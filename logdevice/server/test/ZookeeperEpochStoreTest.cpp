@@ -48,7 +48,8 @@ class ZookeeperEpochStoreTest : public ::testing::Test {
     settings.server = true; // ZookeeperEpochStore requires this
 
     auto cfg_in =
-        Configuration::fromJsonFile(TEST_CONFIG_FILE(TEST_CLUSTER ".conf"));
+        Configuration::fromJsonFile(TEST_CONFIG_FILE(TEST_CLUSTER ".conf"))
+            ->withNodesConfiguration(createSimpleNodesConfig(2));
 
     if (!cfg_in)
       return;
@@ -392,7 +393,7 @@ class UpdateMetaDataRequest : public Request {
     int rv1 = epochstore_->createOrUpdateMetaData(
         logid_,
         std::make_shared<EpochMetaDataUpdateToNextEpoch>(
-            config_, config_->getNodesConfigurationFromServerConfigSource()),
+            config_, config_->getNodesConfiguration()),
         [this](Status st1,
                logid_t lid,
                std::unique_ptr<EpochMetaData> info,
@@ -421,7 +422,7 @@ class UpdateMetaDataRequest : public Request {
               logid_,
               std::make_shared<CustomEpochMetaDataUpdater>(
                   config_,
-                  config_->getNodesConfigurationFromServerConfigSource(),
+                  config_->getNodesConfiguration(),
                   nodeset_selector_,
                   /* use_storage_set_format */ true,
                   /* provision_if_empty */ true),
@@ -448,7 +449,7 @@ class UpdateMetaDataRequest : public Request {
                     logid_,
                     std::make_shared<CustomEpochMetaDataUpdater>(
                         config_,
-                        config_->getNodesConfigurationFromServerConfigSource(),
+                        config_->getNodesConfiguration(),
                         nodeset_selector_,
                         true),
                     [prev_info, this](Status st3,
@@ -659,8 +660,7 @@ TEST_F(ZookeeperEpochStoreTestEmpty, NoRootNodeEpochMetaDataTestNoCreation) {
     rv = epochstore->createOrUpdateMetaData(
         logid,
         std::make_shared<EpochMetaDataUpdateToNextEpoch>(
-            config->get(),
-            config->get()->getNodesConfigurationFromServerConfigSource()),
+            config->get(), config->get()->getNodesConfiguration()),
         [&sem](Status st,
                logid_t,
                std::unique_ptr<EpochMetaData>,

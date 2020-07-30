@@ -18,6 +18,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/APPENDED_Message.h"
 #include "logdevice/common/test/MockSequencerRouter.h"
+#include "logdevice/common/test/NodeSetTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 
 namespace facebook { namespace logdevice {
@@ -269,13 +270,14 @@ TEST_F(AppendRequestTest, SequencerAffinityTest) {
   auto settings = create_default_settings<Settings>();
 
   // Config with 2 regions each with 1 node
-  config_ = std::make_shared<UpdateableConfig>(Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("sequencer_affinity_2nodes.conf")));
+  auto nodes_config = std::make_shared<const NodesConfiguration>();
+  NodeSetTestUtil::addNodes(nodes_config, 1, 2, "rgn1.dc1.cl1.row1.rck1");
+  NodeSetTestUtil::addNodes(nodes_config, 1, 2, "rgn2.dc2.cl2.row2.rck2");
 
-  // TODO Replace getNodesConfigurationFromServerConfigSource when we can
-  // correctly build a nodes config from file
-  config_->updateableNodesConfiguration()->update(
-      config_->getNodesConfigurationFromServerConfigSource());
+  config_ = std::make_shared<UpdateableConfig>(
+      Configuration::fromJsonFile(
+          TEST_CONFIG_FILE("sequencer_affinity_2nodes.conf"))
+          ->withNodesConfiguration(std::move(nodes_config)));
 
   cluster_state_ = std::make_unique<MockClusterState>(
       config_->getNodesConfiguration()->clusterSize());

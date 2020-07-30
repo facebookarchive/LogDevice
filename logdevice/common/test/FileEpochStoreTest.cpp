@@ -61,11 +61,10 @@ class FileEpochStoreTest : public ::testing::Test {
   void SetUp() override {
     dbg::assertOnData = true;
     std::shared_ptr<Configuration> cfg_in =
-        Configuration::fromJsonFile(TEST_CONFIG_FILE(TEST_CLUSTER ".conf"));
+        Configuration::fromJsonFile(TEST_CONFIG_FILE(TEST_CLUSTER ".conf"))
+            ->withNodesConfiguration(createSimpleNodesConfig(11));
     ld_check(cfg_in);
     cluster_config_ = std::make_shared<UpdateableConfig>(std::move(cfg_in));
-    cluster_config_->updateableNodesConfiguration()->update(
-        cluster_config_->getNodesConfigurationFromServerConfigSource());
     auto selector = NodeSetSelectorFactory::create(NodeSetSelectorType::RANDOM);
     auto config = cluster_config_->get();
 
@@ -76,7 +75,7 @@ class FileEpochStoreTest : public ::testing::Test {
     int rv = store_->provisionMetaDataLogs(
         std::make_shared<CustomEpochMetaDataUpdater>(
             config,
-            config->getNodesConfigurationFromServerConfigSource(),
+            config->getNodesConfiguration(),
             std::move(selector),
             true,
             true /* provision_if_empty */,
@@ -142,7 +141,7 @@ TEST_F(FileEpochStoreTest, UpdateMetaData) {
   auto selector = std::make_shared<TestNodeSetSelector>();
   auto updater = std::make_shared<CustomEpochMetaDataUpdater>(
       cluster_config_->get(),
-      cluster_config_->get()->getNodesConfigurationFromServerConfigSource(),
+      cluster_config_->get()->getNodesConfiguration(),
       selector,
       true,
       true);

@@ -11,6 +11,7 @@
 #include "logdevice/common/SequencerLocator.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/test/MockSequencerRouter.h"
+#include "logdevice/common/test/NodeSetTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 
 namespace facebook { namespace logdevice {
@@ -181,17 +182,17 @@ TEST_F(SequencerRouterTest, SequencerAffinityTest) {
   auto settings = create_default_settings<Settings>();
 
   // Config with 2 regions each with 1 node
-  auto uconfig = std::make_shared<UpdateableConfig>(Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("sequencer_affinity_2nodes.conf")));
+  auto nodes_config = std::make_shared<const NodesConfiguration>();
+  NodeSetTestUtil::addNodes(nodes_config, 1, 2, "rgn1.dc1.cl1.row1.rck1");
+  NodeSetTestUtil::addNodes(nodes_config, 1, 2, "rgn2.dc2.cl2.row2.rck2");
 
-  // TODO Replace getNodesConfigurationFromServerConfigSource when we can
-  // correctly build a nodes config from file
-  uconfig->updateableNodesConfiguration()->update(
-      uconfig->getNodesConfigurationFromServerConfigSource());
-  auto config = uconfig->get();
+  std::shared_ptr<Configuration> config =
+      Configuration::fromJsonFile(
+          TEST_CONFIG_FILE("sequencer_affinity_2nodes.conf"))
+          ->withNodesConfiguration(std::move(nodes_config));
 
   cluster_state_ = std::make_unique<MockClusterState>(
-      config->serverConfig()->getNodes().size());
+      config->getNodesConfiguration()->clusterSize());
 
   settings.use_sequencer_affinity = true;
   locator_ = std::make_unique<MockHashBasedSequencerLocator>(
@@ -243,16 +244,17 @@ TEST_F(SequencerRouterTest, SequencerAffinityTest) {
   EXPECT_NE(std::make_pair(N1, SequencerRouter::flags_t(0)), next_node_);
 
   // Config with 3 regions each with 3 nodes
-  uconfig = std::make_shared<UpdateableConfig>(Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("sequencer_affinity_7nodes.conf")));
-  // TODO Replace getNodesConfigurationFromServerConfigSource when we can
-  // correctly build a nodes config from file
-  uconfig->updateableNodesConfiguration()->update(
-      uconfig->getNodesConfigurationFromServerConfigSource());
-  config = uconfig->get();
+  nodes_config = std::make_shared<const NodesConfiguration>();
+  NodeSetTestUtil::addNodes(nodes_config, 3, 2, "rgn1.dc1.cl1.row1.rck1");
+  NodeSetTestUtil::addNodes(nodes_config, 3, 2, "rgn2.dc2.cl2.row2.rck2");
+  NodeSetTestUtil::addNodes(nodes_config, 1, 2, "rgn3.dc3.cl3.row3.rck3");
+
+  config = Configuration::fromJsonFile(
+               TEST_CONFIG_FILE("sequencer_affinity_7nodes.conf"))
+               ->withNodesConfiguration(std::move(nodes_config));
 
   cluster_state_ = std::make_unique<MockClusterState>(
-      config->serverConfig()->getNodes().size());
+      config->getNodesConfiguration()->clusterSize());
 
   settings.use_sequencer_affinity = true;
   locator_ = std::make_unique<MockHashBasedSequencerLocator>(
@@ -313,11 +315,17 @@ TEST_F(SequencerRouterTest, LogNotFound) {
 
   // Config with 2 regions each with 1 node
   // only 3 logs are configured.
-  std::shared_ptr<Configuration> config = Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("sequencer_affinity_2nodes.conf"));
+  auto nodes_config = std::make_shared<const NodesConfiguration>();
+  NodeSetTestUtil::addNodes(nodes_config, 1, 2, "rgn1.dc1.cl1.row1.rck1");
+  NodeSetTestUtil::addNodes(nodes_config, 1, 2, "rgn2.dc2.cl2.row2.rck2");
+
+  std::shared_ptr<Configuration> config =
+      Configuration::fromJsonFile(
+          TEST_CONFIG_FILE("sequencer_affinity_2nodes.conf"))
+          ->withNodesConfiguration(std::move(nodes_config));
 
   cluster_state_ = std::make_unique<MockClusterState>(
-      config->serverConfig()->getNodes().size());
+      config->getNodesConfiguration()->clusterSize());
 
   settings.use_sequencer_affinity = true;
   locator_ = std::make_unique<MockHashBasedSequencerLocator>(

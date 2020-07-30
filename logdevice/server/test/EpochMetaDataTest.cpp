@@ -18,14 +18,13 @@
 #include "logdevice/common/EpochStoreEpochMetaDataFormat.h"
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestNodeSetSelector.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/Record.h"
 #include "logdevice/server/ZookeeperEpochStore.h"
 
 namespace facebook { namespace logdevice {
-
-#define TEST_CLUSTER "nodeset_test" // LD cluster config for nodeset testing
 
 #define N0 ShardID(0, 1)
 #define N1 ShardID(1, 1)
@@ -45,8 +44,80 @@ class EpochMetaDataTest : public ::testing::Test {
     dbg::assertOnData = true;
   }
 
-  std::shared_ptr<Configuration> parseConfig() {
-    return Configuration::fromJsonFile(TEST_CONFIG_FILE(TEST_CLUSTER ".conf"));
+  static std::shared_ptr<Configuration> parseConfig() {
+    configuration::Nodes nodes{
+        {0,
+         configuration::Node::withTestDefaults(
+             0, /* sequencer */ true, /* storage */ false)
+             .setLocation("r0.ds1.cluster1.row1.rack1")},
+        {1,
+         configuration::Node::withTestDefaults(
+             1, /* sequencer */ false, /* storage */ true)
+             .setLocation("r0.ds1.cluster1.row1.rack1")
+             .addStorageRole(2)
+             .setIsMetadataNode(true)},
+        {2,
+         configuration::Node::withTestDefaults(
+             2, /* sequencer */ false, /* storage */ true)
+             .setLocation("r0.ds1.cluster1.row1.rack1")
+             .addStorageRole(2)
+             .setIsMetadataNode(true)},
+        {3,
+         configuration::Node::withTestDefaults(
+             3, /* sequencer */ false, /* storage */ true)
+             .setLocation("r0.ds1.cluster1.row1.rack2")
+             .addStorageRole(2)
+             .setIsMetadataNode(true)},
+        {4,
+         configuration::Node::withTestDefaults(
+             4, /* sequencer */ false, /* storage */ true)
+             .setLocation("r0.ds1.cluster1.row1.rack2")
+             .addStorageRole(2)
+             .setIsMetadataNode(true)},
+        {5,
+         configuration::Node::withTestDefaults(
+             5, /* sequencer */ false, /* storage */ true)
+             .setLocation("r0.ds1.cluster1.row1.rack2")
+             .addStorageRole(2)
+             .setIsMetadataNode(true)},
+        {6,
+         configuration::Node::withTestDefaults(
+             6, /* sequencer */ false, /* storage */ true)
+             .addStorageRole(2)
+             .setLocation("r1.ds1.cluster1.row1.rack1")},
+        {7,
+         configuration::Node::withTestDefaults(
+             7, /* sequencer */ false, /* storage */ true)
+             .addStorageRole(2)
+             .setLocation("r1.ds1.cluster1.row1.rack1")},
+        {8,
+         configuration::Node::withTestDefaults(
+             8, /* sequencer */ false, /* storage */ true)
+             .addStorageRole(2)
+             .setLocation("r1.ds1.cluster1.row1.rack1")},
+        {9,
+         configuration::Node::withTestDefaults(
+             9, /* sequencer */ false, /* storage */ true)
+             .addStorageRole(2)
+             .setLocation("r1.ds1.cluster1.row1.rack1")},
+        {10,
+         configuration::Node::withTestDefaults(
+             10, /* sequencer */ false, /* storage */ true)
+             .addStorageRole(2)
+             .setLocation("r1.ds1.cluster1.row1.rack1")},
+    };
+    auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
+        nodes, ReplicationProperty{{NodeLocationScope::NODE, 3}});
+    ld_check(nodes_configuration);
+
+    nodes_configuration = nodes_configuration->applyUpdate(
+        NodesConfigurationTestUtil::setStorageMembershipUpdate(
+            *nodes_configuration,
+            {ShardID(5, -1), ShardID(7, -1)},
+            membership::StorageState::READ_ONLY,
+            folly::none));
+    return Configuration::fromJsonFile(TEST_CONFIG_FILE("nodeset_test.conf"))
+        ->withNodesConfiguration(std::move(nodes_configuration));
   }
 
   const NodeLocationScope RACK = NodeLocationScope::RACK;
@@ -158,7 +229,7 @@ TEST_F(EpochMetaDataTest, MetaDataLogWritten) {
   ASSERT_NE(nullptr, cfg.get());
   auto selector = std::make_shared<TestNodeSetSelector>();
   CustomEpochMetaDataUpdater updater(
-      cfg, cfg->getNodesConfigurationFromServerConfigSource(), selector, true);
+      cfg, cfg->getNodesConfiguration(), selector, true);
   selector->setStorageSet(StorageSet{N1, N2, N3});
   rv = updater(LOGID, valid_info, /* MetaDataTracer */ nullptr);
   EXPECT_EQ(EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION, rv);
@@ -175,10 +246,10 @@ TEST_F(EpochMetaDataTest, Payload) {
 
   // now converted it back to a new epoch metadata object
   EpochMetaData info_from_str;
-  int rv = info_from_str.fromPayload(
-      Payload(str_payload.data(), str_payload.size()),
-      logid_t(1),
-      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
+  int rv =
+      info_from_str.fromPayload(Payload(str_payload.data(), str_payload.size()),
+                                logid_t(1),
+                                *cfg->getNodesConfiguration());
   EXPECT_EQ(0, rv);
   EXPECT_TRUE(info_from_str.isValid());
   EXPECT_TRUE(info_from_str == info);
@@ -186,10 +257,9 @@ TEST_F(EpochMetaDataTest, Payload) {
   // test with payload with not enough size
   str_payload.resize(str_payload.size() - 1);
   EpochMetaData info2;
-  rv = info2.fromPayload(
-      Payload(str_payload.data(), str_payload.size()),
-      logid_t(1),
-      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
+  rv = info2.fromPayload(Payload(str_payload.data(), str_payload.size()),
+                         logid_t(1),
+                         *cfg->getNodesConfiguration());
   EXPECT_EQ(-1, rv);
   EXPECT_EQ(E::BADMSG, err);
   rv =
@@ -203,10 +273,9 @@ TEST_F(EpochMetaDataTest, Payload) {
       info.toPayload(const_cast<char*>(str_payload.data()), str_payload.size());
 
   EXPECT_EQ(info.sizeInPayload(), rv);
-  rv = info2.fromPayload(
-      Payload(str_payload.data(), rv),
-      logid_t(1),
-      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
+  rv = info2.fromPayload(Payload(str_payload.data(), rv),
+                         logid_t(1),
+                         *cfg->getNodesConfiguration());
   EXPECT_EQ(0, rv);
   EXPECT_TRUE(info2.isValid());
   EXPECT_TRUE(info2 == info);
@@ -252,10 +321,8 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
       weights = {11, 15, 13, 14, 12};
     }
     if (extra_flags & MetaDataLogRecordHeader::HAS_NODESET_SIGNATURE) {
-      auto config =
-          Configuration::fromJsonFile(TEST_CONFIG_FILE(TEST_CLUSTER ".conf"));
-      EXPECT_EQ(config->getNodesConfigurationFromServerConfigSource()
-                    ->getStorageNodesHash(),
+      auto config = parseConfig();
+      EXPECT_EQ(config->getNodesConfiguration()->getStorageNodesHash(),
                 info2.nodeset_params.signature);
     } else {
       EXPECT_EQ(0, info2.nodeset_params.signature);
@@ -307,10 +374,9 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
 
   {
     EpochMetaData info2;
-    int rv = info2.fromPayload(
-        Payload(str.data(), str.size()),
-        logid_t(1),
-        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
+    int rv = info2.fromPayload(Payload(str.data(), str.size()),
+                               logid_t(1),
+                               *cfg->getNodesConfiguration());
     EXPECT_EQ(0, rv);
     check(info2, 1);
   }
@@ -321,19 +387,17 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
     epoch_metadata_version::type v2 = 2;
     memcpy(&str[0], &v2, sizeof(v2));
     EpochMetaData info2;
-    int rv = info2.fromPayload(
-        Payload(str.data(), str.size()),
-        logid_t(1),
-        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
+    int rv = info2.fromPayload(Payload(str.data(), str.size()),
+                               logid_t(1),
+                               *cfg->getNodesConfiguration());
     EXPECT_EQ(-1, rv);
 
     // Change it back to 1 and check that it's uncorrupted.
     epoch_metadata_version::type v1 = 1;
     memcpy(&str[0], &v1, sizeof(v1));
-    rv = info2.fromPayload(
-        Payload(str.data(), str.size()),
-        logid_t(1),
-        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
+    rv = info2.fromPayload(Payload(str.data(), str.size()),
+                           logid_t(1),
+                           *cfg->getNodesConfiguration());
     EXPECT_EQ(0, rv);
   }
 
@@ -355,10 +419,9 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
 
   {
     EpochMetaData info2;
-    int rv = info2.fromPayload(
-        Payload(str.data(), str.size()),
-        logid_t(1),
-        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
+    int rv = info2.fromPayload(Payload(str.data(), str.size()),
+                               logid_t(1),
+                               *cfg->getNodesConfiguration());
     EXPECT_EQ(0, rv);
     check(info2, 2);
   }
@@ -369,10 +432,9 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
     epoch_metadata_version::type v1 = 1;
     memcpy(&str[0], &v1, sizeof(v1));
     EpochMetaData info2;
-    int rv = info2.fromPayload(
-        Payload(str.data(), str.size()),
-        logid_t(1),
-        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
+    int rv = info2.fromPayload(Payload(str.data(), str.size()),
+                               logid_t(1),
+                               *cfg->getNodesConfiguration());
     EXPECT_EQ(-1, rv);
   }
 
@@ -389,10 +451,9 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
 
   {
     EpochMetaData info2;
-    int rv = info2.fromPayload(
-        Payload(str.data(), str.size()),
-        logid_t(1),
-        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
+    int rv = info2.fromPayload(Payload(str.data(), str.size()),
+                               logid_t(1),
+                               *cfg->getNodesConfiguration());
     EXPECT_EQ(0, rv);
     check(info2, 2, MetaDataLogRecordHeader::HAS_WEIGHTS);
   }
@@ -413,10 +474,9 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
 
   {
     EpochMetaData info2;
-    int rv = info2.fromPayload(
-        Payload(str.data(), str.size()),
-        logid_t(1),
-        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
+    int rv = info2.fromPayload(Payload(str.data(), str.size()),
+                               logid_t(1),
+                               *cfg->getNodesConfiguration());
     EXPECT_EQ(0, rv);
     check(info2,
           2,
@@ -425,10 +485,8 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
   }
 
   // config hash
-  auto config =
-      Configuration::fromJsonFile(TEST_CONFIG_FILE(TEST_CLUSTER ".conf"));
-  uint64_t cfg_hash = config->getNodesConfigurationFromServerConfigSource()
-                          ->getStorageNodesHash();
+  auto config = parseConfig();
+  uint64_t cfg_hash = config->getNodesConfiguration()->getStorageNodesHash();
 
   // In real code signature usually isn't equal to storage nodes config hash.
   // Instead it's produced by NodeSetSelector and depends on nodeset selector
@@ -449,10 +507,9 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
 
   {
     EpochMetaData info2;
-    int rv = info2.fromPayload(
-        Payload(str.data(), str.size()),
-        logid_t(1),
-        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
+    int rv = info2.fromPayload(Payload(str.data(), str.size()),
+                               logid_t(1),
+                               *cfg->getNodesConfiguration());
     EXPECT_EQ(0, rv);
     check(info2,
           2,
@@ -476,10 +533,9 @@ TEST_F(EpochMetaDataTest, BackwardCompatibility) {
 
   {
     EpochMetaData info2;
-    int rv = info2.fromPayload(
-        Payload(str.data(), str.size()),
-        logid_t(1),
-        *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
+    int rv = info2.fromPayload(Payload(str.data(), str.size()),
+                               logid_t(1),
+                               *cfg->getNodesConfiguration());
     EXPECT_EQ(0, rv);
     check(info2,
           2,
@@ -510,7 +566,7 @@ TEST_F(EpochMetaDataTest, ZookeeperRecordZnodeBuffer) {
       rv,
       &record_from_buffer,
       logid_t(1),
-      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      *cfg->getNodesConfiguration(),
       &nid_from_buffer);
   EXPECT_EQ(0, rv);
   EXPECT_TRUE(zk_record == record_from_buffer);
@@ -528,7 +584,7 @@ TEST_F(EpochMetaDataTest, ZookeeperRecordZnodeBuffer) {
       rv,
       &record_from_buffer,
       logid_t(1),
-      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      *cfg->getNodesConfiguration(),
       &nid_from_buffer);
   EXPECT_EQ(0, rv);
   EXPECT_TRUE(zk_record == record_from_buffer);
@@ -550,7 +606,7 @@ TEST_F(EpochMetaDataTest, ZookeeperRecordZnodeBuffer) {
       32,
       &record_from_buffer,
       logid_t(1),
-      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      *cfg->getNodesConfiguration(),
       &nid_from_buffer);
   EXPECT_EQ(-1, rv);
   EXPECT_EQ(E::EMPTY, err);
@@ -576,7 +632,7 @@ TEST_F(EpochMetaDataTest, ZookeeperEpochStoreCornerCase) {
       rv,
       &record_from_buffer,
       logid_t(1),
-      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource(),
+      *cfg->getNodesConfiguration(),
       &nid_from_buffer);
   EXPECT_EQ(0, rv);
   EXPECT_TRUE(zk_record == record_from_buffer);
@@ -593,7 +649,7 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
       const_cast<LogsConfig::LogAttributes&>(logcfg->attrs());
   auto selector = std::make_shared<TestNodeSetSelector>();
   CustomEpochMetaDataUpdater updater(
-      cfg, cfg->getNodesConfigurationFromServerConfigSource(), selector, true);
+      cfg, cfg->getNodesConfiguration(), selector, true);
 
   auto zk_record_default = std::make_unique<EpochMetaData>();
   auto rv =
@@ -675,13 +731,12 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
   EXPECT_EQ(initial_epoch_incremented_at, zk_record->epoch_incremented_at);
 
   // test metadata initial provision
-  CustomEpochMetaDataUpdater provisioning_updater(
-      cfg,
-      cfg->getNodesConfigurationFromServerConfigSource(),
-      selector,
-      true,
-      true /* provision_if_empty */,
-      false /* update_if_exists */);
+  CustomEpochMetaDataUpdater provisioning_updater(cfg,
+                                                  cfg->getNodesConfiguration(),
+                                                  selector,
+                                                  true,
+                                                  true /* provision_if_empty */,
+                                                  false /* update_if_exists */);
   zk_record.reset();
   StorageSet shards{N1, N2, N3};
   attrs = attrs.with_replicationFactor(2).with_nodeSetSize(3);
@@ -703,8 +758,7 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdateToNextEpochTest) {
   ASSERT_NE(nullptr, cfg.get()->serverConfig());
   ASSERT_NE(nullptr, cfg.get()->logsConfig());
   auto logcfg = cfg->getLogGroupByIDShared(logid_t(2));
-  EpochMetaDataUpdateToNextEpoch updater(
-      cfg, cfg->getNodesConfigurationFromServerConfigSource());
+  EpochMetaDataUpdateToNextEpoch updater(cfg, cfg->getNodesConfiguration());
 
   auto zk_record_default = std::make_unique<EpochMetaData>();
   auto rv =
@@ -724,10 +778,7 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdateToNextEpochTest) {
   EXPECT_EQ(cmp, *zk_record);
 
   EpochMetaDataUpdateToNextEpoch updater_conditional(
-      cfg,
-      cfg->getNodesConfigurationFromServerConfigSource(),
-      nullptr,
-      cmp.h.epoch);
+      cfg, cfg->getNodesConfiguration(), nullptr, cmp.h.epoch);
 
   rv = updater_conditional(logid_t(2), zk_record, /* MetaDataTracer */ nullptr);
   EXPECT_EQ(EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION, rv);
@@ -819,10 +870,7 @@ TEST_F(EpochMetaDataTest, EpochMetaDataMapBasic) {
 
   size_t bytes_read;
   auto deserialized_result = EpochMetaDataMap::deserialize(
-      {buffer, 4096},
-      &bytes_read,
-      logid,
-      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource());
+      {buffer, 4096}, &bytes_read, logid, *cfg->getNodesConfiguration());
 
   ASSERT_NE(nullptr, deserialized_result);
   ASSERT_EQ(written, bytes_read);
@@ -875,9 +923,7 @@ TEST_F(EpochMetaDataTest, UnionStorageSet) {
   ASSERT_EQ(expected, *s);
 
   s = result->getUnionStorageSet(
-      *cfg->serverConfig()->getNodesConfigurationFromServerConfigSource(),
-      EPOCH_MIN,
-      epoch_t(95));
+      *cfg->getNodesConfiguration(), EPOCH_MIN, epoch_t(95));
   // should filter non-exist or non-storage nodes
   expected = StorageSet{N1, N2, N3, N4, N5, N7};
   ASSERT_EQ(expected, *s);

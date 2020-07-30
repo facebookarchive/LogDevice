@@ -231,4 +231,20 @@ std::string Configuration::toString() const {
   }
   return "";
 }
+
+std::unique_ptr<Configuration> Configuration::withNodesConfiguration(
+    std::shared_ptr<const NodesConfiguration> nodes_configuration) const {
+  std::shared_ptr<ServerConfig> server_config{
+      server_config_ ? server_config_->copy() : nullptr};
+  std::shared_ptr<LogsConfig> logs_config{logs_config_ ? logs_config_->copy()
+                                                       : nullptr};
+  std::shared_ptr<ZookeeperConfig> zookeeper_config{
+      zookeeper_config_ ? std::make_shared<ZookeeperConfig>(*zookeeper_config_)
+                        : nullptr};
+  return std::make_unique<Configuration>(std::move(server_config),
+                                         std::move(logs_config),
+                                         std::move(nodes_configuration),
+                                         std::move(zookeeper_config));
+}
+
 }} // namespace facebook::logdevice

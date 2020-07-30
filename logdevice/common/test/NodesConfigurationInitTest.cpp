@@ -107,9 +107,8 @@ class TimeControlledNCS : public NodesConfigurationStore {
 
 TEST(NodesConfigurationInitTest, ConfigCreation) {
   MockNodesConfigurationInit init(nullptr, UpdateableSettings<Settings>());
-  auto server_config =
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf"))
-          ->serverConfig();
+  std::shared_ptr<ServerConfig> server_config =
+      ServerConfig::fromDataTest(__FILE__);
 
   auto config = init.buildBootstrappingServerConfig(
       {
@@ -153,9 +152,8 @@ TEST(NodesConfigurationInitTest, InitTest) {
       std::move(store), UpdateableSettings<Settings>());
   auto fetched_node_config = std::make_shared<UpdateableNodesConfiguration>();
 
-  auto current_server_config =
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf"))
-          ->serverConfig();
+  std::shared_ptr<ServerConfig> current_server_config =
+      ServerConfig::fromDataTest(__FILE__);
 
   int success = init.init(fetched_node_config,
                           make_test_plugin_registry(),
@@ -184,9 +182,8 @@ TEST(NodesConfigurationInitTest, Retry) {
   MockNodesConfigurationInit init(
       std::move(store), UpdateableSettings<Settings>(settings));
   auto fetched_node_config = std::make_shared<UpdateableNodesConfiguration>();
-  auto current_server_config =
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf"))
-          ->serverConfig();
+  std::shared_ptr<ServerConfig> current_server_config =
+      ServerConfig::fromDataTest(__FILE__);
   int success = init.init(fetched_node_config,
                           make_test_plugin_registry(),
                           "data:10.0.0.2:4440",
@@ -213,9 +210,8 @@ TEST(NodesConfigurationInitTest, Timeout) {
   MockNodesConfigurationInit init(
       std::move(store), UpdateableSettings<Settings>(settings));
   auto fetched_node_config = std::make_shared<UpdateableNodesConfiguration>();
-  auto current_server_config =
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf"))
-          ->serverConfig();
+  std::shared_ptr<ServerConfig> current_server_config =
+      ServerConfig::fromDataTest(__FILE__);
   int success = init.init(fetched_node_config,
                           make_test_plugin_registry(),
                           "data:10.0.0.2:4440",
@@ -241,9 +237,8 @@ TEST(NodesConfigurationInitTest, WithLongDurationCallback) {
   MockNodesConfigurationInit init(
       std::move(store), UpdateableSettings<Settings>(settings));
   auto fetched_node_config = std::make_shared<UpdateableNodesConfiguration>();
-  auto current_server_config =
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf"))
-          ->serverConfig();
+  std::shared_ptr<ServerConfig> current_server_config =
+      ServerConfig::fromDataTest(__FILE__);
   int success = init.init(fetched_node_config,
                           make_test_plugin_registry(),
                           "data:10.0.0.2:4440",

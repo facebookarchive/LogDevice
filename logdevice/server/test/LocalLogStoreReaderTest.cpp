@@ -16,6 +16,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/RECORD_Message.h"
 #include "logdevice/common/protocol/STORE_Message.h"
+#include "logdevice/common/test/NodeSetTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/util.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
@@ -41,8 +42,16 @@ using LocalLogStoreReader::ReadPointer;
 #define N4 ShardID(4, 0)
 #define N5 ShardID(5, 0)
 
-#define CONFIG_PATH \
-  verifyFileExists("logdevice/server/test/configs/local_scd_test.conf").c_str()
+std::shared_ptr<const NodesConfiguration> getNodesConfig() {
+  auto nodes_configuration = std::make_shared<const NodesConfiguration>();
+  NodeSetTestUtil::addNodes(
+      nodes_configuration, 3, 2, "rgn1.dc1.cl1.row1.rck1", 100.0);
+  NodeSetTestUtil::addNodes(
+      nodes_configuration, 2, 2, "rgn2.dc2.cl2.row2.rck2", 100.0);
+  NodeSetTestUtil::addNodes(
+      nodes_configuration, 1, 2, "rgn3.dc3.cl3.row3.rck3", 100.0);
+  return nodes_configuration;
+}
 
 namespace {
 
@@ -63,16 +72,17 @@ using LLSFilter = LocalLogStoreReadFilter;
 
 class MockLocalLogStoreReadFilter : public LocalLogStoreReadFilter {
  public:
-  explicit MockLocalLogStoreReadFilter(std::shared_ptr<ServerConfig> config)
-      : LocalLogStoreReadFilter(), config_(config) {}
+  explicit MockLocalLogStoreReadFilter(
+      std::shared_ptr<const NodesConfiguration> nodes_config)
+      : LocalLogStoreReadFilter(), nodes_config_(nodes_config) {}
 
   std::shared_ptr<const NodesConfiguration>
   getNodesConfiguration() const override {
-    return config_->getNodesConfigurationFromServerConfigSource();
+    return nodes_config_;
   }
 
  private:
-  std::shared_ptr<ServerConfig> config_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
 };
 
 class LocalLogStoreReaderTest : public ::testing::TestWithParam<Options> {
@@ -1283,10 +1293,9 @@ TEST_P(LocalLogStoreReaderTest, LocalScdSimple) {
                             {5, 1, {N5, N0, N4, N2, N3}, 0},
                             {6, 1, {N0, N3, N2, N4, N1}, 0}});
 
-  auto config = Configuration::fromJsonFile(CONFIG_PATH);
+  auto config = getNodesConfig();
 
-  auto filter =
-      std::make_shared<MockLocalLogStoreReadFilter>(config->serverConfig());
+  auto filter = std::make_shared<MockLocalLogStoreReadFilter>(config);
   filter->scd_my_shard_id_ = N0;
   filter->client_location_ = std::make_unique<NodeLocation>();
   filter->client_location_->fromDomainString("rgn1.dc1.cl1.row1.rck1");
@@ -1317,10 +1326,9 @@ TEST_P(LocalLogStoreReaderTest, LocalScdNotLocalNode) {
                             {5, 1, {N5, N0, N4, N2, N3}, 0},
                             {6, 1, {N0, N3, N2, N4, N1}, 0}});
 
-  auto config = Configuration::fromJsonFile(CONFIG_PATH);
+  auto config = getNodesConfig();
 
-  auto filter =
-      std::make_shared<MockLocalLogStoreReadFilter>(config->serverConfig());
+  auto filter = std::make_shared<MockLocalLogStoreReadFilter>(config);
   filter->scd_my_shard_id_ = N3;
   filter->client_location_ = std::make_unique<NodeLocation>();
   filter->client_location_->fromDomainString("rgn1.dc1.cl1.row1.rck1");
@@ -1350,10 +1358,9 @@ TEST_P(LocalLogStoreReaderTest, LocalScdSimpleOneKnownDown) {
                             {5, 1, {N5, N0, N4, N2, N3}, 0},
                             {6, 1, {N0, N3, N2, N4, N1}, 0}});
 
-  auto config = Configuration::fromJsonFile(CONFIG_PATH);
+  auto config = getNodesConfig();
 
-  auto filter =
-      std::make_shared<MockLocalLogStoreReadFilter>(config->serverConfig());
+  auto filter = std::make_shared<MockLocalLogStoreReadFilter>(config);
   filter->scd_my_shard_id_ = N0;
   filter->client_location_ = std::make_unique<NodeLocation>();
   filter->client_location_->fromDomainString("rgn1.dc1.cl1.row1.rck1");
@@ -1387,10 +1394,9 @@ TEST_P(LocalLogStoreReaderTest, LocalScdOurselvesInKnownDown) {
                             {5, 1, {N5, N0, N4, N2, N3}, 0},
                             {6, 1, {N0, N3, N2, N4, N1}, 0}});
 
-  auto config = Configuration::fromJsonFile(CONFIG_PATH);
+  auto config = getNodesConfig();
 
-  auto filter =
-      std::make_shared<MockLocalLogStoreReadFilter>(config->serverConfig());
+  auto filter = std::make_shared<MockLocalLogStoreReadFilter>(config);
   filter->scd_my_shard_id_ = N0;
   filter->client_location_ = std::make_unique<NodeLocation>();
   filter->client_location_->fromDomainString("rgn1.dc1.cl1.row1.rck1");
@@ -1424,10 +1430,9 @@ TEST_P(LocalLogStoreReaderTest, LocalScdNoLocalNodes) {
                             {5, 1, {N5, N0, N4, N2, N3}, 0},
                             {6, 1, {N0, N3, N2, N4, N1}, 0}});
 
-  auto config = Configuration::fromJsonFile(CONFIG_PATH);
+  auto config = getNodesConfig();
 
-  auto filter =
-      std::make_shared<MockLocalLogStoreReadFilter>(config->serverConfig());
+  auto filter = std::make_shared<MockLocalLogStoreReadFilter>(config);
   filter->scd_my_shard_id_ = N0;
   filter->client_location_ = std::make_unique<NodeLocation>();
   filter->client_location_->fromDomainString("rgn3.dc3.cl3.row3.rck3");
@@ -1458,10 +1463,9 @@ TEST_P(LocalLogStoreReaderTest, LocalScdLocalNodesAreDown) {
                             {5, 1, {N5, N0, N4, N2, N3}, 0},
                             {6, 1, {N0, N3, N2, N4, N1}, 0}});
 
-  auto config = Configuration::fromJsonFile(CONFIG_PATH);
+  auto config = getNodesConfig();
 
-  auto filter =
-      std::make_shared<MockLocalLogStoreReadFilter>(config->serverConfig());
+  auto filter = std::make_shared<MockLocalLogStoreReadFilter>(config);
   filter->scd_my_shard_id_ = N1;
   filter->client_location_ = std::make_unique<NodeLocation>();
   filter->client_location_->fromDomainString("rgn3.dc3.cl3.row3.rck3");
@@ -1494,10 +1498,9 @@ TEST_P(LocalLogStoreReaderTest, DrainedRecords) {
        {5, 1, {N5, N1, N4, N2, N3}, LocalLogStoreRecordFormat::FLAG_DRAINED},
        {6, 1, {N5, N3, N2, N4, N1}, LocalLogStoreRecordFormat::FLAG_DRAINED}});
 
-  auto config = Configuration::fromJsonFile(CONFIG_PATH);
+  auto config = getNodesConfig();
 
-  auto filter =
-      std::make_shared<MockLocalLogStoreReadFilter>(config->serverConfig());
+  auto filter = std::make_shared<MockLocalLogStoreReadFilter>(config);
   filter->scd_my_shard_id_ = N0;
   filter->client_location_ = std::make_unique<NodeLocation>();
   filter->client_location_->fromDomainString("rgn1.dc1.cl1.row1.rck1");
@@ -1625,9 +1628,8 @@ TEST_P(LocalLogStoreReaderTest, ReadLimitAtEndOfWindow) {
                    //  -----  window end  -----
                    {5, 1, {N2, N1}, 0, 10000}});
 
-  auto config = Configuration::fromJsonFile(CONFIG_PATH);
-  auto filter =
-      std::make_shared<MockLocalLogStoreReadFilter>(config->serverConfig());
+  auto config = getNodesConfig();
+  auto filter = std::make_shared<MockLocalLogStoreReadFilter>(config);
   filter->scd_my_shard_id_ = N1;
 
   std::vector<RawRecord> records;

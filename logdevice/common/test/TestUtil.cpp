@@ -145,9 +145,11 @@ createSimpleNodesConfig(size_t nnodes) {
   for (size_t i = 0; i < nnodes; ++i) {
     nodes[i] = configuration::Node::withTestDefaults(i)
                    .addSequencerRole()
-                   .addStorageRole(2);
+                   .addStorageRole(2)
+                   .setIsMetadataNode(i == 0);
   }
-  return NodesConfigurationTestUtil::provisionNodes(std::move(nodes));
+  return NodesConfigurationTestUtil::provisionNodes(
+      std::move(nodes), ReplicationProperty{{NodeLocationScope::NODE, 1}});
 }
 
 ServerConfig::MetaDataLogsConfig
@@ -213,16 +215,6 @@ std::shared_ptr<Configuration> createSimpleConfig(size_t nnodes, size_t logs) {
       log_attrs);
 
   auto nodes = createSimpleNodesConfig(nnodes);
-  nodes =
-      nodes->applyUpdate(NodesConfigurationTestUtil::setStorageMembershipUpdate(
-          *nodes,
-          {ShardID(0, -1)},
-          membership::StorageState::READ_WRITE,
-          membership::MetaDataStorageState::METADATA));
-  nodes = nodes->applyUpdate(
-      NodesConfigurationTestUtil::setMetadataReplicationPropertyUpdate(
-          *nodes, ReplicationProperty{{NodeLocationScope::NODE, 1}}));
-
   auto server_config = ServerConfig::fromDataTest(__FILE__);
   return std::make_shared<Configuration>(
       std::move(server_config), std::move(logs_config), std::move(nodes));

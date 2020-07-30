@@ -248,6 +248,16 @@ class Configuration {
 
   std::string toString() const;
 
+  /**
+   * Creates a clone of this configuration object with a specific nodes
+   * configuration. This is meant to be temporary to ease the migration to the
+   * NodesConfiguration structure.
+   *
+   * TODO: Clean this up when the NodesConfiguration migration is done.
+   */
+  std::unique_ptr<Configuration> withNodesConfiguration(
+      std::shared_ptr<const NodesConfiguration> nodes_configuration) const;
+
  private:
   static std::unique_ptr<Configuration>
   loadFromString(const std::string& server, const std::string& logs);

@@ -372,6 +372,12 @@ void SequencerTest::setUp() {
   dbg::currentLevel = log_level_;
   auto config = std::make_shared<UpdateableConfig>(
       Configuration::fromJsonFile(TEST_CONFIG_FILE("sequencer_test.conf")));
+  config->updateableNCMNodesConfiguration()->update(createSimpleNodesConfig(1));
+
+  // TODO the following 2 settings are required to make the NCPublisher pick
+  // the NCM NodesConfiguration. Should be removed when NCM is the default.
+  settings_.enable_nodes_configuration_manager = true;
+  settings_.use_nodes_configuration_manager_nodes_configuration = true;
 
   // turn on byte offsets
   settings_.byte_offsets = true;

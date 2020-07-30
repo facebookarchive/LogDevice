@@ -442,6 +442,8 @@ void EpochSequencerTest::setUp() {
 
   updateable_config_ = std::make_shared<UpdateableConfig>(
       Configuration::fromJsonFile(TEST_CONFIG_FILE("sequencer_test.conf")));
+  updateable_config_->updateableNCMNodesConfiguration()->update(
+      createSimpleNodesConfig(1));
 
   std::shared_ptr<configuration::LocalLogsConfig> logs_config =
       std::make_shared<configuration::LocalLogsConfig>(
@@ -476,6 +478,12 @@ void EpochSequencerTest::setUp() {
   settings_.num_workers = num_workers_;
   // turn on byte offsets
   settings_.byte_offsets = true;
+
+  // TODO the following 2 settings are required to make the NCPublisher pick
+  // the NCM NodesConfiguration. Should be removed when NCM is the default.
+  settings_.enable_nodes_configuration_manager = true;
+  settings_.use_nodes_configuration_manager_nodes_configuration = true;
+
   processor_ =
       make_test_processor(settings_, updateable_config_, &stats_, NodeID(1, 1));
   ASSERT_NE(nullptr, processor_.get());
