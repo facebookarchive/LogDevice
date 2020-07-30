@@ -328,9 +328,6 @@ void fillNodeState(
       auto node_info = rebuilding_set
           ? rebuilding_set->getNodeInfo(node_index, shard_index)
           : nullptr;
-      // DEPRECATED
-      state.set_current_storage_state(
-          toThrift<thrift::ShardStorageState>(result->storage_state));
 
       state.set_storage_state(
           toThrift<membership::thrift::StorageState>(result->storage_state));

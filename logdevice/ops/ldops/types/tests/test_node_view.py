@@ -165,16 +165,6 @@ class TestNodeView(TestCase):
             )
 
             self.assertTupleEqual(
-                nv.shards_current_storage_state,
-                tuple(s.current_storage_state for s in ns.shard_states),
-            )
-
-            self.assertEqual(
-                nv.shards_current_storage_state_count,
-                Counter(s.current_storage_state for s in ns.shard_states),
-            )
-
-            self.assertTupleEqual(
                 nv.shards_current_operational_state,
                 tuple(s.current_operational_state for s in ns.shard_states),
             )

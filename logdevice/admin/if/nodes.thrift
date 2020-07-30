@@ -314,10 +314,6 @@ struct ShardState {
    */
   1: ShardDataHealth data_health,
   /**
-   * [DEPRECATED]. Will be removed once callers move to storage_state instead.
-   */
-  2: ShardStorageState current_storage_state (deprecated),
-  /**
    * See the ShardOperationalState enum for info. See the
    * maintenance for information about the active transition
    */

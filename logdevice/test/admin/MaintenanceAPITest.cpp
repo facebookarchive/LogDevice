@@ -755,8 +755,6 @@ TEST_F(MaintenanceAPITest, GetNodeState) {
       ASSERT_EQ(2, shard_states.size());
       for (const auto& shard : shard_states) {
         ASSERT_EQ(ShardDataHealth::HEALTHY, shard.get_data_health());
-        ASSERT_EQ(thrift::ShardStorageState::READ_WRITE,
-                  shard.get_current_storage_state());
         ASSERT_EQ(membership::thrift::StorageState::READ_WRITE,
                   shard.get_storage_state());
         ASSERT_EQ(membership::thrift::MetaDataStorageState::METADATA,
@@ -822,9 +820,6 @@ TEST_F(MaintenanceAPITest, GetNodeState) {
     for (const auto& shard : shard_states) {
       ASSERT_EQ(
           membership::thrift::StorageState::NONE, shard.get_storage_state());
-      // The deprecated ShardStorageState
-      ASSERT_EQ(thrift::ShardStorageState::DISABLED,
-                shard.get_current_storage_state());
       ASSERT_EQ(ShardDataHealth::EMPTY, shard.get_data_health());
       ASSERT_EQ(membership::thrift::MetaDataStorageState::METADATA,
                 shard.get_metadata_state());
@@ -895,8 +890,6 @@ TEST_F(MaintenanceAPITest, unblockRebuilding) {
       ASSERT_EQ(2, shard_states.size());
       for (const auto& shard : shard_states) {
         ASSERT_EQ(ShardDataHealth::HEALTHY, shard.get_data_health());
-        ASSERT_EQ(thrift::ShardStorageState::READ_WRITE,
-                  shard.get_current_storage_state());
         ASSERT_EQ(membership::thrift::StorageState::READ_WRITE,
                   shard.get_storage_state());
         ASSERT_EQ(membership::thrift::MetaDataStorageState::METADATA,

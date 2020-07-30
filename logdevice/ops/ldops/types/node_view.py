@@ -26,7 +26,6 @@ from logdevice.admin.nodes.types import (
     ShardDataHealth,
     ShardOperationalState,
     ShardState,
-    ShardStorageState,
     StorageConfig,
 )
 from logdevice.common.types import LocationScope, NodeID, Role, SocketAddressFamily
@@ -173,14 +172,6 @@ class NodeView:
     @property
     def shards_data_health_count(self) -> Counter[ShardDataHealth]:
         return collections.Counter(self.shards_data_health)
-
-    @property
-    def shards_current_storage_state(self) -> Tuple[ShardStorageState, ...]:
-        return tuple(s.current_storage_state for s in self.shard_states)
-
-    @property
-    def shards_current_storage_state_count(self) -> Counter[ShardStorageState]:
-        return collections.Counter(self.shards_current_storage_state)
 
     @property
     def shards_current_operational_state(self) -> Tuple[ShardOperationalState, ...]:

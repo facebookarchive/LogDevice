@@ -496,10 +496,6 @@ MaintenanceManager::getShardStateInternal(ShardID shard) const {
   state.set_storage_state(
       toThrift<membership::thrift::StorageState>(storageState.value()));
 
-  // TODO: DEPRECATED. remove once we enable MM everywere.
-  state.set_current_storage_state(
-      toThrift<thrift::ShardStorageState>(storageState.value()));
-
   auto metadataState = getMetaDataStorageStateInternal(shard);
   if (metadataState.hasError()) {
     return folly::makeUnexpected(std::move(metadataState.error()));
@@ -1737,7 +1733,7 @@ MaintenanceManager::runShardWorkflows() {
   for (const auto& it : active_shard_workflows_) {
     auto shard_id = it.first;
     ShardWorkflow* wf = it.second.first.get();
-    auto current_storage_state =
+    auto shard_state =
         nodes_config_->getStorageMembership()->getShardState(shard_id);
     auto sa = nodes_config_->getNodeStorageAttribute(shard_id.node());
     bool exclude_from_nodeset = sa->exclude_from_nodesets;
@@ -1756,9 +1752,9 @@ MaintenanceManager::runShardWorkflows() {
     }
     // The shard should be in NodesConfig since workflow is created
     // only for shards in the config
-    ld_check(current_storage_state.has_value());
+    ld_check(shard_state.has_value());
     shards.push_back(shard_id);
-    futures.push_back(wf->run(current_storage_state.value(),
+    futures.push_back(wf->run(shard_state.value(),
                               exclude_from_nodeset,
                               getShardDataHealthInternal(shard_id),
                               getCurrentRebuildingMode(shard_id),

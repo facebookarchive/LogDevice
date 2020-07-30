@@ -41,7 +41,6 @@ from logdevice.admin.nodes.types import (
     ShardMaintenanceProgress,
     ShardOperationalState,
     ShardState,
-    ShardStorageState,
     StorageConfig,
 )
 from logdevice.common.types import (
@@ -232,7 +231,6 @@ class MockAdminAPI:
                 shard_states=[
                     ShardState(
                         data_health=ShardDataHealth.HEALTHY,
-                        current_storage_state=ShardStorageState.READ_WRITE,
                         current_operational_state=ShardOperationalState.ENABLED,
                         maintenance=None,
                         storage_state=StorageState.READ_WRITE,
