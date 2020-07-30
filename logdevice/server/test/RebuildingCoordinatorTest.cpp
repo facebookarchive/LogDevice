@@ -455,13 +455,11 @@ class RebuildingCoordinatorTest : public ::testing::Test {
   }
 
   void updateConfig() {
-    std::vector<NodesConfigurationTestUtil::NodeTemplate> nodes;
+    configuration::Nodes nodes;
     for (int i = 0; i < num_nodes; ++i) {
-      nodes.push_back({
-          .id = node_index_t(i),
-          .metadata_node = true,
-          .num_shards = 2,
-      });
+      nodes[i] = configuration::Node::withTestDefaults(i)
+                     .setIsMetadataNode(true)
+                     .addStorageRole(2);
     }
     auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
         std::move(nodes), ReplicationProperty{{NodeLocationScope::NODE, 3}});

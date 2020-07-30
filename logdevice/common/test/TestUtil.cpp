@@ -141,14 +141,13 @@ TemporaryDirectory::~TemporaryDirectory() {
 
 std::shared_ptr<const NodesConfiguration>
 createSimpleNodesConfig(size_t nnodes) {
-  std::vector<NodesConfigurationTestUtil::NodeTemplate> templates;
+  configuration::Nodes nodes;
   for (size_t i = 0; i < nnodes; ++i) {
-    templates.push_back(NodesConfigurationTestUtil::NodeTemplate{
-        .id = node_index_t(i),
-        .num_shards = 2,
-    });
+    nodes[i] = configuration::Node::withTestDefaults(i)
+                   .addSequencerRole()
+                   .addStorageRole(2);
   }
-  return NodesConfigurationTestUtil::provisionNodes(std::move(templates));
+  return NodesConfigurationTestUtil::provisionNodes(std::move(nodes));
 }
 
 ServerConfig::MetaDataLogsConfig

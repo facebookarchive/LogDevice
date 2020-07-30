@@ -64,7 +64,7 @@ class MockGraylistingTracker : public GraylistingTracker {
   explicit MockGraylistingTracker(MockWorkerTimeoutStats stats)
       : stats_(std::move(stats)) {
     for (node_index_t n : {1, 2, 3, 4, 5, 6}) {
-      nodes_.push_back(buildNode(n, "ash.2.08.k.z", n <= 3 ? true : false));
+      nodes_.emplace(n, buildNode("ash.2.08.k.z", n <= 3 ? true : false));
     }
     reComputeNodesConfiguraton();
   }
@@ -102,19 +102,17 @@ class MockGraylistingTracker : public GraylistingTracker {
     return 0s;
   }
 
-  NodesConfigurationTestUtil::NodeTemplate buildNode(node_index_t id,
-                                                     std::string domain,
-                                                     bool metadata = false) {
-    NodesConfigurationTestUtil::NodeTemplate node;
-    node.id = id;
-    node.roles = NodesConfigurationTestUtil::kBothRoles;
-    node.location = domain;
-    node.metadata_node = metadata;
+  configuration::Node buildNode(std::string domain, bool metadata = false) {
+    configuration::Node node;
+    node.addStorageRole();
+    node.addSequencerRole();
+    node.setLocation(domain);
+    node.setIsMetadataNode(metadata);
     return node;
   }
 
   void addNode(node_index_t id, std::string domain) {
-    nodes_.push_back(buildNode(id, domain));
+    nodes_.emplace(id, buildNode(domain));
     reComputeNodesConfiguraton();
   }
 
@@ -125,7 +123,7 @@ class MockGraylistingTracker : public GraylistingTracker {
  private:
   MockWorkerTimeoutStats stats_;
 
-  std::vector<NodesConfigurationTestUtil::NodeTemplate> nodes_;
+  configuration::Nodes nodes_;
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
       nodes_configuration_;

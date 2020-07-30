@@ -296,18 +296,16 @@ EpochRecoveryTest::EpochRecoveryTest()
 
 void EpochRecoveryTest::initConfig() {
   // init cluster config
-  std::vector<NodesConfigurationTestUtil::NodeTemplate> nodes;
+  configuration::Nodes nodes;
   for (ShardID shard : all_shards_) {
     std::string loc;
     auto it = node_locations_.find(shard.node());
     if (it != node_locations_.end()) {
       loc = it->second;
     }
-    nodes.push_back({
-        .id = shard.node(),
-        .location = loc,
-        .metadata_node = true,
-    });
+    nodes[shard.node()] = configuration::Node::withTestDefaults(shard.node())
+                              .setLocation(loc)
+                              .setIsMetadataNode(true);
     node_state_map_[shard] = ClusterStateNodeState::FULLY_STARTED;
   }
   auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(

@@ -72,11 +72,14 @@ TEST_F(NodesConfigurationTest, ProvisionBasic) {
       {1, kBothRoles}, {2, kStorageRole}, {7, kSeqRole}, {9, kStorageRole}};
   for (node_index_t n : NodeSetIndices({1, 2, 7, 9})) {
     const NodeServiceDiscovery& node_sd = serv_discovery->nodeAttributesAt(n);
-    NodeServiceDiscovery expected =
-        genDiscovery(n,
-                     role_map[n],
-                     kTestTags,
-                     n % 2 == 0 ? "aa.bb.cc.dd.ee" : "aa.bb.cc.dd.ff");
+
+    auto is_sequencer = hasRole(role_map[n], NodeRole::SEQUENCER);
+    auto is_storage = hasRole(role_map[n], NodeRole::STORAGE);
+    NodeServiceDiscovery expected = genDiscovery(
+        n,
+        configuration::Node::withTestDefaults(n, is_sequencer, is_storage)
+            .setTags(kTestTags)
+            .setLocation(n % 2 == 0 ? "aa.bb.cc.dd.ee" : "aa.bb.cc.dd.ff"));
     EXPECT_EQ(expected, node_sd);
   }
 
@@ -168,7 +171,9 @@ TEST_F(NodesConfigurationTest, TestGossipDefaultingToDataAddress) {
       std::make_unique<ServiceDiscoveryConfig::Update>();
 
   // Add one node with gossip address
-  auto desc1 = genDiscovery(10, kBothRoles, {}, "aa.bb.cc.dd.ee");
+  auto desc1 = genDiscovery(
+      10,
+      configuration::Node::withTestDefaults(10).setLocation("aa.bb.cc.dd.ee"));
   // For the correctness of the test, assert that both addresses are differect.
   ASSERT_NE(desc1.default_client_data_address, desc1.gossip_address.value());
 
@@ -179,7 +184,9 @@ TEST_F(NodesConfigurationTest, TestGossipDefaultingToDataAddress) {
           std::make_unique<NodeServiceDiscovery>(desc1)});
 
   // Add one node with gossip address
-  auto desc2 = genDiscovery(20, kBothRoles, {}, "aa.bb.cc.dd.ef");
+  auto desc2 = genDiscovery(
+      20,
+      configuration::Node::withTestDefaults(20).setLocation("aa.bb.cc.dd.ef"));
   desc2.gossip_address.reset();
   update.service_discovery_update->addNode(
       20,
@@ -208,7 +215,9 @@ TEST_F(NodesConfigurationTest, TestServerToServerDefaultingToDataAddress) {
       std::make_unique<ServiceDiscoveryConfig::Update>();
 
   // Add one node with dedicated server-to-server address
-  auto desc1 = genDiscovery(10, kBothRoles, {}, "aa.bb.cc.dd.ee");
+  auto desc1 = genDiscovery(
+      10,
+      configuration::Node::withTestDefaults(10).setLocation("aa.bb.cc.dd.ee"));
   // For the correctness of the test, assert that both addresses are different.
   ASSERT_NE(desc1.default_client_data_address,
             desc1.server_to_server_address.value());
@@ -220,7 +229,9 @@ TEST_F(NodesConfigurationTest, TestServerToServerDefaultingToDataAddress) {
           std::make_unique<NodeServiceDiscovery>(desc1)});
 
   // Add one node without a dedicated address
-  auto desc2 = genDiscovery(20, kBothRoles, {}, "aa.bb.cc.dd.ef");
+  auto desc2 = genDiscovery(
+      20,
+      configuration::Node::withTestDefaults(20).setLocation("aa.bb.cc.dd.ef"));
   desc2.server_to_server_address.reset();
   update.service_discovery_update->addNode(
       20,
@@ -342,8 +353,10 @@ TEST_F(NodesConfigurationTest, ChangingServiceDiscoveryAfterProvision) {
         9,
         ServiceDiscoveryConfig::NodeUpdate{
             ServiceDiscoveryConfig::UpdateType::PROVISION,
-            std::make_unique<NodeServiceDiscovery>(
-                genDiscovery(9, kBothRoles, {}, "aa.bb.cc.dd.ee"))});
+            std::make_unique<NodeServiceDiscovery>(genDiscovery(
+                9,
+                configuration::Node::withTestDefaults(9).setLocation(
+                    "aa.bb.cc.dd.ee")))});
     VLOG(1) << "update2: " << update2.toString();
     auto new_config = config->applyUpdate(std::move(update2));
     EXPECT_EQ(nullptr, new_config);
@@ -464,8 +477,10 @@ TEST_F(NodesConfigurationTest, AddingNodeWithoutServiceDiscoveryOrAttribute) {
         17,
         ServiceDiscoveryConfig::NodeUpdate{
             ServiceDiscoveryConfig::UpdateType::PROVISION,
-            std::make_unique<NodeServiceDiscovery>(
-                genDiscovery(17, kBothRoles, {}, "aa.bb.cc.dd.ee"))});
+            std::make_unique<NodeServiceDiscovery>(genDiscovery(
+                17,
+                configuration::Node::withTestDefaults(17).setLocation(
+                    "aa.bb.cc.dd.ee")))});
     update.storage_config_update = std::make_unique<StorageConfig::Update>();
     update.storage_config_update->membership_update =
         std::make_unique<StorageMembership::Update>(
@@ -663,8 +678,11 @@ TEST_F(NodesConfigurationTest, StorageHash) {
 
 TEST_F(NodesConfigurationTest, WritableStorageCapacity) {
   auto config = provisionNodes(
-      initialAddShardsUpdate(
-          {{13, kBothRoles, {}, "a.b.c.d.e", 1.0, 256.0, /*num_shards*/ 2}}),
+      initialAddShardsUpdate({{13,
+                               configuration::Node::withTestDefaults(13)
+                                   .setLocation("a.b.c.d.e")
+                                   .addSequencerRole(true, 1.0)
+                                   .addStorageRole(2, 256.0)}}),
       {ShardID(13, 0), ShardID(13, 1)});
   ASSERT_TRUE(config->validate());
 

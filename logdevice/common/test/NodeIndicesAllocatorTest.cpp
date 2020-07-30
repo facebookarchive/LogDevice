@@ -24,10 +24,10 @@ ServiceDiscoveryConfig buildConfig(std::vector<node_index_t> indices) {
 
   ServiceDiscoveryConfig::Update update;
   for (auto i : indices) {
-    update.addNode(
-        i,
-        {ServiceDiscoveryConfig::UpdateType::PROVISION,
-         std::make_unique<NodeServiceDiscovery>(genDiscovery(i, {3}, {}, ""))});
+    update.addNode(i,
+                   {ServiceDiscoveryConfig::UpdateType::PROVISION,
+                    std::make_unique<NodeServiceDiscovery>(genDiscovery(
+                        i, configuration::Node::withTestDefaults(i)))});
   }
 
   ServiceDiscoveryConfig new_cfg;

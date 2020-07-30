@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "logdevice/common/configuration/Node.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 
 namespace facebook {
@@ -18,29 +19,14 @@ extern const configuration::nodes::NodeServiceDiscovery::RoleSet kStorageRole;
 extern const configuration::nodes::NodeServiceDiscovery::RoleSet kBothRoles;
 extern const configuration::nodes::NodeServiceDiscovery::TagMap kTestTags;
 
-struct NodeTemplate {
-  node_index_t id;
-  configuration::nodes::NodeServiceDiscovery::RoleSet roles{kBothRoles};
-  configuration::nodes::NodeServiceDiscovery::TagMap tags{kTestTags};
-  std::string location{};
-  double sequencer_weight{1.0};
-  double capacity{1.0};
-  shard_size_t num_shards{2};
-  bool metadata_node{false};
-  node_gen_t generation{1};
-};
-
 configuration::nodes::NodeServiceDiscovery
-genDiscovery(node_index_t n,
-             configuration::nodes::NodeServiceDiscovery::RoleSet roles,
-             configuration::nodes::NodeServiceDiscovery::TagMap tags,
-             std::string location);
+genDiscovery(node_index_t n, const configuration::Node& node);
 
 configuration::nodes::NodesConfiguration::Update
 initialAddShardsUpdate(std::vector<node_index_t> node_idxs);
 
 configuration::nodes::NodesConfiguration::Update
-initialAddShardsUpdate(std::vector<NodeTemplate> nodes,
+initialAddShardsUpdate(configuration::Nodes nodes,
                        ReplicationProperty metadata_rep = ReplicationProperty{
                            {NodeLocationScope::NODE, 2}});
 
@@ -48,13 +34,15 @@ std::shared_ptr<const configuration::nodes::NodesConfiguration> provisionNodes(
     configuration::nodes::NodesConfiguration::Update provision_update,
     std::unordered_set<ShardID> metadata_shards);
 
+// If an idx is passed, we use it, otherwise we use the largest idx + 1.
 configuration::nodes::NodesConfiguration::Update
 addNewNodeUpdate(const configuration::nodes::NodesConfiguration& existing,
-                 NodeTemplate node);
+                 const configuration::Node& node,
+                 folly::Optional<node_index_t> idx = folly::none);
 
 configuration::nodes::NodesConfiguration::Update
 addNewNodesUpdate(const configuration::nodes::NodesConfiguration& existing,
-                  std::vector<NodeTemplate> nodes);
+                  configuration::Nodes nodes);
 
 // Create an NC::Update to transition all PROVISIONING shards to NONE by
 // applying a MARK_SHARD_PROVISIONED transition.
@@ -86,7 +74,7 @@ provisionNodes(std::vector<node_index_t> node_idxs,
                std::unordered_set<ShardID> metadata_shards = {});
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
-provisionNodes(std::vector<NodeTemplate> nodes,
+provisionNodes(configuration::Nodes nodes,
                ReplicationProperty metadata_rep = ReplicationProperty{
                    {NodeLocationScope::NODE, 2}});
 

@@ -151,11 +151,15 @@ struct StorageNodeAttributes {
 };
 
 struct Node {
-  explicit Node(const Node&);
-
   Node() = default;
   Node(Node&&) = default;
+  Node(const Node&);
   Node& operator=(Node&&) = default;
+  Node& operator=(const Node&);
+
+  static Node withTestDefaults(node_index_t idx,
+                               bool sequencer = true,
+                               bool storage = true);
 
   /*
    * This is a unique name for the node in the cluster. This is currently not a
@@ -236,6 +240,15 @@ struct Node {
    */
   std::bitset<NUM_ROLES> roles;
 
+  std::unordered_map<std::string, std::string> tags;
+
+  /**
+   * Only used in the tests for templating and doesn't reflect the actual
+   * metadata state of this node. This will be fixed when the nodes
+   * configuration migration is done and this class is only used for templating.
+   */
+  bool metadata_node{false};
+
   std::unique_ptr<SequencerNodeAttributes> sequencer_attributes;
   std::unique_ptr<StorageNodeAttributes> storage_attributes;
 
@@ -304,22 +317,35 @@ struct Node {
     return -1;
   }
 
-  void addSequencerRole(bool enabled = true, double weight = 1.0) {
+  Node& addSequencerRole(bool enabled = true, double weight = 1.0) {
     setRole(NodeRole::SEQUENCER);
     sequencer_attributes = std::make_unique<SequencerNodeAttributes>();
     sequencer_attributes->setEnabled(enabled);
     sequencer_attributes->setWeight(weight);
+
+    return *this;
   }
 
-  void addStorageRole(shard_size_t num_shards = 1, double capacity = 1.0) {
+  Node& addStorageRole(shard_size_t num_shards = 1, double capacity = 1.0) {
     setRole(NodeRole::STORAGE);
     storage_attributes = std::make_unique<StorageNodeAttributes>();
     storage_attributes->num_shards = num_shards;
     storage_attributes->capacity = capacity;
+
+    return *this;
   }
 
   // return a human-readable string for the location info
   std::string locationStr() const;
+
+  Node& setTags(std::unordered_map<std::string, std::string> tags);
+  Node& setLocation(const std::string& location);
+  Node& setIsMetadataNode(bool metadata_node);
+  Node& setGeneration(node_gen_t generation);
+  Node& setName(std::string name);
+  Node& setAddress(Sockaddr address);
+  Node& setGossipAddress(Sockaddr gossip_address);
+  Node& setSSLAddress(Sockaddr ssl_address);
 };
 
 using Nodes = std::unordered_map<node_index_t, Node>;

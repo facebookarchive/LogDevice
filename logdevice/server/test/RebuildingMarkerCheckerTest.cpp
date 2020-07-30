@@ -18,13 +18,14 @@ namespace facebook { namespace logdevice {
 using namespace facebook::logdevice::configuration;
 
 NodesConfiguration buildNodesConfiguration(NodeID my_id, int num_shards) {
-  NodesConfigurationTestUtil::NodeTemplate tmpl{my_id.index()};
-  tmpl.num_shards = num_shards;
-  tmpl.generation = my_id.generation();
+  configuration::Node node =
+      configuration::Node::withTestDefaults(my_id.index());
+  node.addStorageRole(num_shards);
+  node.generation = my_id.generation();
 
   NodesConfiguration nc;
-  auto new_nc =
-      nc.applyUpdate(NodesConfigurationTestUtil::addNewNodeUpdate(nc, tmpl));
+  auto new_nc = nc.applyUpdate(
+      NodesConfigurationTestUtil::addNewNodeUpdate(nc, node, my_id.index()));
   ld_check(new_nc);
 
   // Assert that all the shards are PROVISIONING

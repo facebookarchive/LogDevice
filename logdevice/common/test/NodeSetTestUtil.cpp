@@ -29,18 +29,16 @@ void addNodes(std::shared_ptr<const NodesConfiguration>& nodes,
 
   std::vector<ShardID> added_shards;
 
-  std::vector<NodesConfigurationTestUtil::NodeTemplate> new_nodes;
+  configuration::Nodes new_nodes;
   node_index_t idx =
       nodes->clusterSize() > 0 ? nodes->getMaxNodeIndex() + 1 : 0;
   for (size_t i = 0; i < num_nodes; ++i) {
-    new_nodes.push_back(NodesConfigurationTestUtil::NodeTemplate{
-        .id = idx,
-        .location = location_string,
-        .sequencer_weight = sequencer,
-        .capacity = weight,
-        .num_shards = num_shards,
-        .metadata_node = metadata_node,
-    });
+    new_nodes.emplace(idx,
+                      configuration::Node::withTestDefaults(idx)
+                          .setLocation(location_string)
+                          .addSequencerRole(true, sequencer)
+                          .addStorageRole(num_shards, weight)
+                          .setIsMetadataNode(metadata_node));
     added_shards.emplace_back(idx, -1);
     idx++;
   }
@@ -77,5 +75,4 @@ void addLog(configuration::LocalLogsConfig* logs_config,
   logs_config->insert(
       logid_interval, folly::to<std::string>(logid.val()), log_attrs);
 }
-
 }}} // namespace facebook::logdevice::NodeSetTestUtil

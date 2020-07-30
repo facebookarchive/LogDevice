@@ -40,17 +40,18 @@ class NodeStatsControllerLocatorTest : public Test {
  public:
   std::shared_ptr<const NodesConfiguration>
   nodesWithLocations(std::vector<folly::Optional<std::string>> locations) {
-    std::vector<NodeTemplate> templates;
+    configuration::Nodes templates;
     for (const auto& location_str : locations) {
       auto idx = node_index++;
       if (!location_str.has_value()) {
         continue;
       }
-      NodeTemplate node_template;
-      node_template.id = idx;
-      node_template.roles = kBothRoles;
-      node_template.location = *location_str;
-      templates.emplace_back(std::move(node_template));
+      configuration::Node node_template =
+          configuration::Node::withTestDefaults(idx);
+      if (!location_str->empty()) {
+        node_template.setLocation(*location_str);
+      }
+      templates[idx] = std::move(node_template);
     }
     auto nc = provisionNodes(std::move(templates));
     ld_check(nc != nullptr);

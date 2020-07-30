@@ -20,17 +20,16 @@ namespace facebook { namespace logdevice {
 static void do_benchmark(NodeSetSelectorType type, unsigned iterations) {
   std::shared_ptr<Configuration> config;
   BENCHMARK_SUSPEND {
-    std::vector<NodesConfigurationTestUtil::NodeTemplate> nodes;
+    configuration::Nodes nodes;
     const int nodes_per_rack = 20;
     for (int rack = 0; rack < 10; ++rack) {
       for (int node = 0; node < nodes_per_rack; ++node) {
-        configuration::Node n;
-        nodes.push_back(NodesConfigurationTestUtil::NodeTemplate{
-            .id = node_index_t(rack * nodes_per_rack + node),
-            .location = "region.dc.cluster.row.rack" + std::to_string(rack),
-            .num_shards = 1,
-            .roles = NodesConfigurationTestUtil::kBothRoles,
-        });
+        nodes[rack * nodes_per_rack + node] =
+            configuration::Node::withTestDefaults(rack * nodes_per_rack + node)
+                .setIsMetadataNode(true)
+                .setLocation("region.dc.cluster.row.rack" +
+                             std::to_string(rack))
+                .addStorageRole(1);
       }
     }
 

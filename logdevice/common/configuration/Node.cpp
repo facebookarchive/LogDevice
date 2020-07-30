@@ -27,6 +27,9 @@ Node::Node(const Node& other) {
   generation = other.generation;
   location = other.location;
   roles = other.roles;
+  tags = other.tags;
+  metadata_node = other.metadata_node;
+
   if (hasRole(NodeRole::SEQUENCER)) {
     sequencer_attributes =
         std::make_unique<SequencerNodeAttributes>(*other.sequencer_attributes);
@@ -35,6 +38,35 @@ Node::Node(const Node& other) {
     storage_attributes =
         std::make_unique<StorageNodeAttributes>(*other.storage_attributes);
   }
+}
+
+Node& Node::operator=(const Node& node) {
+  *this = Node(node);
+  return *this;
+}
+
+/* static */ Node Node::withTestDefaults(node_index_t idx,
+                                         bool sequencer,
+                                         bool storage) {
+  Node n;
+
+  n.name = folly::sformat("server-{}", idx);
+
+  std::string addr = folly::sformat("127.0.0.{}", idx);
+  n.address = Sockaddr(addr, 4440);
+  n.gossip_address = Sockaddr(addr, 4441);
+  n.admin_address = Sockaddr(addr, 64440);
+  n.server_to_server_address = Sockaddr(addr, 4442);
+  n.server_thrift_api_address = Sockaddr(addr, 7441);
+  n.client_thrift_api_address = Sockaddr(addr, 7440);
+
+  if (sequencer) {
+    n.addSequencerRole();
+  }
+  if (storage) {
+    n.addStorageRole();
+  }
+  return n;
 }
 
 std::string Node::locationStr() const {
@@ -98,6 +130,40 @@ bool nodeRoleFromString(const std::string& str, NodeRole* out) {
     return false;
   }
   return true;
+}
+
+Node& Node::setTags(std::unordered_map<std::string, std::string> tags) {
+  this->tags = std::move(tags);
+  return *this;
+}
+Node& Node::setLocation(const std::string& location) {
+  this->location = NodeLocation();
+  this->location.value().fromDomainString(location);
+  return *this;
+}
+Node& Node::setIsMetadataNode(bool metadata_node) {
+  this->metadata_node = metadata_node;
+  return *this;
+}
+Node& Node::setGeneration(node_gen_t generation) {
+  this->generation = generation;
+  return *this;
+}
+Node& Node::setName(std::string name) {
+  this->name = std::move(name);
+  return *this;
+}
+Node& Node::setAddress(Sockaddr address) {
+  this->address = std::move(address);
+  return *this;
+}
+Node& Node::setGossipAddress(Sockaddr gossip_address) {
+  this->gossip_address = std::move(gossip_address);
+  return *this;
+}
+Node& Node::setSSLAddress(Sockaddr ssl_address) {
+  this->ssl_address = std::move(ssl_address);
+  return *this;
 }
 
 }}} // namespace facebook::logdevice::configuration

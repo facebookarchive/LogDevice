@@ -675,12 +675,11 @@ void AppenderTest::start(bool stream_message) {
 }
 
 void AppenderTest::updateConfig() {
-  std::vector<NodesConfigurationTestUtil::NodeTemplate> nodes;
+  configuration::Nodes nodes;
   for (ShardID shard : shards_) {
-    nodes.push_back({
-        .id = shard.node(),
-        .metadata_node = true,
-    });
+    nodes.emplace(shard.node(),
+                  configuration::Node::withTestDefaults(shard.node())
+                      .setIsMetadataNode(true));
   }
   auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
       std::move(nodes), ReplicationProperty{{NodeLocationScope::NODE, 3}});

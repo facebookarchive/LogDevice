@@ -104,13 +104,11 @@ class Subscriber {
 };
 
 std::shared_ptr<UpdateableConfig> buildConfig() {
-  std::vector<NodesConfigurationTestUtil::NodeTemplate> nodes;
+  configuration::Nodes nodes;
   for (node_index_t nid = 0; nid < kNumNodes; ++nid) {
-    nodes.push_back({
-        .id = nid,
-        .metadata_node = true,
-        .num_shards = kNumShards,
-    });
+    nodes[nid] = configuration::Node::withTestDefaults(nid)
+                     .setIsMetadataNode(true)
+                     .addStorageRole(kNumShards);
   }
   auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
       std::move(nodes), ReplicationProperty{{NodeLocationScope::NODE, 2}});

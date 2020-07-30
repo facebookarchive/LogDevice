@@ -15,7 +15,6 @@
 
 namespace facebook { namespace logdevice {
 
-using NodeTemplate = NodesConfigurationTestUtil::NodeTemplate;
 class MetadataNodesetSelectorTest : public ::testing::Test {
  public:
   explicit MetadataNodesetSelectorTest() {}
@@ -31,22 +30,22 @@ class MetadataNodesetSelectorTest : public ::testing::Test {
 
 void MetadataNodesetSelectorTest::init() {
   int i, j = 0;
-  std::vector<NodeTemplate> nodes;
+  configuration::Nodes nodes;
   std::unordered_set<ShardID> metadata_shards;
   for (auto loc : {"rg1.dc1.msb1.rw1.rk1",
                    "rg1.dc1.msb1.rw1.rk2",
                    "rg1.dc1.msb1.rw1.rk3"}) {
     i = 0;
     while (i < 2) {
-      NodeTemplate node;
-      node.id = j++;
-      node.location = loc;
-      node.num_shards = 1;
+      auto idx = j++;
+      configuration::Node node = configuration::Node::withTestDefaults(idx);
+      node.setLocation(loc);
+      node.addStorageRole(1);
       if (i == 1) {
-        metadata_shards.insert(ShardID(node.id, 0));
+        metadata_shards.insert(ShardID(idx, 0));
       }
       node.metadata_node = i == 1 ? true : false;
-      nodes.push_back(node);
+      nodes[idx] = std::move(node);
       i++;
     }
   }
@@ -61,12 +60,11 @@ void MetadataNodesetSelectorTest::addNewRack(std::string rack_location,
                                              std::vector<node_index_t> nodes) {
   std::unordered_map<ShardID, membership::StorageState> map;
   for (auto nid : nodes) {
-    NodeTemplate node;
-    node.id = nid;
-    node.location = rack_location;
-    node.num_shards = 1;
+    configuration::Node node = configuration::Node::withTestDefaults(nid);
+    node.setLocation(rack_location);
+    node.addStorageRole(1);
     auto update =
-        NodesConfigurationTestUtil::addNewNodeUpdate(*nodes_config_, node);
+        NodesConfigurationTestUtil::addNewNodeUpdate(*nodes_config_, node, nid);
     nodes_config_ = nodes_config_->applyUpdate(update);
     map[ShardID(nid, 0)] = membership::StorageState::READ_WRITE;
   }
@@ -202,13 +200,12 @@ TEST_F(MetadataNodesetSelectorTest, MultiScopeReplicationProperty) {
 TEST_F(MetadataNodesetSelectorTest, NodeScopeNodeset) {
   replication_property_ = ReplicationProperty({{NodeLocationScope::NODE, 3}});
   // Build a cluster with three nodes in the same domain
-  std::vector<NodeTemplate> nodes;
+  configuration::Nodes nodes;
   for (int i = 0; i < 3; i++) {
-    NodeTemplate node;
-    node.id = i;
-    node.location = "rg1.dc1.msb3.rw1.rk1";
-    node.num_shards = 1;
-    nodes.push_back(node);
+    nodes.emplace(i,
+                  configuration::Node::withTestDefaults(i)
+                      .setLocation("rg1.dc1.msb3.rw1.rk1")
+                      .addStorageRole(1));
   }
   auto update = NodesConfigurationTestUtil::initialAddShardsUpdate(
       nodes, replication_property_);

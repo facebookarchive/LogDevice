@@ -543,12 +543,12 @@ void MaintenanceManagerTest::setSequencerWorkflowResult(SeqWfResult r) {
 
 void MaintenanceManagerTest::addNewNode(node_index_t node,
                                         std::string location) {
-  NodesConfigurationTestUtil::NodeTemplate n;
-  n.id = node;
-  n.location = location;
-  n.num_shards = 1;
+  configuration::Node n;
+  n.addSequencerRole();
+  n.addStorageRole(1);
+  n.setLocation(location);
   nodes_config_ = nodes_config_->applyUpdate(
-      NodesConfigurationTestUtil::addNewNodeUpdate(*nodes_config_, n));
+      NodesConfigurationTestUtil::addNewNodeUpdate(*nodes_config_, n, node));
   ld_check(nodes_config_);
 }
 
@@ -1771,7 +1771,8 @@ TEST_F(MaintenanceManagerTest, TestPurgeMaintenance) {
   runExecutor();
 
   // Simluate node removal by building a new nodes config without nodes 1 & 13
-  nodes_config_ = NodesConfigurationTestUtil::provisionNodes({2, 9, 11})
+  nodes_config_ = NodesConfigurationTestUtil::provisionNodes(
+                      std::vector<node_index_t>{2, 9, 11})
                       ->withVersion(membership::MembershipVersion::Type(100));
   ASSERT_NE(nullptr, nodes_config_);
   maintenance_manager_->onNodesConfigurationUpdated();
@@ -1791,9 +1792,9 @@ TEST_F(MaintenanceManagerTest, TestPurgeMaintenance) {
   ASSERT_NE(nullptr, write_done_cb);
 
   // Simulate the remove of N2
-  nodes_config_ =
-      NodesConfigurationTestUtil::provisionNodes({9, 11})->withVersion(
-          membership::MembershipVersion::Type(110));
+  nodes_config_ = NodesConfigurationTestUtil::provisionNodes(
+                      std::vector<node_index_t>{9, 11})
+                      ->withVersion(membership::MembershipVersion::Type(110));
   ASSERT_NE(nullptr, nodes_config_);
   maintenance_manager_->onNodesConfigurationUpdated();
 

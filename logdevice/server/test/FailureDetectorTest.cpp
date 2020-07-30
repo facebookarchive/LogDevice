@@ -152,12 +152,11 @@ class FailureDetectorTest : public testing::Test {
 
 // generates a dummy config consisting of num_nodes sequencers
 std::shared_ptr<Configuration> gen_config(size_t num_nodes) {
-  std::vector<NodesConfigurationTestUtil::NodeTemplate> nodes;
+  configuration::Nodes nodes;
   for (node_index_t i = 0; i < num_nodes; ++i) {
-    nodes.push_back({
-        .id = i,
-        .metadata_node = true,
-    });
+    nodes[i] = configuration::Node::withTestDefaults(i)
+                   .addStorageRole()
+                   .setIsMetadataNode(true);
   }
   // metadata stored on all nodes with max replication factor 3
   auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
