@@ -43,11 +43,6 @@ const Sockaddr& NodeServiceDiscovery::getGossipAddress() const {
                                     : default_client_data_address;
 }
 
-const Sockaddr& NodeServiceDiscovery::getServerToServerAddress() const {
-  return server_to_server_address.has_value() ? server_to_server_address.value()
-                                              : default_client_data_address;
-}
-
 bool NodeServiceDiscovery::isValid() const {
   if (!isFieldValid(
           default_client_data_address, "default_client_data_address") ||
@@ -144,42 +139,6 @@ std::string NodeServiceDiscovery::toString() const {
       logdevice::toString(roles),
       version,
       logdevice::toString(tags));
-}
-
-const Sockaddr& NodeServiceDiscovery::getSockaddr(
-    SocketType socket_type,
-    ConnectionType connection_type,
-    bool is_server,
-    bool use_dedicated_server_to_server_address) const {
-  switch (socket_type) {
-    case SocketType::GOSSIP:
-      return getGossipAddress();
-
-    case SocketType::DATA:
-      if (is_server && use_dedicated_server_to_server_address) {
-        if (!server_to_server_address.has_value()) {
-          return Sockaddr::INVALID;
-        }
-        return server_to_server_address.value();
-      }
-
-      if (connection_type == ConnectionType::SSL) {
-        if (!ssl_address.has_value()) {
-          return Sockaddr::INVALID;
-        }
-        return ssl_address.value();
-      }
-      return default_client_data_address;
-
-    default:
-      RATELIMIT_CRITICAL(std::chrono::seconds(1),
-                         2,
-                         "Unexpected Socket Type:%d!",
-                         (int)socket_type);
-      ld_check(false);
-  }
-
-  return Sockaddr::INVALID;
 }
 
 namespace {

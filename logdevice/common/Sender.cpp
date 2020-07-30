@@ -30,6 +30,7 @@
 #include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/ServerConfig.h"
+#include "logdevice/common/configuration/nodes/ServerAddressRouter.h"
 #include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/network/IConnectionFactory.h"
@@ -1379,15 +1380,12 @@ void Sender::noteConfigurationChanged(
 
     if (node_service_discovery != nullptr) {
       node_gen_t generation = nodes_->getNodeGeneration(i);
-      const Settings& worker_settings = Worker::settings();
-      bool is_server = worker_settings.server;
-      bool use_dedicated_server_to_server_address =
-          worker_settings.use_dedicated_server_to_server_address;
-      const Sockaddr& newaddr = node_service_discovery->getSockaddr(
+      auto newaddr = configuration::nodes::ServerAddressRouter().getAddress(
+          i,
+          *node_service_discovery,
           s->getSockType(),
           s->getConnType(),
-          is_server,
-          use_dedicated_server_to_server_address);
+          Worker::settings());
       if (s->peer_name_.asNodeID().generation() == generation &&
           s->peer_sockaddr_ == newaddr) {
         ++it;

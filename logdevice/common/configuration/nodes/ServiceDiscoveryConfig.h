@@ -137,22 +137,6 @@ struct NodeServiceDiscovery {
   std::string toString() const;
   bool isValidForReset(const NodeServiceDiscovery& current) const;
 
-  /**
-   * Returns the corresponding socket address for a specific channel.
-   *
-   * @param socket_type     Type of socket.
-   * @param connection_type Type of connection.
-   * @param is_server       Whether the caller is a server.
-   * @param use_dedicated_server_to_server_address Temporary switch to control
-   *        whether nodes use a dedicated address to talk to other nodes.
-   *        Ignored if the peer type is not NODE.
-   */
-  const Sockaddr&
-  getSockaddr(SocketType socket_type,
-              ConnectionType connection_type,
-              bool is_server,
-              bool use_dedicated_server_to_server_address) const;
-
   const RoleSet& getRoles() const {
     return roles;
   }

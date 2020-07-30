@@ -14,6 +14,7 @@
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
+#include "logdevice/common/configuration/nodes/ServerAddressRouter.h"
 #include "logdevice/common/libevent/LibEventCompatibility.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/common/protocol/ACK_Message.h"
@@ -109,19 +110,13 @@ SocketDependencies::getNodeSockaddr(NodeID node_id,
   const auto* node_service_discovery =
       nodes_configuration->getNodeServiceDiscovery(node_id.index());
 
-  const Settings& settings = getSettings();
-  bool is_server = settings.server;
-  bool use_s2s_addr = settings.use_dedicated_server_to_server_address;
-
   if (node_service_discovery) {
-    if (socket_type == SocketType::GOSSIP &&
-        !getSettings().send_to_gossip_port) {
-      return node_service_discovery->getSockaddr(
-          SocketType::DATA, connection_type, is_server, use_s2s_addr);
-    }
-
-    return node_service_discovery->getSockaddr(
-        socket_type, connection_type, is_server, use_s2s_addr);
+    return configuration::nodes::ServerAddressRouter().getAddress(
+        node_id.index(),
+        *node_service_discovery,
+        socket_type,
+        connection_type,
+        getSettings());
   }
 
   return Sockaddr::INVALID;

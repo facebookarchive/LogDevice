@@ -241,16 +241,6 @@ TEST_F(NodesConfigurationTest, TestServerToServerDefaultingToDataAddress) {
 
   auto new_config = config->applyUpdate(update);
   ASSERT_NE(nullptr, new_config);
-
-  // Server-to-server address is set on N10, should return the passed address.
-  EXPECT_EQ(
-      desc1.server_to_server_address,
-      new_config->getNodeServiceDiscovery(10)->getServerToServerAddress());
-
-  // Server-to-server address is not set on N20, should return data address.
-  EXPECT_EQ(
-      desc2.default_client_data_address,
-      new_config->getNodeServiceDiscovery(20)->getServerToServerAddress());
 }
 
 TEST_F(NodesConfigurationTest, ChangingServiceDiscoveryAfterProvision) {
