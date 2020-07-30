@@ -19,8 +19,8 @@ using namespace facebook::logdevice::configuration;
 
 namespace facebook { namespace logdevice {
 
-folly::SemiFuture<std::unique_ptr<thrift::CheckImpactResponse>>
-CheckImpactHandler::semifuture_checkImpact(
+folly::coro::Task<std::unique_ptr<thrift::CheckImpactResponse>>
+CheckImpactHandler::co_checkImpact(
     std::unique_ptr<thrift::CheckImpactRequest> request) {
   // We don't have a safety checker.
   if (safety_checker_ == nullptr) {
@@ -92,30 +92,28 @@ CheckImpactHandler::semifuture_checkImpact(
         "max-unavailable-sequencing-capacity-pct has to be between 0 and 100");
   }
 
-  return safety_checker_
-      ->checkImpact(std::move(status_map),
-                    std::move(shards),
-                    std::move(sequencers),
-                    target_storage_state,
-                    safety_margin,
-                    request->check_metadata_logs_ref().value_or(true),
-                    request->check_internal_logs_ref().value_or(true),
-                    request->check_capacity_ref().value_or(true),
-                    request->get_max_unavailable_storage_capacity_pct(),
-                    request->get_max_unavailable_sequencing_capacity_pct(),
-                    logs_to_check)
-      .via(this->getThreadManager())
-      .thenValue([](const folly::Expected<Impact, Status>& impact) {
-        if (impact.hasError()) {
-          // An error has happened.
-          thrift::OperationError ex(error_description(impact.error()));
-          ex.set_error_code(static_cast<uint16_t>(impact.error()));
-          ex.set_message(error_description(impact.error()));
-          throw ex;
-        }
+  auto impact = co_await safety_checker_->checkImpact(
+      std::move(status_map),
+      std::move(shards),
+      std::move(sequencers),
+      target_storage_state,
+      safety_margin,
+      request->check_metadata_logs_ref().value_or(true),
+      request->check_internal_logs_ref().value_or(true),
+      request->check_capacity_ref().value_or(true),
+      request->get_max_unavailable_storage_capacity_pct(),
+      request->get_max_unavailable_sequencing_capacity_pct(),
+      logs_to_check);
 
-        return std::make_unique<thrift::CheckImpactResponse>(
-            toThrift<thrift::CheckImpactResponse>(impact.value()));
-      });
+  if (impact.hasError()) {
+    // An error has happened.
+    thrift::OperationError ex(error_description(impact.error()));
+    ex.set_error_code(static_cast<uint16_t>(impact.error()));
+    ex.set_message(error_description(impact.error()));
+    throw ex;
+  }
+
+  co_return std::make_unique<thrift::CheckImpactResponse>(
+      toThrift<thrift::CheckImpactResponse>(impact.value()));
 }
 }} // namespace facebook::logdevice
