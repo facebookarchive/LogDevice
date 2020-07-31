@@ -88,6 +88,10 @@ class SocketAddress:
         """
         socket_address: SocketAddress
         # pyre-fixme[33]: Given annotation cannot contain `Any`.
+        # pyre-fixme[9]: info has type `List[Tuple[socket.AddressFamily,
+        #  socket.SocketKind, int, str, typing.Tuple[typing.Any, ...]]]`; used as
+        #  `List[Tuple[socket.AddressFamily, socket.SocketKind, int, str,
+        #  Union[Tuple[str, int], Tuple[str, int, int, int]]]]`.
         info: List[
             Tuple[socket.AddressFamily, socket.SocketKind, int, str, Tuple[Any, ...]]
         ] = socket.getaddrinfo(host, port)
