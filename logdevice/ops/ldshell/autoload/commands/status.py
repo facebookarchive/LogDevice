@@ -212,10 +212,7 @@ async def print_results_json(results, *args, **kwargs):
 
 
 def render_uptime(uptime: float):
-    # TODO(T70149915): Remove as soon as new version is rolled out
-    year = timedelta(days=365).total_seconds()
-    now = time.time()
-    elapsed_secs = uptime if uptime < year else now - uptime
+    elapsed_secs = time.time() - uptime
     return naturaltime(timedelta(seconds=int(elapsed_secs)))
 
 
