@@ -652,6 +652,13 @@ void Worker::finishWorkAndCloseSockets() {
     ld_info("Aborted %lu configuration-fetch requests", c);
   }
 
+  // abort all running trim requests
+  if (!runningTrimRequests().map.empty()) {
+    c = runningTrimRequests().map.size();
+    runningTrimRequests().map.clear();
+    ld_info("Aborted %lu trim requests", c);
+  }
+
   // Kick off the following async sequence:
   //  1) wait for requestsPending() to become zero
   //  2) tear down state machines such as read streams
