@@ -4,7 +4,6 @@
 
 #include <gtest/gtest.h>
 
-using namespace ::testing;
 using namespace facebook::logdevice;
 using NodesConfigTagMapT = ServerSettings::NodesConfigTagMapT;
 

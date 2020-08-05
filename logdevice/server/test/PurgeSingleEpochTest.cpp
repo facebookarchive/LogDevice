@@ -25,7 +25,6 @@
 #include "logdevice/server/storage/PurgeUncleanEpochs.h"
 
 using namespace facebook::logdevice;
-using namespace facebook::logdevice::NodeSetTestUtil;
 
 #define N0S0 ShardID(0, 0)
 #define N1S0 ShardID(1, 0)
