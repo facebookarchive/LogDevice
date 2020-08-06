@@ -1694,6 +1694,8 @@ void ReplicatedStateMachine<T, D>::snapshot(std::function<void(Status st)> cb) {
         return;
       }
 
+      snapshot_in_flight_ = false;
+
       if (st == E::OK) {
         // We don't want to wait for the snapshot to be read before
         // last_snapshot_* members are modified otherwise
@@ -1722,7 +1724,6 @@ void ReplicatedStateMachine<T, D>::snapshot(std::function<void(Status st)> cb) {
         last_written_version_ = LSN_INVALID;
         advertiseVersions(RsmVersionType::DURABLE, LSN_INVALID);
       }
-      snapshot_in_flight_ = false;
       cb_or_noop(st);
     });
   };
