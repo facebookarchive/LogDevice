@@ -9,8 +9,6 @@
 
 #include <gtest/gtest.h>
 
-using namespace ::testing;
-
 namespace facebook { namespace logdevice {
 
 TEST(DataRecordTest, EmptyPayloadGroup) {
