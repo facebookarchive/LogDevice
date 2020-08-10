@@ -34,6 +34,7 @@
 #include "logdevice/include/LogsConfigTypes.h"
 #include "logdevice/include/types.h"
 #include "logdevice/test/utils/MetaDataProvisioner.h"
+#include "logdevice/test/utils/NodesConfigurationFileUpdater.h"
 #include "logdevice/test/utils/port_selection.h"
 
 namespace facebook { namespace logdevice {
@@ -344,14 +345,6 @@ class ClusterFactory {
    */
   ClusterFactory& doPreProvisionEpochMetaData() {
     provision_epoch_metadata_ = true;
-    return *this;
-  }
-
-  /**
-   * If called, nodes configuration store won't be provisioned.
-   */
-  ClusterFactory& doNotPreProvisionNodesConfigurationStore() {
-    provision_nodes_configuration_store_ = false;
     return *this;
   }
 
@@ -677,9 +670,6 @@ class ClusterFactory {
   // Provision the inital epoch metadata in epoch store and storage nodes
   // that store metadata
   bool provision_epoch_metadata_ = false;
-
-  // Provision the inital nodes configuration store
-  bool provision_nodes_configuration_store_ = true;
 
   // Controls whether the cluster should also update the NodesConfiguration
   // whenver the ServerConfig change. This is there only during the migration
@@ -1423,9 +1413,10 @@ class Cluster {
   const NodesConfigurationSourceOfTruth nodes_configuration_sot_;
 
   std::shared_ptr<UpdateableConfig> config_;
-  std::unique_ptr<NodesConfigurationPublisher> nodes_configuration_publisher_;
   FileConfigSource* config_source_;
   std::unique_ptr<ClientSettings> client_settings_;
+  std::unique_ptr<NodesConfigurationFileUpdater> nodes_configuration_updater_;
+
   // ordered map for convenience
   Nodes nodes_;
 

@@ -359,11 +359,10 @@ Cluster::Cluster(std::string root_path,
     config_->updateableLogsConfig()->update(logs_config);
   }
 
-  nodes_configuration_publisher_ =
-      std::make_unique<NodesConfigurationPublisher>(
-          config_,
-          impl_settings->getSettings(),
-          std::make_unique<NoopTraceLogger>(config_, folly::none));
+  nodes_configuration_updater_ =
+      std::make_unique<NodesConfigurationFileUpdater>(
+          config_->updateableNodesConfiguration(),
+          buildNodesConfigurationStore());
 }
 
 logsconfig::LogAttributes
@@ -858,6 +857,15 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
   cluster->setNodeReplacementCounters(std::move(replacement_counters));
   cluster->maintenance_manager_node_ = maintenance_manager_node_;
 
+  if (cluster->updateNodesConfigurationFromServerConfig(
+          config->serverConfig().get()) != 0) {
+    return nullptr;
+  }
+  cluster->nodes_configuration_updater_->start();
+  wait_until("NodesConfiguration is picked by the updater", [&]() {
+    return cluster->getConfig()->getNodesConfiguration() != nullptr;
+  });
+
   // create Node objects, but don't start the processes
   for (int i = 0; i < nnodes; i++) {
     cluster->nodes_[node_ids[i]] =
@@ -869,14 +877,6 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
   if (provision_epoch_metadata_) {
     if (cluster->provisionEpochMetaData(
             provision_nodeset_selector_, allow_existing_metadata_) != 0) {
-      return nullptr;
-    }
-  }
-
-  if (provision_nodes_configuration_store_) {
-    const auto& server_config = config->serverConfig();
-    if (cluster->updateNodesConfigurationFromServerConfig(
-            server_config.get()) != 0) {
       return nullptr;
     }
   }
