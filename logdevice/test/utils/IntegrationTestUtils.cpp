@@ -2106,7 +2106,12 @@ int Node::waitUntilRSMSynced(const char* rsm,
 
 int Node::waitUntilExited() {
   ld_info("Waiting for node %d to exit", node_index_);
-  auto res = logdeviced_->wait();
+  folly::ProcessReturnCode res;
+  if (isRunning()) {
+    res = logdeviced_->wait();
+  } else {
+    res = logdeviced_->returnCode();
+  }
   ld_check(res.exited() || res.killed());
   if (res.killed()) {
     ld_warning("Node %d did not exit cleanly (signal %d)",
@@ -2951,7 +2956,7 @@ void Cluster::waitForServersToProcessNodesConfiguration(
     membership::MembershipVersion::Type version) {
   auto check = [this, version]() {
     for (auto& [_, node] : nodes_) {
-      if (node && node->logdeviced_ && !node->stopped_) {
+      if (node && !node->stopped_ && node->isRunning()) {
         auto stats = node->stats();
         auto version_itr =
             stats.find("nodes_configuration_manager_published_version");

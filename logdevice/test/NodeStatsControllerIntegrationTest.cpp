@@ -249,21 +249,23 @@ class NodeStatsControllerIntegrationTest : public IntegrationTestBase {
    */
   void setOneLogPerNode() {
     auto full_config = cluster->getConfig()->get();
-    auto nodes = full_config->serverConfig()->getNodes();
+    auto nodes_config = full_config->getNodesConfiguration();
 
     auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
 
     auto config_tree = logsconfig::LogsConfigTree::create();
     const auto defaults =
         logsconfig::DefaultLogAttributes{}.with_replicationFactor(1);
-    for (unsigned int i = 0; i < nodes.size(); ++i) {
+    for (unsigned int i = 0; i < nodes_config->clusterSize(); ++i) {
       ASSERT_TRUE(config_tree->addLogGroup(
           "/",
           std::to_string(i),
           logid_range_t({logid_t{i + 1}, logid_t{i + 1}}),
           defaults.with_sequencerAffinity(
               logsconfig::Attribute<folly::Optional<std::string>>(
-                  nodes.at(i).location.value().toString()))));
+                  nodes_config->getNodeServiceDiscovery(i)
+                      ->location.value()
+                      .toString()))));
     }
     logs_config->setLogsConfigTree(std::move(config_tree));
     logs_config->markAsFullyLoaded();

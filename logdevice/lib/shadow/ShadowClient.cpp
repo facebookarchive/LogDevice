@@ -175,18 +175,24 @@ std::shared_ptr<ShadowClient>
 ShadowClient::create(const std::string& origin_name,
                      const Shadow::Attrs& attrs,
                      std::chrono::milliseconds timeout,
-                     StatsHolder* stats) {
+                     StatsHolder* stats,
+                     std::unique_ptr<ClientSettings> client_settings) {
+  if (client_settings == nullptr) {
+    client_settings = std::unique_ptr<ClientSettings>(ClientSettings::create());
+  }
+  client_settings->set("shadow-client", "true");
+  // In case the default is changed in the future
+  client_settings->set("on-demand-logs-config", "false");
+  // Epoch metadata cache is used for reading, not necessary here
+  client_settings->set("client-epoch-metadata-cache-size", "0");
+  // Don't want to pollute traces with shadow data - TODO not sure about
+  // this
+  client_settings->set("disable-trace-logger", "true");
+
   std::string shadow_name(origin_name + ".shadow:" + attrs->destination());
   std::shared_ptr<Client> client =
       ClientFactory()
-          .setSetting("shadow-client", "true")
-          // In case the default is changed in the future
-          .setSetting("on-demand-logs-config", "false")
-          // Epoch metadata cache is used for reading, not necessary here
-          .setSetting("client-epoch-metadata-cache-size", "0")
-          // Don't want to pollute traces with shadow data - TODO not sure about
-          // this
-          .setSetting("disable-trace-logger", "true")
+          .setClientSettings(std::move(client_settings))
           .setClusterName(shadow_name)
           .setTimeout(timeout)
           .create(attrs->destination());

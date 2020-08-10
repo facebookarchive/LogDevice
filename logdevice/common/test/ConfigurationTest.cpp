@@ -71,30 +71,6 @@ TEST(ConfigurationTest, SimpleValid) {
 
   ASSERT_EQ(5, nodes.size());
 
-  // N0 and N5 are sequencer nodes. The list of sequencers is padded to size 43.
-  const auto& seq_locator_config =
-      config->getNodesConfiguration()->getSequencersConfig();
-  EXPECT_EQ(43, seq_locator_config.nodes.size());
-  EXPECT_EQ(43, seq_locator_config.weights.size());
-  for (int i = 0; i <= 42; ++i) {
-    if (i == 0) {
-      EXPECT_EQ(NodeID(0, 3), seq_locator_config.nodes[i]);
-      EXPECT_EQ(1, seq_locator_config.weights[i]);
-    } else if (i == 5) {
-      EXPECT_EQ(NodeID(5, 2), seq_locator_config.nodes[i]);
-      EXPECT_EQ(1, seq_locator_config.weights[i]);
-    } else if (i == 6) {
-      EXPECT_EQ(NodeID(6, 2), seq_locator_config.nodes[i]);
-      EXPECT_EQ(1, seq_locator_config.weights[i]);
-    } else if (i == 42) {
-      EXPECT_EQ(NodeID(42, 5), seq_locator_config.nodes[i]);
-      EXPECT_EQ(1, seq_locator_config.weights[i]);
-    } else {
-      EXPECT_EQ(NodeID(), seq_locator_config.nodes[i]);
-      EXPECT_EQ(0, seq_locator_config.weights[i]);
-    }
-  }
-
   char buf[256];
 
   {
@@ -453,33 +429,6 @@ TEST(ConfigurationTest, OverlappingLogIdRanges) {
 
   config = Configuration::fromJsonFile(TEST_CONFIG_FILE("overlap3.conf"));
   EXPECT_EQ(config->logsConfig(), nullptr);
-  EXPECT_EQ(err, E::INVALID_CONFIG);
-}
-
-/**
- * Attempts to load configs with invalid roles config and checks that
- * they fail with E::INVALID_CONFIG.
- */
-TEST(ConfigurationTest, InvalidRolesConfig) {
-  using facebook::logdevice::E;
-  using facebook::logdevice::err;
-
-  std::shared_ptr<Configuration> config;
-
-  config =
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("invalid_roles_empty.conf"));
-  EXPECT_EQ(err, E::INVALID_CONFIG);
-
-  config = Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("invalid_roles_unknown.conf"));
-  EXPECT_EQ(err, E::INVALID_CONFIG);
-
-  config = Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("invalid_roles_not_array.conf"));
-  EXPECT_EQ(err, E::INVALID_CONFIG);
-
-  config = Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("invalid_generation_with_non_storage_role.conf"));
   EXPECT_EQ(err, E::INVALID_CONFIG);
 }
 

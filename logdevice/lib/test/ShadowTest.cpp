@@ -284,10 +284,21 @@ TEST_F(ShadowTest, LogRangeAutoUpdate) {
 
 // Make sure shadow client initializes without crashing
 TEST(ShadowClientTest, ShadowClientInitAppend) {
+  auto nodes_config_path =
+      provisionTempNodesConfiguration(*createSimpleNodesConfig(1));
+  std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
+  client_settings->set(
+      "nodes-configuration-file-store-dir", nodes_config_path->path().string());
+  client_settings->set("admin-client-capabilities", "true");
+
   LogAttributes::Shadow shadowAttr{
       std::string("file:") + TEST_CONFIG_FILE("sample_no_ssl.conf"), 0.1};
-  std::shared_ptr<ShadowClient> shadow_client = ShadowClient::create(
-      "test", shadowAttr, std::chrono::seconds(10), nullptr);
+  std::shared_ptr<ShadowClient> shadow_client =
+      ShadowClient::create("test",
+                           shadowAttr,
+                           std::chrono::seconds(10),
+                           nullptr,
+                           std::move(client_settings));
   ASSERT_NE(shadow_client, nullptr);
 
   int rv = shadow_client->append(logid_t{1},

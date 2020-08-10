@@ -621,7 +621,9 @@ int main(int argc, const char* argv[]) {
   std::unique_ptr<Cluster> cluster = nullptr;
   try {
     if (options::config_path != "") {
-      auto config = Configuration::fromJsonFile(options::config_path.c_str());
+      auto config = Configuration::fromJsonFile(options::config_path.c_str())
+                        ->withNodesConfiguration(
+                            createSimpleNodesConfig(options::nnodes));
       if (config == nullptr) {
         ld_error("Unable to load config. Could not create cluster");
         return 1;

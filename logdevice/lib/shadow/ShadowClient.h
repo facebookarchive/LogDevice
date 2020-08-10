@@ -113,10 +113,12 @@ class ShadowClient {
    * Creates a shadow client object backed by a Client object used for shadow
    * appends. Runs on current thread, so should only be used by the factory.
    */
-  static std::shared_ptr<ShadowClient> create(const std::string& origin_name,
-                                              const Shadow::Attrs& attrs,
-                                              std::chrono::milliseconds timeout,
-                                              StatsHolder* stats);
+  static std::shared_ptr<ShadowClient>
+  create(const std::string& origin_name,
+         const Shadow::Attrs& attrs,
+         std::chrono::milliseconds timeout,
+         StatsHolder* stats,
+         std::unique_ptr<ClientSettings> client_settings = nullptr);
 
   ~ShadowClient();
 
