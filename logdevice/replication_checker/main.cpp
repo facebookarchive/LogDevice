@@ -1984,8 +1984,9 @@ int main(int argc, const char** argv) {
     }
     if (!checker_settings->only_data_logs) {
       add_log(metaDataLogID(logid_t(it->first)),
-              ReplicationProperty::fromLogAttributes(
-                  cfg->serverConfig()->getMetaDataLogGroup()->attrs())
+              cfg->getNodesConfiguration()
+                  ->getMetaDataLogsReplication()
+                  ->getReplicationProperty()
                   .getReplicationFactor());
     }
   }

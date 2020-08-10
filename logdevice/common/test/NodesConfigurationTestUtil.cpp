@@ -151,9 +151,17 @@ provisionNodes(std::vector<node_index_t> node_idxs,
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 provisionNodes(configuration::Nodes nodes, ReplicationProperty metadata_rep) {
+  // TODO(mbassem): Remove in the next diffs.
+  // If the passed structure doesn't have any metadata node, consider all of
+  // them metadata nodes.
+  auto num_metadata = std::count_if(nodes.begin(), nodes.end(), [](auto it) {
+    return it.second.metadata_node;
+  });
+
   std::unordered_set<ShardID> metadata_shards;
   for (const auto& [nid, node] : nodes) {
-    if (hasRole(node.roles, NodeRole::STORAGE)) {
+    if (hasRole(node.roles, NodeRole::STORAGE) &&
+        (node.metadata_node || num_metadata == 0)) {
       for (int i = 0; i < node.storage_attributes->num_shards; i++) {
         metadata_shards.insert(ShardID(nid, i));
       }
@@ -304,18 +312,6 @@ addNewNodesUpdate(const configuration::nodes::NodesConfiguration& existing,
   NodesConfiguration::Update update{};
   update.service_discovery_update =
       std::make_unique<ServiceDiscoveryConfig::Update>();
-  update.sequencer_config_update = std::make_unique<SequencerConfig::Update>();
-  update.sequencer_config_update->membership_update =
-      std::make_unique<SequencerMembership::Update>(
-          existing.getSequencerMembership()->getVersion());
-  update.sequencer_config_update->attributes_update =
-      std::make_unique<SequencerAttributeConfig::Update>();
-  update.storage_config_update = std::make_unique<StorageConfig::Update>();
-  update.storage_config_update->attributes_update =
-      std::make_unique<StorageAttributeConfig::Update>();
-  update.storage_config_update->membership_update =
-      std::make_unique<StorageMembership::Update>(
-          existing.getStorageMembership()->getVersion());
 
   for (auto [nid, node] : nodes) {
     update.service_discovery_update->addNode(
@@ -325,6 +321,15 @@ addNewNodesUpdate(const configuration::nodes::NodesConfiguration& existing,
             std::make_unique<NodeServiceDiscovery>(genDiscovery(nid, node))});
 
     if (hasRole(node.roles, NodeRole::SEQUENCER)) {
+      if (update.sequencer_config_update == nullptr) {
+        update.sequencer_config_update =
+            std::make_unique<SequencerConfig::Update>();
+        update.sequencer_config_update->membership_update =
+            std::make_unique<SequencerMembership::Update>(
+                existing.getSequencerMembership()->getVersion());
+        update.sequencer_config_update->attributes_update =
+            std::make_unique<SequencerAttributeConfig::Update>();
+      }
       update.sequencer_config_update->membership_update->addNode(
           nid,
           {SequencerMembershipTransition::ADD_NODE,
@@ -338,6 +343,15 @@ addNewNodesUpdate(const configuration::nodes::NodesConfiguration& existing,
     }
 
     if (hasRole(node.roles, NodeRole::STORAGE)) {
+      if (update.storage_config_update == nullptr) {
+        update.storage_config_update =
+            std::make_unique<StorageConfig::Update>();
+        update.storage_config_update->attributes_update =
+            std::make_unique<StorageAttributeConfig::Update>();
+        update.storage_config_update->membership_update =
+            std::make_unique<StorageMembership::Update>(
+                existing.getStorageMembership()->getVersion());
+      }
       for (int s = 0; s < node.storage_attributes->num_shards; ++s) {
         update.storage_config_update->membership_update->addShard(
             ShardID(nid, s),
@@ -447,6 +461,50 @@ configuration::nodes::NodesConfiguration::Update setStorageMembershipUpdate(
   return update;
 }
 
+configuration::nodes::NodesConfiguration::Update setSequencerEnabledUpdate(
+    const configuration::nodes::NodesConfiguration& existing,
+    std::vector<node_index_t> nodes,
+    bool target_sequencer_enabled) {
+  NodesConfiguration::Update update{};
+  update.sequencer_config_update = std::make_unique<SequencerConfig::Update>();
+  update.sequencer_config_update->membership_update =
+      std::make_unique<SequencerMembership::Update>(
+          existing.getSequencerMembership()->getVersion());
+  for (auto node : nodes) {
+    auto seq_mem = existing.getSequencerMembership()->getNodeState(node);
+    ld_check(seq_mem.hasValue());
+    update.sequencer_config_update->membership_update->addNode(
+        node,
+        {SequencerMembershipTransition::SET_ENABLED_FLAG,
+         target_sequencer_enabled,
+         /* sequencer_weight */ 0 /* doesn't matter */});
+  }
+  VLOG(1) << "update: " << update.toString();
+  return update;
+}
+
+configuration::nodes::NodesConfiguration::Update setSequencerWeightUpdate(
+    const configuration::nodes::NodesConfiguration& existing,
+    std::vector<node_index_t> nodes,
+    double target_sequencer_weight) {
+  NodesConfiguration::Update update{};
+  update.sequencer_config_update = std::make_unique<SequencerConfig::Update>();
+  update.sequencer_config_update->membership_update =
+      std::make_unique<SequencerMembership::Update>(
+          existing.getSequencerMembership()->getVersion());
+  for (auto node : nodes) {
+    auto seq_mem = existing.getSequencerMembership()->getNodeState(node);
+    ld_check(seq_mem.hasValue());
+    update.sequencer_config_update->membership_update->addNode(
+        node,
+        {SequencerMembershipTransition::SET_WEIGHT,
+         /* sequencer_enabled */ false /* doesn't matter */,
+         target_sequencer_weight});
+  }
+  VLOG(1) << "update: " << update.toString();
+  return update;
+}
+
 configuration::nodes::NodesConfiguration::Update excludeFromNodesetUpdate(
     const configuration::nodes::NodesConfiguration& existing,
     std::vector<node_index_t> nodes,
@@ -478,6 +536,117 @@ setMetadataReplicationPropertyUpdate(
       std::make_unique<MetaDataLogsReplication::Update>(
           existing.getMetaDataLogsReplication()->getVersion());
   update.metadata_logs_rep_update->replication = metadata_rep;
+  VLOG(1) << "update: " << update.toString();
+  return update;
+}
+
+configuration::nodes::NodesConfiguration::Update setNodeAttributesUpdate(
+    node_index_t node,
+    folly::Optional<configuration::nodes::NodeServiceDiscovery> svc_disc,
+    folly::Optional<configuration::nodes::SequencerNodeAttribute> seq_attrs,
+    folly::Optional<configuration::nodes::StorageNodeAttribute> storage_attrs) {
+  NodesConfiguration::Update update{};
+
+  if (svc_disc.has_value()) {
+    update.service_discovery_update =
+        std::make_unique<ServiceDiscoveryConfig::Update>();
+    update.service_discovery_update->addNode(
+        node,
+        ServiceDiscoveryConfig::NodeUpdate{
+            ServiceDiscoveryConfig::UpdateType::RESET,
+            std::make_unique<NodeServiceDiscovery>(*svc_disc)});
+  }
+
+  if (seq_attrs.has_value()) {
+    update.sequencer_config_update =
+        std::make_unique<SequencerConfig::Update>();
+
+    update.sequencer_config_update->attributes_update =
+        std::make_unique<SequencerAttributeConfig::Update>();
+
+    update.sequencer_config_update->attributes_update->addNode(
+        node,
+        {SequencerAttributeConfig::UpdateType::RESET,
+         std::make_unique<SequencerNodeAttribute>(*seq_attrs)});
+  }
+
+  if (storage_attrs.has_value()) {
+    update.storage_config_update = std::make_unique<StorageConfig::Update>();
+    update.storage_config_update->attributes_update =
+        std::make_unique<StorageAttributeConfig::Update>();
+
+    update.storage_config_update->attributes_update->addNode(
+        node,
+        {StorageAttributeConfig::UpdateType::RESET,
+         std::make_unique<StorageNodeAttribute>(*storage_attrs)});
+  }
+
+  VLOG(1) << "update: " << update.toString();
+  return update;
+}
+
+configuration::nodes::NodesConfiguration::Update
+shrinkNodesUpdate(const configuration::nodes::NodesConfiguration& existing,
+                  std::vector<node_index_t> nodes) {
+  NodesConfiguration::Update update{};
+
+  for (auto node_idx : nodes) {
+    // Service Discovery Update
+    if (update.service_discovery_update == nullptr) {
+      update.service_discovery_update =
+          std::make_unique<ServiceDiscoveryConfig::Update>();
+    }
+    update.service_discovery_update->addNode(
+        node_idx, {ServiceDiscoveryConfig::UpdateType::REMOVE, nullptr});
+
+    // Sequencer Config Update
+    if (existing.isSequencerNode(node_idx)) {
+      // Sequencer Membership Update
+      if (update.sequencer_config_update == nullptr) {
+        update.sequencer_config_update =
+            std::make_unique<SequencerConfig::Update>();
+        update.sequencer_config_update->membership_update =
+            std::make_unique<SequencerMembership::Update>(
+                existing.getSequencerMembership()->getVersion());
+        update.sequencer_config_update->attributes_update =
+            std::make_unique<SequencerAttributeConfig::Update>();
+      }
+      update.sequencer_config_update->membership_update->addNode(
+          node_idx,
+          {SequencerMembershipTransition::REMOVE_NODE,
+           /* sequencer_enabled= */ false,
+           /* weight= */ 0});
+
+      // Sequencer Config
+      update.sequencer_config_update->attributes_update->addNode(
+          node_idx, {SequencerAttributeConfig::UpdateType::REMOVE, nullptr});
+    }
+
+    // Storage Config Update
+    if (existing.isStorageNode(node_idx)) {
+      // Storage Membership Update
+      if (update.storage_config_update == nullptr) {
+        update.storage_config_update =
+            std::make_unique<StorageConfig::Update>();
+        update.storage_config_update->membership_update =
+            std::make_unique<StorageMembership::Update>(
+                existing.getStorageMembership()->getVersion());
+        update.storage_config_update->attributes_update =
+            std::make_unique<StorageAttributeConfig::Update>();
+      }
+
+      auto shards = existing.getStorageMembership()->getShardStates(node_idx);
+      for (const auto& shard : shards) {
+        update.storage_config_update->membership_update->addShard(
+            ShardID(node_idx, shard.first),
+            {StorageStateTransition::REMOVE_EMPTY_SHARD, Condition::NONE});
+      }
+
+      // Storage Attributes Update
+      update.storage_config_update->attributes_update->addNode(
+          node_idx, {StorageAttributeConfig::UpdateType::REMOVE, nullptr});
+    }
+  }
   VLOG(1) << "update: " << update.toString();
   return update;
 }

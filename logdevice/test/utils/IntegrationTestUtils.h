@@ -29,6 +29,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRecord.h"
 #include "logdevice/common/replicated_state_machine/RsmVersionTypes.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/ClientSettings.h"
 #include "logdevice/include/LogsConfigTypes.h"
@@ -345,11 +346,6 @@ class ClusterFactory {
    */
   ClusterFactory& doPreProvisionEpochMetaData() {
     provision_epoch_metadata_ = true;
-    return *this;
-  }
-
-  ClusterFactory& doNotSyncServerConfigToNodesConfiguration() {
-    sync_server_config_to_nodes_configuration_ = false;
     return *this;
   }
 
@@ -764,6 +760,9 @@ class ClusterFactory {
   createLogsConfigManagerLogs(std::unique_ptr<Cluster>& cluster);
 
   void populateDefaultServerSettings();
+
+  std::shared_ptr<const NodesConfiguration>
+  provisionNodesConfiguration(int nnodes) const;
 };
 
 // All ports logdeviced can listen on.
@@ -783,8 +782,9 @@ struct ServerAddresses {
   // before starting the server process.
   std::vector<detail::PortOwner> owners;
 
-  void toNodeConfig(configuration::Node& node, bool ssl) {
-    node.address = protocol;
+  void toNodeConfig(configuration::nodes::NodeServiceDiscovery& node,
+                    bool ssl) {
+    node.default_client_data_address = protocol;
     node.gossip_address = gossip;
     if (ssl) {
       node.ssl_address.assign(protocol_ssl);
@@ -854,16 +854,14 @@ class Cluster {
    * Expand the cluster by adding nodes with the given indices.
    * @return 0 on success, -1 on error.
    */
-  int expand(std::vector<node_index_t> new_indices,
-             bool start = true,
-             bool bump_config_version = true);
+  int expand(std::vector<node_index_t> new_indices, bool start = true);
 
   /**
    * Expand the cluster by adding `nnodes` with consecutive indices after the
    * highest existing one.
    * @return 0 on success, -1 on error.
    */
-  int expand(int nnodes, bool start = true, bool bump_config_version = true);
+  int expand(int nnodes, bool start = true);
 
   /**
    * Shrink the cluster by removing the given nodes.
@@ -881,7 +879,7 @@ class Cluster {
    */
   int shrink(int nnodes);
 
-  std::shared_ptr<UpdateableConfig> getConfig() {
+  std::shared_ptr<UpdateableConfig> getConfig() const {
     return config_;
   }
 
@@ -1006,13 +1004,12 @@ class Cluster {
                                          bool allow_existing_metadata = true);
 
   /**
-   * Converts the server config into a nodes configuration and writes it to
-   * disk via a FileBasedNodesConfigurationStore.
-   * @param server_config                  the server config to convert
+   * Updates the NC on disk via FileBasedNodesConfigurationStore.
+   * @param nodes_config                  the NC to write
    * @return          0 for success, -1 for failure
    */
-  int updateNodesConfigurationFromServerConfig(
-      const ServerConfig* server_config);
+  int updateNodesConfiguration(
+      const configuration::nodes::NodesConfiguration& nodes_config);
 
   /**
    * Replaces the node at the specified index.  Kills the current process if
@@ -1095,6 +1092,13 @@ class Cluster {
       folly::Optional<std::set<node_index_t>> nodes = folly::none,
       std::chrono::steady_clock::time_point deadline =
           std::chrono::steady_clock::time_point::max());
+
+  /**
+   * Waits until all live nodes have processed the NodesConfiguration with at
+   * least the version passed.
+   */
+  void waitForServersToProcessNodesConfiguration(
+      membership::MembershipVersion::Type version);
 
   /**
    * Waits until all live nodes have a view of the config same as getConfig().
@@ -1345,7 +1349,6 @@ class Cluster {
           std::string cluster_name,
           bool enable_logsconfig_manager,
           dbg::Level default_log_level,
-          bool sync_server_config_to_nodes_configuration,
           NodesConfigurationSourceOfTruth nodes_configuration_sot);
 
   // Directory where to store the data for a node (logs, db, sockets).

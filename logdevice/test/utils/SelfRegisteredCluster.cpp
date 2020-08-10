@@ -18,7 +18,6 @@ SelfRegisteredCluster::create(ClusterFactory&& factory) {
       .setNodesConfigurationSourceOfTruth(
           IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
       .useHashBasedSequencerAssignment()
-      .doNotSyncServerConfigToNodesConfiguration()
       // TODO: If rebuilding is disabled the node doesn't mark itself as
       // provisioned.
       .enableSelfInitiatedRebuilding()

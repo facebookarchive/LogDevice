@@ -684,8 +684,7 @@ TEST_F(ConfigIntegrationTest, Stats) {
 
   // test #2: change config without updating version. expect
   // config_update_hash_mismatch and updated_config to be incremented.
-  cluster->expand(1, /*start*/ true, /*bump_config_versiion*/ false);
-  cluster->waitForServersToPartiallyProcessConfigUpdate();
+  cluster->expand(1, /*start*/ true);
 
   auto stats2 = cluster->getNode(0).stats();
   EXPECT_LE(stats["config_update_same_version"],

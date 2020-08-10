@@ -99,13 +99,8 @@ shard_size_t NodesConfig::calculateNumShards() const {
 bool NodesConfig::generateNodesConfiguration(
     const MetaDataLogsConfig& meta_config,
     config_version_t version) {
-  auto config = nodes::NodesConfigLegacyConverter::fromLegacyNodesConfig(
-      *this, meta_config, version);
-
-  if (config == nullptr) {
-    return false;
-  }
-  nodes_configuration_ = std::move(config);
+  // TODO: REMOVE
+  nodes_configuration_ = std::make_shared<const nodes::NodesConfiguration>();
   return true;
 }
 

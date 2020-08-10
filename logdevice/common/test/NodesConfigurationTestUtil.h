@@ -100,6 +100,16 @@ configuration::nodes::NodesConfiguration::Update setStorageMembershipUpdate(
     folly::Optional<membership::StorageState> target_storage_state,
     folly::Optional<membership::MetaDataStorageState> target_metadata_state);
 
+configuration::nodes::NodesConfiguration::Update setSequencerEnabledUpdate(
+    const configuration::nodes::NodesConfiguration& existing,
+    std::vector<node_index_t> nodes,
+    bool target_sequencer_enabled);
+
+configuration::nodes::NodesConfiguration::Update setSequencerWeightUpdate(
+    const configuration::nodes::NodesConfiguration& existing,
+    std::vector<node_index_t> nodes,
+    double target_sequencer_weight);
+
 configuration::nodes::NodesConfiguration::Update excludeFromNodesetUpdate(
     const configuration::nodes::NodesConfiguration& existing,
     std::vector<node_index_t> nodes,
@@ -109,5 +119,15 @@ configuration::nodes::NodesConfiguration::Update
 setMetadataReplicationPropertyUpdate(
     const configuration::nodes::NodesConfiguration& existing,
     ReplicationProperty metadata_rep);
+
+configuration::nodes::NodesConfiguration::Update setNodeAttributesUpdate(
+    node_index_t node,
+    folly::Optional<configuration::nodes::NodeServiceDiscovery> svc_disc,
+    folly::Optional<configuration::nodes::SequencerNodeAttribute> seq_attrs,
+    folly::Optional<configuration::nodes::StorageNodeAttribute> storage_attrs);
+
+configuration::nodes::NodesConfiguration::Update
+shrinkNodesUpdate(const configuration::nodes::NodesConfiguration& existing,
+                  std::vector<node_index_t> nodes);
 
 }}} // namespace facebook::logdevice::NodesConfigurationTestUtil

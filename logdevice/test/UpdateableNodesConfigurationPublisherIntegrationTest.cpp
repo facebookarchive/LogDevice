@@ -28,7 +28,6 @@ class NodesConfigurationPublisherIntegrationTest : public IntegrationTestBase {
 
     // Initialize the cluster
     cluster_ = IntegrationTestUtils::ClusterFactory{}
-                   .doNotSyncServerConfigToNodesConfiguration()
                    .setNodesConfigurationSourceOfTruth(
                        NodesConfigurationSourceOfTruth::SERVER_CONFIG)
                    .create(5);

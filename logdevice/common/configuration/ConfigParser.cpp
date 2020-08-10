@@ -113,14 +113,17 @@ void setMetaDataLogsPermission(MetaDataLogsConfig& config) {
 bool parseMetaDataLog(const folly::dynamic& clusterMap,
                       const SecurityConfig& securityConfig,
                       MetaDataLogsConfig& output) {
+  folly::dynamic metaDataLogSection;
+
   auto iter = clusterMap.find("metadata_logs");
-  if (iter == clusterMap.items().end()) {
+  if (iter != clusterMap.items().end()) {
+    metaDataLogSection = iter->second;
+  } else {
     // This section is now optional since we have nodes-configuration-manager
     // that store that information in NCS (NodesConfigurationStore).
-    return true;
+    metaDataLogSection = folly::dynamic::object();
   }
 
-  const folly::dynamic& metaDataLogSection = iter->second;
   if (!metaDataLogSection.isObject()) {
     ld_error("\"metadata_logs\" entry for cluster is not a JSON object");
     err = E::INVALID_CONFIG;
@@ -128,13 +131,8 @@ bool parseMetaDataLog(const folly::dynamic& clusterMap,
   }
 
   iter = metaDataLogSection.find("nodeset");
-  if (iter == metaDataLogSection.items().end()) {
-    ld_error("\"nodeset\" is missing in \"metadata_logs\" section");
-    err = E::INVALID_CONFIG;
-    return false;
-  }
-
-  if (!parseMetaDataLogNodes(iter->second, output)) {
+  if (iter != metaDataLogSection.items().end() &&
+      !parseMetaDataLogNodes(iter->second, output)) {
     return false;
   }
 
@@ -144,15 +142,6 @@ bool parseMetaDataLog(const folly::dynamic& clusterMap,
                       /* permissions */ false,
                       /* metadata_logs */ true);
   if (!log_attrs.has_value()) {
-    err = E::INVALID_CONFIG;
-    return false;
-  }
-
-  std::string replication_error;
-  if (ReplicationProperty::validateLogAttributes(
-          log_attrs.value(), &replication_error) != 0) {
-    ld_error("Invalid replication settings in \"metadata_logs\" section: %s",
-             replication_error.c_str());
     err = E::INVALID_CONFIG;
     return false;
   }
@@ -243,21 +232,6 @@ bool parseMetaDataLog(const folly::dynamic& clusterMap,
   // in the configuration file then set the metadata log permissions.
   if (securityConfig.allowPermissionsInConfig()) {
     setMetaDataLogsPermission(output);
-  }
-
-  int replication_factor =
-      ReplicationProperty::fromLogAttributes(log_attrs.value())
-          .getReplicationFactor();
-  if (replication_factor + (*log_attrs).extraCopies().value() >
-      COPYSET_SIZE_MAX) {
-    ld_error("the sum (%d) of replicationFactor and extraCopies "
-             "for metadata logs exceeds COPYSET_SIZE_MAX %zu",
-             replication_factor + (*log_attrs).extraCopies().value(),
-             COPYSET_SIZE_MAX);
-    // shouldn't happend in default config
-    ld_check(false);
-    err = E::INVALID_CONFIG;
-    return false;
   }
 
   return true;
