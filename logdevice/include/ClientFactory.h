@@ -130,6 +130,9 @@ class ClientFactory {
   // have to call it again before each subsequent call to create().
   ClientFactory& setClientSettings(std::unique_ptr<ClientSettings> v);
 
+  ClientFactory() = default;
+  ClientFactory(ClientFactory&&) = default;
+
   virtual ~ClientFactory();
 
  private:

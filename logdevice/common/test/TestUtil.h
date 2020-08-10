@@ -16,6 +16,7 @@
 #include <thread>
 
 #include <boost/filesystem.hpp>
+#include <folly/experimental/TestUtil.h>
 
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
@@ -107,6 +108,14 @@ ServerConfig::MetaDataLogsConfig createMetaDataLogsConfig(
     size_t max_metadata_nodes,
     size_t max_replication,
     NodeLocationScope sync_replication_scope = NodeLocationScope::NODE);
+
+/**
+ * Provisions a temporary directory and writes the passed NodesConfig there.
+ * The returned temp directory path can be then passed to the
+ * nodes-configuration-file-store-dir setting.
+ */
+std::unique_ptr<folly::test::TemporaryDirectory>
+provisionTempNodesConfiguration(const NodesConfiguration& nodes_config);
 
 /**
  * Create a MetaDataLogsConfig object from an existing list of node

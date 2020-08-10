@@ -37,6 +37,8 @@
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/ConfigParser.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
+#include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/plugin/CommonBuiltinPlugins.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
@@ -476,6 +478,31 @@ std::string get_localhost_address_str() {
     }
   }
   throw std::runtime_error("couldn't find any loopback interfaces");
+}
+
+std::unique_ptr<folly::test::TemporaryDirectory>
+provisionTempNodesConfiguration(const NodesConfiguration& nodes_config) {
+  auto temp_dir = std::make_unique<folly::test::TemporaryDirectory>();
+
+  using namespace logdevice::configuration::nodes;
+  NodesConfigurationStoreFactory::Params params;
+  params.type = NodesConfigurationStoreFactory::NCSType::File;
+  params.file_store_root_dir = temp_dir->path().string();
+  params.path = NodesConfigurationStoreFactory::getDefaultConfigStorePath(
+      NodesConfigurationStoreFactory::NCSType::File, "");
+
+  auto store = NodesConfigurationStoreFactory::create(std::move(params));
+  if (store == nullptr) {
+    return nullptr;
+  }
+
+  auto serialized = NodesConfigurationCodec::serialize(nodes_config);
+  if (serialized.empty()) {
+    return nullptr;
+  }
+  store->updateConfigSync(
+      std::move(serialized), NodesConfigurationStore::Condition::overwrite());
+  return temp_dir;
 }
 
 }} // namespace facebook::logdevice

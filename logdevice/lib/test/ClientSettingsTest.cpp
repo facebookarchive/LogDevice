@@ -37,18 +37,33 @@ settings(const std::unique_ptr<ClientSettings>& ptr) {
   return settings(*ptr);
 }
 
-static std::shared_ptr<Client>
-create_client(std::unique_ptr<ClientSettings>&& settings) {
-  // NOTE: assumes test is being run from top-level fbcode dir
-  std::string config_path =
-      std::string("file:") + TEST_CONFIG_FILE("sample_no_ssl.conf");
-  return ClientFactory()
-      .setClientSettings(std::move(settings))
-      .create(config_path);
-}
 } // namespace
 
-TEST(ClientSettingsTest, Basic) {
+class ClientSettingsTest : public testing::Test {
+ public:
+  std::shared_ptr<Client>
+  create_client(std::unique_ptr<ClientSettings>&& settings) {
+    if (settings == nullptr) {
+      settings = std::unique_ptr<ClientSettings>(ClientSettings::create());
+    }
+    // NOTE: assumes test is being run from top-level fbcode dir
+    std::string config_path =
+        std::string("file:") + TEST_CONFIG_FILE("sample_no_ssl.conf");
+
+    settings->set("nodes-configuration-file-store-dir", ncs_->path().string());
+    settings->set("admin-client-capabilities", "true");
+
+    return ClientFactory()
+        .setClientSettings(std::move(settings))
+        .create(config_path);
+  }
+
+ protected:
+  std::unique_ptr<folly::test::TemporaryDirectory> ncs_{
+      provisionTempNodesConfiguration(*createSimpleNodesConfig(1))};
+};
+
+TEST_F(ClientSettingsTest, Basic) {
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
   client_settings->set("enable-logsconfig-manager", "false");
   ASSERT_EQ(0, client_settings->set("sendbuf-kb", "123"));
@@ -68,12 +83,12 @@ TEST(ClientSettingsTest, Basic) {
 /**
  * Should be able to create a Client with nullptr settings
  */
-TEST(ClientSettingsTest, Default) {
+TEST_F(ClientSettingsTest, Default) {
   auto client = create_client(nullptr);
   ASSERT_EQ(-1, settings(client->settings())->tcp_sendbuf_kb);
 }
 
-TEST(ClientSettingsTest, Errors) {
+TEST_F(ClientSettingsTest, Errors) {
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
 
   EXPECT_EQ(-1, client_settings->set("blahinvalidoption", "foo"));
@@ -91,7 +106,7 @@ TEST(ClientSettingsTest, Errors) {
  * on-demand-logs-config should force an alternative logs config to be used
  * instead a local one
  */
-TEST(ClientSettingsTest, OnDemandLogsConfig) {
+TEST_F(ClientSettingsTest, OnDemandLogsConfig) {
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
 
   client_settings->set("on-demand-logs-config", true);
@@ -108,7 +123,7 @@ TEST(ClientSettingsTest, OnDemandLogsConfig) {
  * verifies that a setting updated via ClientSettings::set gets propagated to
  * the client workers
  */
-TEST(ClientSettingsTest, MethodUpdateableSettings) {
+TEST_F(ClientSettingsTest, MethodUpdateableSettings) {
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
 
   // A local copy we keep to set updateable settings on
@@ -153,7 +168,7 @@ TEST(ClientSettingsTest, MethodUpdateableSettings) {
  * verifies that a setting updated via ClientSettings::set gets propagated to
  * the client workers
  */
-TEST(ClientSettingsTest, ConfigUpdateableSettings) {
+TEST_F(ClientSettingsTest, ConfigUpdateableSettings) {
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
 
   // Copying the config to a temporary location so we can modify it later
@@ -175,6 +190,9 @@ TEST(ClientSettingsTest, ConfigUpdateableSettings) {
                     .setSetting("enable-logsconfig-manager", "false")
                     .setSetting("checksum-bits", "32")
                     .setSetting("file-config-update-interval", "10ms")
+                    .setSetting("nodes-configuration-file-store-dir",
+                                ncs_->path().string())
+                    .setSetting("admin-client-capabilities", "true")
                     .create(std::string("file:") + configPath);
   ClientImpl* clientImpl = dynamic_cast<ClientImpl*>(client.get());
   ASSERT_TRUE((bool)clientImpl);
@@ -225,7 +243,7 @@ TEST(ClientSettingsTest, ConfigUpdateableSettings) {
 }
 
 // Test getting a setting from the ClientSettings itself
-TEST(ClientSettingsTest, GetConfig) {
+TEST_F(ClientSettingsTest, GetConfig) {
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
 
   ASSERT_EQ(0, client_settings->set("sendbuf-kb", "123"));
@@ -234,7 +252,7 @@ TEST(ClientSettingsTest, GetConfig) {
 }
 
 // Test getting a setting that doesn't exist from the ClientSettings
-TEST(ClientSettingsTest, GetConfigNonExistentSetting) {
+TEST_F(ClientSettingsTest, GetConfigNonExistentSetting) {
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
 
   EXPECT_FALSE(client_settings->get("thisisanonexistentsetting"));
@@ -246,7 +264,7 @@ isInList(std::pair<std::string, std::string> pair,
   return std::find(settings.begin(), settings.end(), pair) != settings.end();
 }
 
-TEST(ClientSettingsTest, GetAllSettings) {
+TEST_F(ClientSettingsTest, GetAllSettings) {
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
 
   ASSERT_EQ(0, client_settings->set("sendbuf-kb", "123"));
@@ -260,14 +278,14 @@ TEST(ClientSettingsTest, GetAllSettings) {
       std::make_pair("file-config-update-interval", "10ms"), settings));
 }
 
-TEST(ClientSettingsTest, GetDefaultValue) {
+TEST_F(ClientSettingsTest, GetDefaultValue) {
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
 
   EXPECT_EQ("false", client_settings->get("server"));
   EXPECT_EQ("cores", client_settings->get("num-workers"));
 }
 
-TEST(ClientSettingsTest, ParseNumWorkers) {
+TEST_F(ClientSettingsTest, ParseNumWorkers) {
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
 
   // Invalid test cases
