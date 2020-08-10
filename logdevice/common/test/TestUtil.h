@@ -92,27 +92,6 @@ createSimpleNodesConfig(size_t nnodes,
                         int replication_factor = 1);
 
 /**
- * Create a MetaDataLogsConfig object from an existing NodesConfig. Nodes
- * are selected from the beginning of nodes in @nodes with non-zero weight
- * until either max_metadata_nodes is reached or all nodes are picked.
- *
- * @param nodes                 NodesConfigObject given
- * @param max_metadata_nodes    maximum nodes to store metadata logs,
- *                              the actual number of nodes is also capped by
- *                              the number of non-zero weight nodes in
- *                              NodesConfig.
- * @param max_replication       maximum replication factor for metadata logs,
- *                              the actual replication factor is also capped by
- *                              the actual metadata nodeset size
- * @return                      Configuration::MetaDataLogsConfig object
- */
-ServerConfig::MetaDataLogsConfig createMetaDataLogsConfig(
-    const ServerConfig::NodesConfig& nodes,
-    size_t max_metadata_nodes,
-    size_t max_replication,
-    NodeLocationScope sync_replication_scope = NodeLocationScope::NODE);
-
-/**
  * Provisions a temporary directory and writes the passed NodesConfig there.
  * The returned temp directory path can be then passed to the
  * nodes-configuration-file-store-dir setting.

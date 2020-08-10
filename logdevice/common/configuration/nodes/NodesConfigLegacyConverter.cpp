@@ -386,38 +386,6 @@ bool NodesConfigLegacyConverter::testWithServerConfig(
     }
   }
 
-  {
-    auto old_num_shards = server_config.getNodesConfig().calculateNumShards();
-    if (new_nodes_config->getNumShards() != old_num_shards) {
-      ld_error(
-          "Nodes config num of shards mismatch after conversion! original: "
-          "%u, new: %u.",
-          old_num_shards,
-          new_nodes_config->getNumShards());
-      return false;
-    }
-  }
-
-  {
-    auto old_max_idx =
-        server_config.getNodesConfig().getMaxNodeIdx_DEPRECATED();
-    if (new_nodes_config->getMaxNodeIndex() != old_max_idx) {
-      ld_error(
-          "Nodes config max node index mismatch after conversion! original: "
-          "%lu, new: %u.",
-          old_max_idx,
-          new_nodes_config->getMaxNodeIndex());
-      return false;
-    }
-  }
-
-  if (new_nodes_config->getSequencersConfig() !=
-      server_config.getSequencers_DEPRECATED()) {
-    ld_error(
-        "Sequencer config does not match b/w new NC and legacy server config!");
-    return false;
-  }
-
   // check metadata shards
   std::unordered_set<node_index_t> meta_nodeset_orig(
       server_config.getMetaDataNodeIndices().begin(),

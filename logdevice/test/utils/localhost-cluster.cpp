@@ -389,13 +389,8 @@ int shell(Cluster& cluster) {
 
   if (options::enable_logsconfig_manager) {
     // If logs config manager is enabled, print steps to create a log range
-    auto cfg = cluster.getConfig()->getServerConfig();
     int nstorage_nodes =
-        std::count_if(cfg->getNodes().begin(),
-                      cfg->getNodes().end(),
-                      [](Configuration::Nodes::value_type kv) {
-                        return kv.second.isReadableStorageNode();
-                      });
+        cluster.getConfig()->getNodesConfiguration()->getStorageNodes().size();
 
     auto& first_node = cluster.getNode(0);
     auto first_node_admin_addr = first_node.addrs_.admin;

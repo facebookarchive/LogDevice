@@ -214,8 +214,10 @@ void NodeSetTest::writeMetaDataLog() {
   auto count_activations = [&]() {
     size_t count = 0;
     for (size_t i = 0; i < nodes_; ++i) {
-      auto config = cluster_->getConfig()->get()->serverConfig();
-      if (!config->getNode(i) || !config->getNode(i)->isSequencingEnabled()) {
+      if (!cluster_->getConfig()
+               ->getNodesConfiguration()
+               ->getSequencerMembership()
+               ->isSequencingEnabled(i)) {
         continue;
       }
       auto stats = cluster_->getNode(i).stats();
@@ -820,10 +822,9 @@ TEST_F(NodeSetTest, RebuildMultipleEpochs) {
   // do a rolling replacement of storage nodes
   for (int i = 0; i < nodes_; ++i) {
     if (cluster_->getConfig()
-            ->get()
-            ->serverConfig()
-            ->getNode(i)
-            ->isReadableStorageNode()) {
+            ->getNodesConfiguration()
+            ->getStorageMembership()
+            ->hasShardShouldReadFrom(i)) {
       ASSERT_EQ(0, cluster_->replace(i));
       ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, i, SHARD_IDX));
       // Wait until all shards finish rebuilding.

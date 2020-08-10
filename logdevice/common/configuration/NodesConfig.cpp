@@ -83,19 +83,6 @@ uint64_t NodesConfig::calculateHash() const {
       hashable_string.data(), hashable_string.size(), SEED);
 }
 
-// TODO(T15517759): remove when Flexible Log Sharding is fully implemented.
-shard_size_t NodesConfig::calculateNumShards() const {
-  for (const auto& it : nodes_) {
-    if (!it.second.isReadableStorageNode()) {
-      continue;
-    }
-    ld_check(it.second.getNumShards() > 0);
-    return it.second.getNumShards();
-    break; // The other storage nodes have the same amount of shards.
-  }
-  return 0;
-}
-
 bool NodesConfig::generateNodesConfiguration(
     const MetaDataLogsConfig& meta_config,
     config_version_t version) {

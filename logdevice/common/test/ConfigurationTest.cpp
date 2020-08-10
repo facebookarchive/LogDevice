@@ -135,7 +135,6 @@ TEST(ConfigurationTest, SimpleValid) {
     EXPECT_EQ(1, node.getWritableStorageCapacity());
 
     EXPECT_EQ(3, node.generation);
-    EXPECT_TRUE(node.isSequencingEnabled());
 
     EXPECT_TRUE(node.location.has_value());
     const NodeLocation& location = node.location.value();
@@ -184,7 +183,6 @@ TEST(ConfigurationTest, SimpleValid) {
     EXPECT_EQ(4, node.getWritableStorageCapacity());
 
     EXPECT_EQ(6, node.generation);
-    EXPECT_FALSE(node.isSequencingEnabled());
     EXPECT_FALSE(node.location.has_value());
 
     EXPECT_FALSE(node.hasRole(NodeRole::SEQUENCER));
@@ -227,7 +225,6 @@ TEST(ConfigurationTest, SimpleValid) {
     EXPECT_EQ(2, node.getWritableStorageCapacity());
 
     EXPECT_EQ(2, node.generation);
-    EXPECT_TRUE(node.isSequencingEnabled());
 
     ASSERT_TRUE(node.location.has_value());
     EXPECT_EQ("ash.ash2.07.a.b", node.locationStr());
@@ -271,7 +268,6 @@ TEST(ConfigurationTest, SimpleValid) {
     EXPECT_EQ(4, node.storage_attributes->capacity);
     EXPECT_EQ(4, node.getWritableStorageCapacity());
     EXPECT_EQ(5, node.generation);
-    EXPECT_TRUE(node.isSequencingEnabled());
 
     ASSERT_TRUE(node.location.has_value());
     EXPECT_EQ("ash.ash2.07.a.b", node.locationStr());
@@ -867,74 +863,6 @@ TEST(ConfigurationTest, BadID) {
 
   ASSERT_EQ(nullptr, config->logsConfig());
   EXPECT_EQ(err, E::INVALID_CONFIG);
-}
-
-TEST(ConfigurationTest, SequencerWeights) {
-  using namespace facebook::logdevice;
-
-  std::shared_ptr<Configuration> config(
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("sequencer_weights.conf")));
-  ASSERT_NE(nullptr, config.get());
-  ASSERT_EQ(8, config->serverConfig()->getNodes().size());
-
-  {
-    // Validating the SequencerNodeAttributes structs
-    std::vector<SequencerNodeAttributes> expected{
-        {false, 0},
-        {true, 1},
-        {true, 2},
-        {true, 4},
-        {false, 8},
-        {false, 8},
-        {true, 1},
-        {true, 0},
-    };
-
-    std::vector<SequencerNodeAttributes> got;
-    const auto& nodes = config->serverConfig()->getNodes();
-    for (short i = 0; i <= config->getNodesConfigurationFromServerConfigSource()
-                               ->getMaxNodeIndex();
-         i++) {
-      node_index_t idx{i};
-      if (nodes.find(idx) == nodes.end()) {
-        continue;
-      }
-      got.push_back(*nodes.at(idx).sequencer_attributes);
-    }
-
-    EXPECT_EQ(expected, got);
-  }
-
-  {
-    // Validating that SequencersConfig is properly calculated.
-    const auto& seq_config = config->serverConfig()
-                                 ->getNodesConfigurationFromServerConfigSource()
-                                 ->getSequencersConfig();
-
-    // check padded node IDs
-    EXPECT_EQ(std::vector<NodeID>({NodeID(),
-                                   NodeID(1, 1),
-                                   NodeID(2, 1),
-                                   NodeID(3, 1),
-                                   NodeID(),
-                                   NodeID(),
-                                   NodeID(6, 1),
-                                   NodeID()}),
-              seq_config.nodes);
-
-    // check normalized weights
-    EXPECT_EQ(std::vector<double>({0, .25, .5, 1, 0, 0, 0.25, 0}),
-              seq_config.weights);
-
-    EXPECT_FALSE(config->serverConfig()->getNode(0)->isSequencingEnabled());
-    EXPECT_TRUE(config->serverConfig()->getNode(1)->isSequencingEnabled());
-    EXPECT_TRUE(config->serverConfig()->getNode(2)->isSequencingEnabled());
-    EXPECT_TRUE(config->serverConfig()->getNode(3)->isSequencingEnabled());
-    EXPECT_FALSE(config->serverConfig()->getNode(4)->isSequencingEnabled());
-    EXPECT_FALSE(config->serverConfig()->getNode(5)->isSequencingEnabled());
-    EXPECT_TRUE(config->serverConfig()->getNode(6)->isSequencingEnabled());
-    EXPECT_FALSE(config->serverConfig()->getNode(7)->isSequencingEnabled());
-  }
 }
 
 TEST(ConfigurationTest, Serialization) {

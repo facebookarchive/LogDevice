@@ -156,15 +156,6 @@ class ServerConfig {
   }
 
   /**
-   * Returns a description of sequencer nodes in the cluster.
-   * NOTE: being DEPRECATED. Use NodesConfiguration::getSequencersConfig()
-   * instead.
-   */
-  const SequencersConfig& getSequencers_DEPRECATED() const {
-    return sequencersConfig_;
-  }
-
-  /**
    * Looks up a node by index.
    *
    * @return On success, returns a pointer to a Node object contained in
@@ -489,7 +480,6 @@ class ServerConfig {
   MetaDataLogsConfig metaDataLogsConfig_;
   PrincipalsConfig principalsConfig_;
   SecurityConfig securityConfig_;
-  SequencersConfig sequencersConfig_;
   TrafficShapingConfig trafficShapingConfig_;
   ShapingConfig readIOShapingConfig_;
   SettingsConfig serverSettingsConfig_;

@@ -32,7 +32,6 @@ static Configuration::Nodes createFailureDomainNodes() {
 
     // store data on all nodes
     node.addStorageRole(/*num_shards*/ 2);
-    ld_check(nodes[i].isWritableStorageNode());
 
     // node 0 running sequencer
     if (i == 0) {
@@ -231,7 +230,9 @@ TEST_F(FailureDomainIntegrationTest, ReadHealthWithFailureDomain) {
   ld_info("Killing the third region (node 3, 4, 5), should not affect "
           "connection health");
   for (int i = 3; i <= 5; ++i) {
-    ld_check(config->serverConfig()->getNode(i)->isReadableStorageNode());
+    ld_check(config->getNodesConfiguration()
+                 ->getStorageMembership()
+                 ->hasShardShouldReadFrom(i));
     cluster->getNode(i).kill();
   }
 
@@ -249,7 +250,9 @@ TEST_F(FailureDomainIntegrationTest, ReadHealthWithFailureDomain) {
   cluster->getNode(4).start();
   cluster->getNode(3).waitUntilStarted();
   cluster->getNode(4).waitUntilStarted();
-  ld_check(config->serverConfig()->getNode(0)->isReadableStorageNode());
+  ld_check(config->getNodesConfiguration()
+               ->getStorageMembership()
+               ->hasShardShouldReadFrom(0));
   cluster->getNode(0).kill();
 
   /* sleep override */

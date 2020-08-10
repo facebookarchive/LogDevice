@@ -200,38 +200,6 @@ ServerConfig::ServerConfig(std::string cluster_name,
       ns_delimiter_(ns_delimiter),
       customFields_(std::move(customFields)) {
   ld_check(nodesConfig_.hasNodesConfiguration());
-
-  // sequencersConfig_ needs consecutive node indexes, see comment in
-  // SequencersConfig.h.
-  // Pad with zero-weight invalid nodes if there are gaps in numbering.
-  //
-  // Still using the DEPRECATED getMaxNodeIdx intentionally as we need the
-  // legacy NodesConfig in here.
-  size_t max_node = nodesConfig_.getMaxNodeIdx_DEPRECATED();
-  sequencersConfig_.nodes.resize(max_node + 1);
-  sequencersConfig_.weights.resize(max_node + 1);
-
-  for (const auto& it : nodesConfig_.getNodes()) {
-    node_index_t i = it.first;
-    const auto& node = it.second;
-
-    if (node.isSequencingEnabled()) {
-      sequencersConfig_.nodes[i] = NodeID(i, node.generation);
-      sequencersConfig_.weights[i] = node.getSequencerWeight();
-    }
-  }
-
-  // Scale all weights to the [0, 1] range. Note that increasing the maximum
-  // weight will cause all nodes' weights to change, possibly resulting in
-  // many sequencers being relocated.
-  auto max_it = std::max_element(
-      sequencersConfig_.weights.begin(), sequencersConfig_.weights.end());
-  if (max_it != sequencersConfig_.weights.end() && *max_it > 0) {
-    double max_weight = *max_it;
-    for (double& weight : sequencersConfig_.weights) {
-      weight /= max_weight;
-    }
-  }
 }
 
 const ServerConfig::Node* ServerConfig::getNode(node_index_t index) const {

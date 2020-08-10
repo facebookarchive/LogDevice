@@ -87,10 +87,9 @@ TEST_F(LocalLogStoreIntegrationTest, StartWithCorruptDB) {
   // process writes for the healthy DBs, the test will fail.
   for (int idx = NNODES - 2; idx < NNODES; ++idx) {
     ld_check(cluster->getConfig()
-                 ->get()
-                 ->serverConfig()
-                 ->getNode(idx)
-                 ->isReadableStorageNode());
+                 ->getNodesConfiguration()
+                 ->getStorageMembership()
+                 ->hasShardShouldReadFrom(idx));
     IntegrationTestUtils::Node& node = cluster->getNode(idx);
 
     std::vector<uint32_t> shards_to_corrupt;
@@ -149,10 +148,9 @@ TEST_F(LocalLogStoreIntegrationTest, StartWithCorruptMetadataValue) {
   // of the metadata keys.
   for (int n = 1; n < NNODES; ++n) {
     ld_check(cluster->getConfig()
-                 ->get()
-                 ->serverConfig()
-                 ->getNode(n)
-                 ->isReadableStorageNode());
+                 ->getNodesConfiguration()
+                 ->getStorageMembership()
+                 ->hasShardShouldReadFrom(n));
     IntegrationTestUtils::Node& node = cluster->getNode(n);
 
     auto sharded_store = node.createLocalLogStore();

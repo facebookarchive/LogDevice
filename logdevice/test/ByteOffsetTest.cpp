@@ -58,7 +58,9 @@ TEST_F(ByteOffsetTest, InBandByteOffsetBasic) {
                      .create(4);
 
   std::shared_ptr<const Configuration> config = cluster->getConfig()->get();
-  ld_check(config->serverConfig()->getNode(0)->isSequencingEnabled());
+  ld_check(config->getNodesConfiguration()
+               ->getSequencerMembership()
+               ->isSequencingEnabled(0));
 
   std::shared_ptr<Client> client = cluster->createClient();
 

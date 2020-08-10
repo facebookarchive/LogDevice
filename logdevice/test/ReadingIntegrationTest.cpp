@@ -76,18 +76,16 @@ TEST_P(ReadingIntegrationTest, ReadStreamAtEndDoesNotCrash) {
 
   // We should be able to kill a node without the reader crashing
   ld_check(cluster->getConfig()
-               ->get()
-               ->serverConfig()
-               ->getNode(1)
-               ->isReadableStorageNode());
+               ->getNodesConfiguration()
+               ->getStorageMembership()
+               ->hasShardShouldReadFrom(1));
   cluster->getNode(1).kill();
 
   // We should be able to replace a node without the reader crashing
   ld_check(cluster->getConfig()
-               ->get()
-               ->serverConfig()
-               ->getNode(2)
-               ->isReadableStorageNode());
+               ->getNodesConfiguration()
+               ->getStorageMembership()
+               ->hasShardShouldReadFrom(2));
   ASSERT_EQ(0, cluster->replace(2));
 
   // Give some time for Client to notice the node replacement
@@ -588,10 +586,18 @@ TEST_P(ReadingIntegrationTest, PurgingSmokeTest) {
                      .create(4);
 
   std::shared_ptr<const Configuration> config = cluster->getConfig()->get();
-  ld_check(config->serverConfig()->getNode(0)->isSequencingEnabled());
-  ld_check(config->serverConfig()->getNode(1)->isReadableStorageNode());
-  ld_check(config->serverConfig()->getNode(2)->isReadableStorageNode());
-  ld_check(config->serverConfig()->getNode(3)->isReadableStorageNode());
+  ld_check(config->getNodesConfiguration()
+               ->getSequencerMembership()
+               ->isSequencingEnabled(0));
+  ld_check(config->getNodesConfiguration()
+               ->getStorageMembership()
+               ->hasShardShouldReadFrom(1));
+  ld_check(config->getNodesConfiguration()
+               ->getStorageMembership()
+               ->hasShardShouldReadFrom(2));
+  ld_check(config->getNodesConfiguration()
+               ->getStorageMembership()
+               ->hasShardShouldReadFrom(3));
   ld_check(config->getLogGroupByIDShared(LOG_ID)
                ->attrs()
                .replicationFactor()
@@ -685,7 +691,9 @@ TEST_P(ReadingIntegrationTest, ReadHealth) {
   wait_until([&]() { return async_reader->isConnectionHealthy(LOG_ID) == 1; });
 
   ld_info("Killing first storage node, should not affect connection health");
-  ld_check(config->serverConfig()->getNode(1)->isReadableStorageNode());
+  ld_check(config->getNodesConfiguration()
+               ->getStorageMembership()
+               ->hasShardShouldReadFrom(1));
   cluster->getNode(1).kill();
   /* sleep override */
   std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -693,7 +701,9 @@ TEST_P(ReadingIntegrationTest, ReadHealth) {
   wait_until([&]() { return async_reader->isConnectionHealthy(LOG_ID) == 1; });
 
   ld_info("Killing sequencer node, should not affect connection health");
-  ld_check(!config->serverConfig()->getNode(0)->isReadableStorageNode());
+  ld_check(!config->getNodesConfiguration()
+                ->getStorageMembership()
+                ->hasShardShouldReadFrom(0));
   cluster->getNode(0).kill();
   /* sleep override */
   std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -702,7 +712,9 @@ TEST_P(ReadingIntegrationTest, ReadHealth) {
 
   ld_info("Killing second storage node, should negatively affect cluster "
           "health because r=2");
-  ld_check(config->serverConfig()->getNode(2)->isReadableStorageNode());
+  ld_check(config->getNodesConfiguration()
+               ->getStorageMembership()
+               ->hasShardShouldReadFrom(2));
   cluster->getNode(2).kill();
   wait_until([&]() { return reader->isConnectionHealthy(LOG_ID) == 0; });
   wait_until([&]() { return async_reader->isConnectionHealthy(LOG_ID) == 0; });
@@ -780,14 +792,18 @@ TEST_P(ReadingIntegrationTest, HealthChangeCallback) {
   record_sem.wait();
 
   ld_info("Killing first storage node, should not affect connection health");
-  ld_check(config->serverConfig()->getNode(1)->isReadableStorageNode());
+  ld_check(config->getNodesConfiguration()
+               ->getStorageMembership()
+               ->hasShardShouldReadFrom(1));
   cluster->getNode(1).kill();
   /* sleep override */
   std::this_thread::sleep_for(std::chrono::seconds(1));
   EXPECT_TRUE(currently_healthy.load());
 
   ld_info("Killing sequencer node, should not affect connection health");
-  ld_check(!config->serverConfig()->getNode(0)->isReadableStorageNode());
+  ld_check(!config->getNodesConfiguration()
+                ->getStorageMembership()
+                ->hasShardShouldReadFrom(0));
   cluster->getNode(0).kill();
   /* sleep override */
   std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -795,7 +811,9 @@ TEST_P(ReadingIntegrationTest, HealthChangeCallback) {
 
   ld_info("Killing second storage node, should negatively affect cluster "
           "health because r=2");
-  ld_check(config->serverConfig()->getNode(2)->isReadableStorageNode());
+  ld_check(config->getNodesConfiguration()
+               ->getStorageMembership()
+               ->hasShardShouldReadFrom(2));
   cluster->getNode(2).kill();
   sem.wait();
   EXPECT_FALSE(currently_healthy.load());
@@ -986,7 +1004,9 @@ TEST_P(ReadingIntegrationTest, LogTailAttributes) {
                      .create(4);
 
   std::shared_ptr<const Configuration> config = cluster->getConfig()->get();
-  ld_check(config->serverConfig()->getNode(0)->isSequencingEnabled());
+  ld_check(config->getNodesConfiguration()
+               ->getSequencerMembership()
+               ->isSequencingEnabled(0));
 
   std::shared_ptr<Client> client = cluster->createClient();
 

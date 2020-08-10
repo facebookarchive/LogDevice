@@ -627,10 +627,9 @@ void RecoveryTest::verifyEpochRecoveryMetadata(
   // examine the local log store for the per-epoch log metadata
   for (int i = 0; i < nodes_; ++i) {
     if (!cluster_->getConfig()
-             ->get()
-             ->serverConfig()
-             ->getNode(i)
-             ->isReadableStorageNode()) {
+             ->getNodesConfiguration()
+             ->getStorageMembership()
+             ->hasShardShouldReadFrom(i)) {
       continue;
     }
 
@@ -2056,10 +2055,9 @@ TEST_P(RecoveryTest, PerEpochLogMetadata) {
   // examine the local log store for the per-epoch log metadata
   for (int i = 0; i < nodes_; ++i) {
     if (!cluster_->getConfig()
-             ->get()
-             ->serverConfig()
-             ->getNode(i)
-             ->isReadableStorageNode()) {
+             ->getNodesConfiguration()
+             ->getStorageMembership()
+             ->hasShardShouldReadFrom(i)) {
       continue;
     }
 

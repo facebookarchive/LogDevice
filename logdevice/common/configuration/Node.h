@@ -269,13 +269,6 @@ struct Node {
       return 0;
     }
   }
-  bool includeInNodesets() const {
-    return hasRole(NodeRole::STORAGE) &&
-        !storage_attributes->exclude_from_nodesets;
-  }
-  bool isSequencingEnabled() const {
-    return getSequencerWeight() > 0;
-  }
 
   bool isReadableStorageNode() const {
     return hasRole(NodeRole::STORAGE) &&
@@ -296,9 +289,6 @@ struct Node {
                                        : storage_attributes->state;
   }
 
-  bool isDisabled() const {
-    return !isReadableStorageNode() && !isSequencingEnabled();
-  }
   shard_size_t getNumShards() const {
     return !hasRole(NodeRole::STORAGE) ? 0 : storage_attributes->num_shards;
   }

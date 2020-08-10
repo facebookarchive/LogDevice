@@ -841,16 +841,14 @@ TEST_F(AppendIntegrationTest, WriteAfterReplace) {
   std::shared_ptr<Client> client = cluster->createClient();
 
   // We expect this to be a 1 seqencer + 1 storage node setup
-  ld_check(cluster->getConfig()
-               ->get()
-               ->serverConfig()
-               ->getNode(0)
-               ->isSequencingEnabled());
-  ld_check(cluster->getConfig()
-               ->get()
-               ->serverConfig()
-               ->getNode(1)
-               ->isReadableStorageNode());
+  EXPECT_TRUE(cluster->getConfig()
+                  ->getNodesConfiguration()
+                  ->getSequencerMembership()
+                  ->isSequencingEnabled(0));
+  EXPECT_TRUE(cluster->getConfig()
+                  ->getNodesConfiguration()
+                  ->getStorageMembership()
+                  ->hasShardShouldReadFrom(1));
 
   const logid_t LOG_ID(1);
   Payload payload("123", 3);

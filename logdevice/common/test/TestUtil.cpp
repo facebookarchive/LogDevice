@@ -190,28 +190,6 @@ createMetaDataLogsConfig(std::vector<node_index_t> positive_weight_nodes,
   return cfg;
 }
 
-ServerConfig::MetaDataLogsConfig
-createMetaDataLogsConfig(const ServerConfig::NodesConfig& nodes_config,
-                         size_t max_metadata_nodes,
-                         size_t max_replication,
-                         NodeLocationScope sync_replication_scope) {
-  // calculate a nodeset which has weights > 0 and resize with max_metadata
-  // accordingly
-  std::vector<node_index_t> positive_weight_nodes;
-  for (const auto& it : nodes_config.getNodes()) {
-    if (it.second.isWritableStorageNode()) {
-      positive_weight_nodes.push_back(it.first);
-    }
-  }
-  size_t meta_nodeset_size =
-      std::min(positive_weight_nodes.size(), max_metadata_nodes);
-  positive_weight_nodes.resize(meta_nodeset_size);
-
-  return createMetaDataLogsConfig(std::move(positive_weight_nodes),
-                                  max_replication,
-                                  sync_replication_scope);
-}
-
 std::shared_ptr<Configuration> createSimpleConfig(size_t nnodes, size_t logs) {
   auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(1);
   auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
