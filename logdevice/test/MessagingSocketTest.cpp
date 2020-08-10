@@ -35,6 +35,7 @@
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/Stats.h"
 #include "logdevice/common/test/ConnectionTest_fixtures.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/ClientSettings.h"
 #include "logdevice/lib/ClientImpl.h"
@@ -203,15 +204,19 @@ create_config(std::vector<int> ld_ports) {
         Sockaddr("127.0.0.1", std::to_string(ld_port + 1).c_str());
     node.generation = 3;
     node.addStorageRole(/*num_shards*/ 2);
+    node.addSequencerRole();
     nodes.insert(std::make_pair(node_idx, std::move(node)));
     node_idx++;
   }
-  configuration::MetaDataLogsConfig meta_config;
+
   auto updateable_config = std::make_shared<UpdateableConfig>();
-  Configuration::NodesConfig node_config{nodes};
 
   updateable_config->updateableServerConfig()->update(
-      ServerConfig::fromDataTest(CLUSTER_NAME, node_config, meta_config));
+      ServerConfig::fromDataTest(CLUSTER_NAME));
+  updateable_config->updateableNodesConfiguration()->update(
+      NodesConfigurationTestUtil::provisionNodes(std::move(nodes)));
+  updateable_config->updateableNCMNodesConfiguration()->update(
+      updateable_config->getNodesConfiguration());
   return updateable_config;
 }
 

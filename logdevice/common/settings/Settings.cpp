@@ -2931,7 +2931,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
 
   init("enable-nodes-configuration-manager",
        &enable_nodes_configuration_manager,
-       "false", // defaults to false
+       "true",
        nullptr, // no custom validation necessary
        "If set, NodesConfigurationManager and its workflow will be enabled.",
        CLIENT | SERVER | REQUIRES_RESTART,
@@ -2939,7 +2939,7 @@ void Settings::defineSettings(SettingEasyInit& init) {
 
   init("use-nodes-configuration-manager-nodes-configuration",
        &use_nodes_configuration_manager_nodes_configuration,
-       "false", // defaults to false
+       "true",
        nullptr, // no custom validation necessary
        "If true and enable_nodes_configuration_manager is set, logdevice will "
        "use the nodes configuration from the NodesConfigurationManager.",

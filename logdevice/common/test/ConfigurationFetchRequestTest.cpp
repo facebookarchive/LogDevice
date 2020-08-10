@@ -206,6 +206,9 @@ TEST(ConfigurationFetchRequestTest, TimeoutTimer) {
 
   auto updatable_config =
       std::make_shared<UpdateableConfig>(createSimpleConfig(3, 0));
+  // TODO remove when we deprecate the NC publisher
+  updatable_config->updateableNCMNodesConfiguration()->update(
+      updatable_config->getNodesConfiguration());
   Settings settings = create_default_settings<Settings>();
   settings.num_workers = 3;
   auto processor = make_test_processor(settings, std::move(updatable_config));
@@ -233,6 +236,10 @@ TEST(ConfigurationFetchRequestTest, NoCallbackObjectDestruction) {
 
   auto updatable_config =
       std::make_shared<UpdateableConfig>(createSimpleConfig(3, 0));
+  // TODO remove when we deprecate the NC publisher
+  updatable_config->updateableNCMNodesConfiguration()->update(
+      updatable_config->getNodesConfiguration());
+
   Settings settings = create_default_settings<Settings>();
   settings.num_workers = 3;
   auto processor = make_test_processor(settings, std::move(updatable_config));

@@ -90,13 +90,6 @@ class APPEND_MessageTest : public ::testing::Test {
       : settings_(create_default_settings<Settings>()),
         processor_(make_test_processor(settings_)) {
     // build a Configuration object and use it to initialize a Sequencer
-    Configuration::Node node;
-    node.address = Sockaddr("127.0.0.1", "20034");
-    node.gossip_address = Sockaddr("127.0.0.1", "20035");
-    node.generation = 1;
-    node.addStorageRole();
-    Configuration::NodesConfig nodes({{0, std::move(node)}});
-
     auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(1);
     auto logs_config = std::make_unique<configuration::LocalLogsConfig>();
     logs_config->insert(boost::icl::right_open_interval<logid_t::raw_type>(
@@ -109,8 +102,10 @@ class APPEND_MessageTest : public ::testing::Test {
     ml_config.sequencers_provision_epoch_store = false;
     ml_config.sequencers_write_metadata_logs = false;
     config_ = std::make_shared<Configuration>(
-        ServerConfig::fromDataTest(__FILE__, nodes, std::move(ml_config)),
-        std::move(logs_config));
+        ServerConfig::fromDataTest(
+            __FILE__, configuration::NodesConfig{}, std::move(ml_config)),
+        std::move(logs_config),
+        createSimpleNodesConfig(1));
 
     settings_.enable_sticky_copysets = true;
 

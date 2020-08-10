@@ -50,7 +50,7 @@ sidebar_label: Settings
 | config-path | location of the cluster config file to use. Format: [file:]<path-to-config-file> or configerator:<configerator-path> |  | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
 | enable-logsconfig-manager | If true, logdeviced will load the logs configuration from the internal replicated storage and will ignore the logs section in the config file. This also enables the remote management API for logs config. | true |  |
 | enable-node-self-registration | If set, the node will register itself in the config if it doesn't find itself there. Otherwise it will crash. This requires --enable-nodes-configuration-manager=true | false | requires&nbsp;restart, **experimental**, server&nbsp;only |
-| enable-nodes-configuration-manager | If set, NodesConfigurationManager and its workflow will be enabled. | false | requires&nbsp;restart |
+| enable-nodes-configuration-manager | If set, NodesConfigurationManager and its workflow will be enabled. | true | requires&nbsp;restart |
 | file-config-update-interval | interval at which to poll config file for changes (if reading config from file on disk | 10000ms |  |
 | hard-exit-on-node-configuration-mismatch | Just quickly exits whenever the server's NodeID and/or service discovery configuration changes. Necessary so that we don't get stuck for shutdown timeout if flusing IOs on shared storage is slow or failing. This allowes another storage head to take over the shared storage as quickly as possible. Ultimately IO fencing will solve this more gracefully. | false | server&nbsp;only |
 | initial-config-load-timeout | maximum time to wait for initial server configuration until giving up | 15s | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
@@ -82,7 +82,7 @@ sidebar_label: Settings
 | shutdown-on-node-configuration-mismatch | Gracefully shutdown whenever the server's NodeID and/or service discovery configuration changes. | true | server&nbsp;only |
 | sleep-secs-after-self-registeration | If set, the node will sleep for these many secs after self registeration | 5s | server&nbsp;only |
 | tls-ticket-seeds-path | The path to the TLS ticket seed file, only useful when use-tls-ticket-seeds is set. Read TLSCredProcessor::processTLSTickets to understand the format of the seed. |  | requires&nbsp;restart, server&nbsp;only |
-| use-nodes-configuration-manager-nodes-configuration | If true and enable\_nodes\_configuration\_manager is set, logdevice will use the nodes configuration from the NodesConfigurationManager. | false |  |
+| use-nodes-configuration-manager-nodes-configuration | If true and enable\_nodes\_configuration\_manager is set, logdevice will use the nodes configuration from the NodesConfigurationManager. | true |  |
 | use-tls-ticket-seeds | If enabled, TLS tickets seed will be read and used to initiate TLS ticket encryption keys. Once enabled, and all the servers share the same seeds file, they will all use the same ticket encrpytion key, and they all can decrypt each others generated tickets enabling clients to resume TLS sessions between all the servers in the same cluster. | false | requires&nbsp;restart, server&nbsp;only |
 | wipe-storage-when-storage-state-none | Allow wiping the local RocksDB store when its storage state is none | false | requires&nbsp;restart, server&nbsp;only |
 | zk-config-polling-interval | polling and retry interval for Zookeeper config source | 1000ms | CLI&nbsp;only |

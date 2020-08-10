@@ -777,10 +777,7 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
 
   if (!nodes_configuration_sot_.has_value()) {
     // sot setting not provided. randomize the source of truth of NC.
-    nodes_configuration_sot_.assign(
-        folly::Random::rand64(2) == 0
-            ? NodesConfigurationSourceOfTruth::NCM
-            : NodesConfigurationSourceOfTruth::SERVER_CONFIG);
+    nodes_configuration_sot_.assign(NodesConfigurationSourceOfTruth::NCM);
   }
 
   ld_check(nodes_configuration_sot_.has_value());

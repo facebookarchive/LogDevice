@@ -27,6 +27,7 @@
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/HELLO_Message.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 
 namespace facebook { namespace logdevice {
@@ -454,12 +455,17 @@ TEST(MessagingTest, SendFromCallback) {
   node.gossip_address = Sockaddr("127.0.0.1", "65535"), node.generation = 1;
   node.addStorageRole();
 
-  Configuration::NodesConfig nodes({{0, std::move(node)}});
-  auto config =
-      std::make_shared<UpdateableConfig>(std::make_shared<Configuration>(
-          ServerConfig::fromDataTest(
-              __FILE__, nodes, Configuration::MetaDataLogsConfig()),
-          nullptr));
+  configuration::Nodes nodes({{0, std::move(node)}});
+
+  auto nodes_configuration =
+      NodesConfigurationTestUtil::provisionNodes(std::move(nodes));
+
+  auto config = std::make_shared<UpdateableConfig>(
+      std::make_shared<Configuration>(ServerConfig::fromDataTest(__FILE__),
+                                      nullptr,
+                                      std::move(nodes_configuration)));
+  config->updateableNCMNodesConfiguration()->update(
+      config->getNodesConfiguration());
 
   struct SendRequest : public Request {
     explicit SendRequest(NodeID node)

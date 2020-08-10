@@ -42,6 +42,7 @@
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
 #include "logdevice/common/settings/util.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/Err.h"
 #include "logdevice/include/Record.h"
@@ -170,6 +171,7 @@ void UnreleasedRecordDetectorTest::SetUp() {
   // Someone may try and fail to connect before we start the listener. Make sure
   // it doesn't cause connection errors later.
   settings.connect_throttle.initial_delay = std::chrono::milliseconds(0);
+
   usettings_ =
       std::make_unique<UpdateableSettings<Settings>>(std::move(settings));
   ServerSettings server_settings(create_default_settings<ServerSettings>());
@@ -203,29 +205,29 @@ void UnreleasedRecordDetectorTest::SetUp() {
       nullptr);
   ld_notify("ShardedStorageThreadPool created.");
 
+  auto socketPath = temp_dir_path + "/socket";
+
+  configuration::Node node = configuration::Node::withTestDefaults(0);
+  node.setAddress(Sockaddr(socketPath));
+  node.addStorageRole(1);
+  node.setIsMetadataNode(true);
+
+  configuration::Nodes nodes;
+  nodes[0] = std::move(node);
+
+  auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
+      std::move(nodes), ReplicationProperty{{NodeLocationScope::NODE, 1}});
+
   // create config from file
   config_ = std::make_shared<UpdateableConfig>(
-      Configuration::fromJsonFile(CONFIG_PATH));
+      Configuration::fromJsonFile(CONFIG_PATH)
+          ->withNodesConfiguration(std::move(nodes_configuration)));
+
   ASSERT_NE(nullptr, config_);
   ASSERT_NE(nullptr, config_->getServerConfig());
   ld_notify("UpdateableConfig created from file %s.", CONFIG_PATH);
-
-  // override node address with path to unix domain socket in temp directory
-  std::string socketPath(temp_dir_path);
-  socketPath.append("/socket");
-  auto* const node =
-      const_cast<configuration::Node*>(config_->getServerConfig()->getNode(0));
-  ASSERT_TRUE(configuration::parser::parseHostString(
-      socketPath, node->address, "host"));
-
-  // do the same thing for NodesConfiguration
-  auto nodes_configuration =
-      config_->getNodesConfigurationFromServerConfigSource();
-  ASSERT_NE(nullptr, nodes_configuration);
-  const auto* serv_disc = nodes_configuration->getNodeServiceDiscovery(0);
-  ASSERT_NE(nullptr, serv_disc);
-  const_cast<configuration::nodes::NodeServiceDiscovery*>(serv_disc)
-      ->default_client_data_address = node->address;
+  config_->updateableNCMNodesConfiguration()->update(
+      config_->getNodesConfiguration());
 
   // create processor
   processor_ =

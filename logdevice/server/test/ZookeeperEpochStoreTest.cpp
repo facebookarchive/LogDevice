@@ -55,6 +55,9 @@ class ZookeeperEpochStoreTest : public ::testing::Test {
       return;
 
     config = std::make_shared<UpdateableConfig>(std::move(cfg_in));
+    // TODO remove when we deprecate the NC publisher
+    config->updateableNCMNodesConfiguration()->update(
+        config->getNodesConfiguration());
 
     processor = make_test_processor(settings, config, nullptr, NodeID(0, 1));
     other_node_processor =
