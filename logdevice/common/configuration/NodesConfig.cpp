@@ -11,7 +11,7 @@
 #include <folly/hash/SpookyHashV2.h>
 
 #include "logdevice/common/configuration/MetaDataLogsConfig.h"
-#include "logdevice/common/configuration/nodes/NodesConfigLegacyConverter.h"
+#include "logdevice/common/configuration/ServerConfig.h"
 
 namespace facebook { namespace logdevice { namespace configuration {
 
@@ -81,14 +81,6 @@ uint64_t NodesConfig::calculateHash() const {
   const uint64_t SEED = 0x9a6bf3f8ebcd8cdfL; // random
   return folly::hash::SpookyHashV2::Hash64(
       hashable_string.data(), hashable_string.size(), SEED);
-}
-
-bool NodesConfig::generateNodesConfiguration(
-    const MetaDataLogsConfig& meta_config,
-    config_version_t version) {
-  // TODO: REMOVE
-  nodes_configuration_ = std::make_shared<const nodes::NodesConfiguration>();
-  return true;
 }
 
 folly::dynamic NodesConfig::toJson() const {

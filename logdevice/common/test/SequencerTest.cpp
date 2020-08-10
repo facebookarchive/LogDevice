@@ -276,9 +276,7 @@ class MockSequencer : public Sequencer {
 
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override {
-    return test_->getConfig()
-        ->serverConfig()
-        ->getNodesConfigurationFromServerConfigSource();
+    return test_->getConfig()->getNodesConfiguration();
   }
 
   void startGetTrimPointRequest() override {}
@@ -371,8 +369,8 @@ MockEpochSequencer* SequencerTest::getCurrentEpochSequencer() {
 void SequencerTest::setUp() {
   dbg::currentLevel = log_level_;
   auto config = std::make_shared<UpdateableConfig>(
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("sequencer_test.conf")));
-  config->updateableNCMNodesConfiguration()->update(createSimpleNodesConfig(1));
+      Configuration::fromJsonFile(TEST_CONFIG_FILE("sequencer_test.conf"))
+          ->withNodesConfiguration(createSimpleNodesConfig(1)));
 
   // TODO the following 2 settings are required to make the NCPublisher pick
   // the NCM NodesConfiguration. Should be removed when NCM is the default.

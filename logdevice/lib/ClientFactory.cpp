@@ -16,7 +16,6 @@
 
 #include "logdevice/common/ConfigInit.h"
 #include "logdevice/common/NodesConfigurationInit.h"
-#include "logdevice/common/NodesConfigurationPublisher.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/StatsCollectionThread.h"
 #include "logdevice/common/checks.h"
@@ -207,30 +206,21 @@ std::shared_ptr<Client> ClientFactory::attemptToCreate(
     if (use_server_ncs) {
       ld_info("Trying to obtain initial NodesConfiguration from a LogDevice "
               "server...");
-      success = nodes_cfg_init.init(config->updateableNCMNodesConfiguration(),
+      success = nodes_cfg_init.init(config->updateableNodesConfiguration(),
                                     plugin_registry,
                                     nodes_configuration_seed,
                                     config->getServerConfig());
     } else if (use_zk_ncs) {
       ld_info("Trying to obtain initial NodesConfiguration from Zookeeper...");
       success = nodes_cfg_init.initWithoutProcessor(
-          config->updateableNCMNodesConfiguration());
+          config->updateableNodesConfiguration());
     }
     if (!success) {
       return nullptr;
     }
-    ld_check(config->getNodesConfigurationFromNCMSource() != nullptr);
+    ld_check(config->getNodesConfiguration() != nullptr);
   }
 
-  // publish the NodesConfiguration for the first time. Later a
-  // long-living subscribing NodesConfigurationPublisher will be created again
-  // in Processor
-  // TODO(T43023435): use an actual TraceLogger to log this initial update.
-  NodesConfigurationPublisher publisher(
-      config,
-      impl_settings->getSettings(),
-      std::make_shared<NoopTraceLogger>(config),
-      /*subscribe*/ false);
   ld_check(config->getNodesConfiguration() != nullptr);
 
   if (!validateSSLSettings(config->getNodesConfiguration(),

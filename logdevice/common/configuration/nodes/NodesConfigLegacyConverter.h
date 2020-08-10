@@ -18,29 +18,10 @@ class NodesConfigLegacyConverter {
   static membership::StorageState
   fromLegacyStorageState(configuration::StorageState ls);
 
-  static configuration::StorageState
-  toLegacyStorageState(membership::StorageState ss);
-
-  static int toLegacyNodesConfig(const NodesConfiguration& config,
-                                 NodesConfig* legacy_config_out);
-
   static std::shared_ptr<const NodesConfiguration>
   fromLegacyNodesConfig(const NodesConfig& config_legacy,
                         const MetaDataLogsConfig& meta_config,
                         config_version_t version);
-
-  static int
-  toLegacyMetadataLogsConfig(const NodesConfiguration& config,
-                             MetaDataLogsConfig& existing_metadata_config);
-
-  // take a server config, convert its nodes config to the new type,
-  // and convert it back, create a new server config with the config that
-  // got converted back, compare with the original. return true if the
-  // generated server is the same as the original.
-  static bool testWithServerConfig(const ServerConfig& server_config);
-
-  static bool testSerialization(const ServerConfig& server_config,
-                                bool compress);
 };
 
 }}}} // namespace facebook::logdevice::configuration::nodes

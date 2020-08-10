@@ -239,7 +239,7 @@ std::shared_ptr<const configuration::nodes::NodesConfiguration>
 NodesConfigurationPoller::getNodesConfiguration() const {
   // NodesConfigurationPoller is used by NCM so it must use
   // NCM based NC for conditional polling
-  return Worker::onThisThread()->getNodesConfigurationFromNCMSource();
+  return Worker::onThisThread()->getNodesConfiguration();
 }
 
 folly::Optional<node_index_t> NodesConfigurationPoller::getMyNodeID() const {

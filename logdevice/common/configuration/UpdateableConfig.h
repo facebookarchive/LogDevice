@@ -75,16 +75,6 @@ class UpdateableConfig : public configuration::UpdateableConfigBase {
     return updateable_nodes_configuration_->get();
   }
 
-  std::shared_ptr<const configuration::nodes::NodesConfiguration>
-  getNodesConfigurationFromNCMSource() const {
-    return updateable_ncm_nodes_configuration_->get();
-  }
-
-  std::shared_ptr<const configuration::nodes::NodesConfiguration>
-  getNodesConfigurationFromServerConfigSource() const {
-    return getServerConfig()->getNodesConfigurationFromServerConfigSource();
-  }
-
   std::shared_ptr<configuration::LocalLogsConfig> getLocalLogsConfig() const;
   std::shared_ptr<UpdateableServerConfig> updateableServerConfig() const {
     return updateable_server_config_;
@@ -103,32 +93,13 @@ class UpdateableConfig : public configuration::UpdateableConfigBase {
     return updateable_nodes_configuration_;
   }
 
-  std::shared_ptr<UpdateableNodesConfiguration>
-  updateableNCMNodesConfiguration() const {
-    return updateable_ncm_nodes_configuration_;
-  }
-
   static std::shared_ptr<UpdateableConfig> createEmpty();
 
  private:
   std::shared_ptr<UpdateableServerConfig> updateable_server_config_;
   std::shared_ptr<UpdateableLogsConfig> updateable_logs_config_;
   std::shared_ptr<UpdateableZookeeperConfig> updateable_zookeeper_config_;
-
-  // This can either be the ServerConfig  NC or the NodesConfigurationManager
-  // NC. This updateable is managed by the NodesConfigurationPublisher. Read the
-  // comment on top of NodesConfigurationPublisher to understand how
-  // and when it is updated. Default to using this updateable NC unless you
-  // explicitly need the NCM NC, in which case use
-  // updateable_ncm_nodes_configuration_ instead.
   std::shared_ptr<UpdateableNodesConfiguration> updateable_nodes_configuration_;
-
-  // Populated by the NodesConfigurationManager when the NodesConfiguration in
-  // the NodesConfigurationStore changes.
-  // Use this NC if you explicitly need the NCM NC, otherwise use
-  // updateable_nodes_configuration_.
-  std::shared_ptr<UpdateableNodesConfiguration>
-      updateable_ncm_nodes_configuration_;
 
   ConfigSubscriptionHandle server_config_subscription_;
   ConfigSubscriptionHandle logs_config_subscription_;

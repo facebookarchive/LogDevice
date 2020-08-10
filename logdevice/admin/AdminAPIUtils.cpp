@@ -14,7 +14,6 @@
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/Node.h"
-#include "logdevice/common/configuration/nodes/NodesConfigLegacyConverter.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"

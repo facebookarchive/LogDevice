@@ -441,9 +441,8 @@ void EpochSequencerTest::setUp() {
   dbg::currentLevel = log_level_;
 
   updateable_config_ = std::make_shared<UpdateableConfig>(
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("sequencer_test.conf")));
-  updateable_config_->updateableNCMNodesConfiguration()->update(
-      createSimpleNodesConfig(1));
+      Configuration::fromJsonFile(TEST_CONFIG_FILE("sequencer_test.conf"))
+          ->withNodesConfiguration(createSimpleNodesConfig(1)));
 
   std::shared_ptr<configuration::LocalLogsConfig> logs_config =
       std::make_shared<configuration::LocalLogsConfig>(

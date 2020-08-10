@@ -12,7 +12,6 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/configuration/ConfigParser.h"
-#include "logdevice/common/configuration/nodes/NodesConfigLegacyConverter.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"

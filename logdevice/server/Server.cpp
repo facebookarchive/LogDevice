@@ -21,7 +21,6 @@
 #include "logdevice/common/FileEpochStore.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/NodesConfigurationInit.h"
-#include "logdevice/common/NodesConfigurationPublisher.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/SequencerLocator.h"
 #include "logdevice/common/SequencerPlacement.h"
@@ -459,19 +458,8 @@ void ServerParameters::init() {
     if (!initNodesConfiguration(nodes_configuration_store)) {
       throw ConstructorFailed();
     }
-    ld_check(updateable_config_->getNodesConfigurationFromNCMSource() !=
-             nullptr);
+    ld_check(updateable_config_->getNodesConfiguration() != nullptr);
   }
-
-  // Publish the NodesConfiguration for the first time and subscribe to
-  // updates in the mean time, until later when the long-lived subscribing
-  // NodesConfigurationPublisher gets created in the Processor.
-  // TODO(T43023435): use an actual TraceLogger to log this initial update.
-  NodesConfigurationPublisher publisher(
-      updateable_config_,
-      processor_settings_,
-      std::make_shared<NoopTraceLogger>(updateable_config_));
-  ld_check(updateable_config_->getNodesConfiguration() != nullptr);
 
   // Initialize the MyNodeIDFinder that will be used to find our NodeID from
   // the config.
@@ -593,7 +581,7 @@ bool ServerParameters::initNodesConfiguration(
       NodesConfigurationStore::Condition::createIfNotExists());
   NodesConfigurationInit config_init(std::move(store), getProcessorSettings());
   return config_init.initWithoutProcessor(
-      updateable_config_->updateableNCMNodesConfiguration());
+      updateable_config_->updateableNodesConfiguration());
 }
 
 bool ServerParameters::isSequencingEnabled() const {
@@ -1235,7 +1223,7 @@ bool Server::initNCM() {
     }
     ncm->upgradeToProposer();
 
-    auto initial_nc = processor_->config_->getNodesConfigurationFromNCMSource();
+    auto initial_nc = processor_->config_->getNodesConfiguration();
     if (!initial_nc) {
       // Currently this should only happen in tests as our boostrapping
       // workflow should always ensure the Processor has a valid

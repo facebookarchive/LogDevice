@@ -445,8 +445,8 @@ void NodesConfigurationManager::maybeProcessStagedConfig() {
            nodes_configuration_manager_pending_version,
            pending_nodes_config_->getVersion().val());
 
-  // Publish the NodesConfiguration to the NCM NC updateable.
-  deps_->processor_->config_->updateableNCMNodesConfiguration()->update(
+  // Publish the NodesConfiguration to the NC updateable.
+  deps_->processor_->config_->updateableNodesConfiguration()->update(
       pending_nodes_config_);
 
   auto futures = fulfill_on_all_workers<folly::Unit>(

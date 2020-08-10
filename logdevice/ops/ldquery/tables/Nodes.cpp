@@ -14,7 +14,6 @@
 #include "../Utils.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
-#include "logdevice/common/configuration/nodes/NodesConfigLegacyConverter.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/membership/utils.h"
@@ -130,15 +129,8 @@ std::shared_ptr<TableData> Nodes::getData(QueryContext& /*ctx*/) {
       ShardID compatibility_shard(nid, 0);
       auto state_res = storage_membership->getShardState(compatibility_shard);
       if (state_res.has_value()) {
-        // TODO: use the new storage state string
-        // result->set(
-        //     "storage_state",
-        //     membership::toString(state_res->storage_state).toString());
-        const auto legacy_storage_state =
-            configuration::nodes::NodesConfigLegacyConverter::
-                toLegacyStorageState(state_res->storage_state);
         result->set("storage_state",
-                    configuration::storageStateToString(legacy_storage_state));
+                    membership::toString(state_res->storage_state).toString());
       } else {
         ld_warning("Node %hu does not have shard %s in storage membership!",
                    nid,

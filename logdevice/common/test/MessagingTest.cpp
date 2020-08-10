@@ -465,8 +465,6 @@ TEST(MessagingTest, SendFromCallback) {
       std::make_shared<Configuration>(ServerConfig::fromDataTest(__FILE__),
                                       nullptr,
                                       std::move(nodes_configuration)));
-  config->updateableNCMNodesConfiguration()->update(
-      config->getNodesConfiguration());
 
   struct SendRequest : public Request {
     explicit SendRequest(NodeID node)

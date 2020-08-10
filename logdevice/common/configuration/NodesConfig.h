@@ -21,13 +21,9 @@ struct MetaDataLogsConfig;
 
 class NodesConfig {
  public:
-  explicit NodesConfig()
-      : nodes_configuration_(
-            std::make_shared<const nodes::NodesConfiguration>()) {}
+  explicit NodesConfig() {}
 
-  explicit NodesConfig(Nodes nodes)
-      : nodes_configuration_(
-            std::make_shared<const nodes::NodesConfiguration>()) {
+  explicit NodesConfig(Nodes nodes) {
     setNodes(std::move(nodes));
   }
 
@@ -37,31 +33,6 @@ class NodesConfig {
   const Nodes& getNodes() const {
     return nodes_;
   }
-  ////////////////////// New NodesConfiguration ///////////////////////
-
-  bool hasNodesConfiguration() const {
-    return nodes_configuration_ != nullptr;
-  }
-
-  const std::shared_ptr<const nodes::NodesConfiguration>&
-  getNodesConfiguration() const {
-    return nodes_configuration_;
-  }
-
-  void setNodesConfigurationVersion(config_version_t version) {
-    // TODO(T33035439): set the nodes config version to be the same as the
-    // config version_ during the migration period. Will be deprecated.
-    if (nodes_configuration_) {
-      nodes_configuration_ = nodes_configuration_->withVersion(
-          membership::MembershipVersion::Type(version.val()));
-    }
-  }
-
-  // generate the new NodesConfiguration representation based on `this',
-  // and the given @param meta_config and @param version.
-  // @return   true if the new NodesConfiguration is successfully generated
-  bool generateNodesConfiguration(const MetaDataLogsConfig& meta_config,
-                                  config_version_t version);
 
   folly::dynamic toJson() const;
 
@@ -94,13 +65,6 @@ class NodesConfig {
   shard_size_t calculateNumShards() const;
 
   Nodes nodes_;
-
-  // NOTE: NodesConfig is the current nodes config data structure in use, which
-  // will be replaced by nodesConfiguration_ in the future. nodesConfiguration_
-  // is the new format, and it co-exists with current representation.
-  std::shared_ptr<const nodes::NodesConfiguration> nodes_configuration_;
-
-  friend class nodes::NodesConfigLegacyConverter;
 };
 
 }}} // namespace facebook::logdevice::configuration

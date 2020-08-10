@@ -233,27 +233,7 @@ static bool nodes_configuration_exists(std::string config_json) {
 static std::string update_server_config_with_nodes_configuration(
     std::string server_config_str,
     std::string binary_nodes_configuration) {
-  auto config = Configuration::fromJson(server_config_str, nullptr);
-  if (config == nullptr) {
-    auto exception = folly::sformat(
-        "Failed to parse config json: {}", errorStrings()[err].name);
-    throw_python_exception(parseException, object(exception.c_str()));
-  }
-  err = Status::OK;
-
-  auto nc = nodes_configuration_from_string(binary_nodes_configuration);
-
-  NodesConfig nodes_config;
-  NodesConfigLegacyConverter::toLegacyNodesConfig(*nc, &nodes_config);
-
-  auto metadata_cfg = config->serverConfig()->getMetaDataLogsConfig();
-  NodesConfigLegacyConverter::toLegacyMetadataLogsConfig(*nc, metadata_cfg);
-
-  auto new_server_config = config->serverConfig()
-                               ->withNodes(std::move(nodes_config))
-                               ->withMetaDataLogsConfig(metadata_cfg);
-  return new_server_config->toString(
-      config->logsConfig().get(), config->zookeeperConfig().get());
+  throw std::runtime_error("Not implemented");
 }
 
 static std::string normalize_server_config(std::string server_config_str) {
@@ -268,25 +248,8 @@ static std::string normalize_server_config(std::string server_config_str) {
 
 static object
 nodes_configuration_from_server_config(std::string server_config_str) {
-  auto server_config = ServerConfig::fromJson(server_config_str);
-  if (server_config == nullptr) {
-    auto exception = folly::sformat(
-        "Failed to parse config binary: {}", errorStrings()[err].name);
-    throw_python_exception(
-        parseException, object("failed to parse server config json"));
-  }
-  err = Status::OK;
-
-  auto nc = NodesConfigLegacyConverter::fromLegacyNodesConfig(
-      server_config->getNodesConfig(),
-      server_config->getMetaDataLogsConfig(),
-      server_config->getVersion());
-
-  auto nc_thrift = NodesConfigurationThriftConverter::toThrift(*nc);
-  auto nc_str = ThriftCodec::serialize<BinarySerializer>(nc_thrift);
-
-  return object(
-      handle<>(PyBytes_FromStringAndSize(nc_str.c_str(), nc_str.size())));
+  throw std::runtime_error("Not implemented");
+  return object();
 }
 
 }}}} // namespace facebook::logdevice::configuration::nodes

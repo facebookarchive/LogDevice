@@ -37,7 +37,6 @@
 #include "logdevice/common/HashBasedSequencerLocator.h"
 #include "logdevice/common/LegacyLogToShard.h"
 #include "logdevice/common/NodeHealthStatus.h"
-#include "logdevice/common/NodesConfigurationPublisher.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/StaticSequencerLocator.h"
@@ -45,7 +44,6 @@
 #include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/configuration/TextConfigUpdater.h"
-#include "logdevice/common/configuration/nodes/NodesConfigLegacyConverter.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
 #include "logdevice/common/debug.h"
@@ -2891,6 +2889,19 @@ int Cluster::updateNodeAttributes(node_index_t index,
                                   configuration::StorageState storage_state,
                                   int sequencer_weight,
                                   folly::Optional<bool> enable_sequencing) {
+  static const auto from_legacy_storage_state =
+      [](configuration::StorageState storage_state) {
+        switch (storage_state) {
+          case configuration::StorageState::READ_WRITE:
+            return membership::StorageState::READ_WRITE;
+          case configuration::StorageState::READ_ONLY:
+            return membership::StorageState::READ_ONLY;
+          case configuration::StorageState::DISABLED:
+            return membership::StorageState::NONE;
+        }
+        ld_check(false);
+        return membership::StorageState::INVALID;
+      };
   ld_info("Updating attributes of N%d: storage_state %s, sequencer weight %d, "
           "enable_sequencing %s",
           (int)index,
@@ -2925,8 +2936,7 @@ int Cluster::updateNodeAttributes(node_index_t index,
         NodesConfigurationTestUtil::setStorageMembershipUpdate(
             *nodes_config,
             {ShardID(index, -1)},
-            configuration::nodes::NodesConfigLegacyConverter::
-                fromLegacyStorageState(storage_state),
+            from_legacy_storage_state(storage_state),
             folly::none));
   }
 

@@ -266,21 +266,10 @@ class Worker : public WorkContext {
   std::shared_ptr<ServerConfig> getServerConfig() const;
 
   /**
-   * @return  NodesConfiguraton object cached on this worker, depending on
-   *          processor settings, the source can be server config or NCM.
+   * @return  NodesConfiguraton object cached on this worker.
    */
   std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const;
-
-  /**
-   * get the NodesConfiguration updated by NodesConfigurationManager.
-   * Note: only used during NCM migration period, will be removed later
-   */
-  std::shared_ptr<const configuration::nodes::NodesConfiguration>
-  getNodesConfigurationFromNCMSource() const;
-
-  std::shared_ptr<const configuration::nodes::NodesConfiguration>
-  getNodesConfigurationFromServerConfigSource() const;
 
   /**
    * @return logs configuration object cached on this Worker and

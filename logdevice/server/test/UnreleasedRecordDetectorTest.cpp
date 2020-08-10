@@ -226,8 +226,6 @@ void UnreleasedRecordDetectorTest::SetUp() {
   ASSERT_NE(nullptr, config_);
   ASSERT_NE(nullptr, config_->getServerConfig());
   ld_notify("UpdateableConfig created from file %s.", CONFIG_PATH);
-  config_->updateableNCMNodesConfiguration()->update(
-      config_->getNodesConfiguration());
 
   // create processor
   processor_ =

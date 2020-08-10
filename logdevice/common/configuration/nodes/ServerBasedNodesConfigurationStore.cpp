@@ -115,10 +115,10 @@ void ServerBasedNodesConfigurationStore::getConfig(
   auto worker = Worker::onThisThread();
   std::unique_ptr<Request> rq =
       std::make_unique<NodesConfigurationOneTimePollRequest>(
-          genPollerOptions(NodesConfigurationPoller::Poller::Mode::ONE_TIME,
-                           *worker->processor_->settings(),
-                           *worker->processor_->config_
-                                ->getNodesConfigurationFromNCMSource()),
+          genPollerOptions(
+              NodesConfigurationPoller::Poller::Mode::ONE_TIME,
+              *worker->processor_->settings(),
+              *worker->processor_->config_->getNodesConfiguration()),
           std::move(callback),
           base_version,
           node_order_seed_);

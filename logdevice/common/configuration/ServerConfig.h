@@ -137,10 +137,6 @@ class ServerConfig {
     version_ = version;
   }
 
-  void setNodesConfigurationVersion(config_version_t version) {
-    nodesConfig_.setNodesConfigurationVersion(version);
-  }
-
   /**
    * Returns the version of this config
    */
@@ -254,16 +250,6 @@ class ServerConfig {
 
   const NodesConfig& getNodesConfig() const {
     return nodesConfig_;
-  }
-
-  /**
-   * Get the new representation of cluster nodes (i.e. NodesConfiguration
-   * class). reiterate the _FromServerConfigSource_ part to avoid confusion
-   * during NodesConfiguration migration.
-   */
-  const std::shared_ptr<const NodesConfiguration>&
-  getNodesConfigurationFromServerConfigSource() const {
-    return nodesConfig_.getNodesConfiguration();
   }
 
   /**

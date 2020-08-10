@@ -73,9 +73,7 @@ TEST(ConfigurationTest, SimpleValid) {
 
   // N0 and N5 are sequencer nodes. The list of sequencers is padded to size 43.
   const auto& seq_locator_config =
-      config->serverConfig()
-          ->getNodesConfigurationFromServerConfigSource()
-          ->getSequencersConfig();
+      config->getNodesConfiguration()->getSequencersConfig();
   EXPECT_EQ(43, seq_locator_config.nodes.size());
   EXPECT_EQ(43, seq_locator_config.weights.size());
   for (int i = 0; i <= 42; ++i) {
@@ -548,82 +546,6 @@ TEST(ConfigurationTest, LookupNodeByID) {
       configuration::StorageState::READ_WRITE, node->storage_attributes->state);
   EXPECT_EQ(4, node->storage_attributes->capacity);
   EXPECT_EQ(4, node->getWritableStorageCapacity());
-}
-
-TEST(ConfigurationTest, SSLNodeToNode) {
-  std::shared_ptr<Configuration> config(
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf")));
-  ASSERT_NE(config, nullptr);
-
-// The int conversions below are used to circumvent an issue where
-// ASSERT_EQ(<bool>, ...) doesn't build on gcc
-#define TEST_NODE_TO_NODE_SSL(scope, exp_result)                               \
-  do {                                                                         \
-    const auto& nodes = config->serverConfig()->getNodes();                    \
-    NodeID nid0 = NodeID(0, nodes.at(0).generation);                           \
-    NodeID nid2 = NodeID(5, nodes.at(5).generation);                           \
-    const auto nc =                                                            \
-        config->serverConfig()->getNodesConfigurationFromServerConfigSource(); \
-    ASSERT_EQ((int)exp_result,                                                 \
-              configuration::nodes::getNodeSSL(                                \
-                  *nc, nodes.at(0).location, nid2.index(), scope));            \
-    ASSERT_EQ((int)exp_result,                                                 \
-              configuration::nodes::getNodeSSL(                                \
-                  *nc, nodes.at(5).location, nid0.index(), scope));            \
-  } while (0)
-
-  const auto& nodes = config->serverConfig()->getNodes();
-
-  // Nodes in the same data center
-  EXPECT_EQ("ash.ash2.08.k.z", nodes.at(0).locationStr());
-  EXPECT_EQ("ash.ash2.07.a.b", nodes.at(5).locationStr());
-
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::NODE, true);
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::RACK, true);
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::ROW, true);
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::CLUSTER, true);
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::DATA_CENTER, false);
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::REGION, false);
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::ROOT, false);
-
-  // Nodes in different regions
-  EXPECT_EQ(0,
-            const_cast<NodeLocation&>(*nodes.at(5).location)
-                .fromDomainString("lla.lla1.08.k.z"));
-
-  auto recompute_config = [&]() {
-    auto sc = config->serverConfig();
-    config =
-        std::make_shared<Configuration>(sc->withNodes(sc->getNodesConfig()),
-                                        config->logsConfig(),
-                                        nullptr,
-                                        config->zookeeperConfig());
-    ld_check(config != nullptr);
-  };
-
-  recompute_config();
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::NODE, true);
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::RACK, true);
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::ROW, true);
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::CLUSTER, true);
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::DATA_CENTER, true);
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::REGION, true);
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::ROOT, false);
-
-  // Nodes in the same rack
-  EXPECT_EQ(0,
-            const_cast<NodeLocation&>(
-                *config->serverConfig()->getNodes().at(5).location)
-                .fromDomainString("ash.ash2.08.k.z"));
-
-  recompute_config();
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::NODE, true);
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::RACK, false);
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::ROW, false);
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::CLUSTER, false);
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::DATA_CENTER, false);
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::REGION, false);
-  TEST_NODE_TO_NODE_SSL(NodeLocationScope::ROOT, false);
 }
 
 namespace facebook { namespace logdevice { namespace configuration {

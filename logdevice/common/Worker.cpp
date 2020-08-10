@@ -120,8 +120,7 @@ class WorkerImpl {
                 config->get()->serverConfig()->getTrafficShapingConfig(),
                 &w->processor_->clientIdxAllocator(),
                 w->worker_type_ == WorkerType::FAILURE_DETECTOR,
-                config->getServerConfig()
-                    ->getNodesConfigurationFromServerConfigSource(),
+                config->getNodesConfiguration(),
                 getMyNodeIndex(w),
                 getMyLocation(config, w),
                 std::unique_ptr<IConnectionFactory>(
@@ -296,16 +295,6 @@ std::shared_ptr<ServerConfig> Worker::getServerConfig() const {
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 Worker::getNodesConfiguration() const {
   return config_->getNodesConfiguration();
-}
-
-std::shared_ptr<const configuration::nodes::NodesConfiguration>
-Worker::getNodesConfigurationFromNCMSource() const {
-  return config_->getNodesConfigurationFromNCMSource();
-}
-
-std::shared_ptr<const configuration::nodes::NodesConfiguration>
-Worker::getNodesConfigurationFromServerConfigSource() const {
-  return config_->getNodesConfigurationFromServerConfigSource();
 }
 
 std::shared_ptr<LogsConfig> Worker::getLogsConfig() const {

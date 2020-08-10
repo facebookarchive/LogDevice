@@ -176,7 +176,7 @@ ClientImpl::ClientImpl(std::string cluster_name,
       throw ConstructorFailed();
     }
 
-    auto initial_nc = processor_->config_->getNodesConfigurationFromNCMSource();
+    auto initial_nc = processor_->config_->getNodesConfiguration();
     if (!initial_nc) {
       // Currently this should only happen in tests as our boostrapping
       // workflow should always ensure the Processor has a valid

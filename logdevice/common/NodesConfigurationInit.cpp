@@ -165,7 +165,6 @@ NodesConfigurationInit::buildBootstrappingServerConfig(
   auto config = std::make_shared<UpdateableConfig>();
   config->updateableServerConfig()->update(std::move(current_server_config));
   config->updateableNodesConfiguration()->update(nodes_config);
-  config->updateableNCMNodesConfiguration()->update(nodes_config);
   return config;
 }
 

@@ -27,7 +27,6 @@
 #include "logdevice/common/EventLoopTaskQueue.h"
 #include "logdevice/common/HashBasedSequencerLocator.h"
 #include "logdevice/common/MetaDataLogWriter.h"
-#include "logdevice/common/NodesConfigurationPublisher.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/PermissionChecker.h"
 #include "logdevice/common/ReadStreamDebugInfoSamplingConfig.h"
@@ -105,7 +104,6 @@ class ProcessorImpl {
                 : settings->incoming_messages_max_bytes_limit),
         background_init_flag_(),
         background_queue_(),
-        nc_publisher_(processor->config_, settings, std::move(trace_logger)),
         read_stream_debug_info_sampling_config_(
             processor->getPluginRegistry(),
             settings->all_read_streams_debug_config_path),
@@ -133,7 +131,6 @@ class ProcessorImpl {
   std::vector<std::unique_ptr<BackgroundThread>> background_threads_;
   // An empty function means "exit the thread."
   folly::MPMCQueue<folly::Function<void()>> background_queue_;
-  NodesConfigurationPublisher nc_publisher_;
   std::vector<std::unique_ptr<EventLoop>> ev_loops_;
   std::unique_ptr<AllSequencers> allSequencers_;
   std::array<workers_t, static_cast<size_t>(WorkerType::MAX)> all_workers_;
@@ -504,16 +501,6 @@ void Processor::setNodesConfigurationManager(
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
 Processor::getNodesConfiguration() const {
   return config_->getNodesConfiguration();
-}
-
-std::shared_ptr<const configuration::nodes::NodesConfiguration>
-Processor::getNodesConfigurationFromNCMSource() const {
-  return config_->getNodesConfigurationFromNCMSource();
-}
-
-std::shared_ptr<const configuration::nodes::NodesConfiguration>
-Processor::getNodesConfigurationFromServerConfigSource() const {
-  return config_->getNodesConfigurationFromServerConfigSource();
 }
 
 configuration::nodes::NodesConfigurationManager*

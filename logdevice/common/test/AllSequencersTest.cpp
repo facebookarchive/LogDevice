@@ -285,9 +285,8 @@ AllSequencersTest::AllSequencersTest()
 void AllSequencersTest::setUp() {
   dbg::currentLevel = log_level_;
   updateable_config_ = std::make_shared<UpdateableConfig>(
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("sequencer_test.conf")));
-  updateable_config_->updateableNCMNodesConfiguration()->update(
-      createSimpleNodesConfig(2));
+      Configuration::fromJsonFile(TEST_CONFIG_FILE("sequencer_test.conf"))
+          ->withNodesConfiguration(createSimpleNodesConfig(2)));
 
   // TODO the following 2 settings are required to make the NCPublisher pick
   // the NCM NodesConfiguration. Should be removed when NCM is the default.

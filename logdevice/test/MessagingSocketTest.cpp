@@ -215,8 +215,6 @@ create_config(std::vector<int> ld_ports) {
       ServerConfig::fromDataTest(CLUSTER_NAME));
   updateable_config->updateableNodesConfiguration()->update(
       NodesConfigurationTestUtil::provisionNodes(std::move(nodes)));
-  updateable_config->updateableNCMNodesConfiguration()->update(
-      updateable_config->getNodesConfiguration());
   return updateable_config;
 }
 

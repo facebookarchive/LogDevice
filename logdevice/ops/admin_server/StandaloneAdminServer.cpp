@@ -16,7 +16,6 @@
 #include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
 #include "logdevice/common/ConfigInit.h"
 #include "logdevice/common/NodesConfigurationInit.h"
-#include "logdevice/common/NodesConfigurationPublisher.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/WheelTimer.h"
 #include "logdevice/common/ZookeeperClient.h"
@@ -117,20 +116,6 @@ void StandaloneAdminServer::start() {
 
   initServerConfig();
   initNodesConfiguration();
-
-  {
-    // publish the NodesConfiguration for the first time. Later a
-    // long-living subscribing NodesConfigurationPublisher will be created again
-    // in Processor
-    // TODO(T43023435): use an actual TraceLogger to log this initial update.
-    NodesConfigurationPublisher publisher(
-        updateable_config_,
-        settings_,
-        std::make_shared<NoopTraceLogger>(updateable_config_),
-        /*subscribe*/ false);
-    ld_check(updateable_config_->getNodesConfiguration() != nullptr);
-  }
-
   initStatsCollection();
   initProcessor();
   initNodesConfigurationManager();
@@ -179,12 +164,12 @@ void StandaloneAdminServer::initNodesConfiguration() {
   // The store used by the standalone admin server shouldn't require a
   // procoessor. It's either a ZK NCS or a FileBasedNCS.
   auto success = config_init.initWithoutProcessor(
-      updateable_config_->updateableNCMNodesConfiguration());
+      updateable_config_->updateableNodesConfiguration());
   if (!success) {
     ld_critical("Failed to load the initial NodesConfiguration.");
     throw StandaloneAdminServerFailed();
   }
-  ld_check(updateable_config_->getNodesConfigurationFromNCMSource() != nullptr);
+  ld_check(updateable_config_->getNodesConfiguration() != nullptr);
 }
 
 void StandaloneAdminServer::initProcessor() {
@@ -221,7 +206,7 @@ void StandaloneAdminServer::initNodesConfigurationManager() {
     return;
   }
 
-  auto initial_nc = updateable_config_->getNodesConfigurationFromNCMSource();
+  auto initial_nc = updateable_config_->getNodesConfiguration();
   ld_check(initial_nc);
 
   auto ncm = NodesConfigurationManagerFactory::create(
@@ -500,8 +485,7 @@ bool StandaloneAdminServer::onConfigUpdate(ServerConfig& config) {
     // Ensure that settings are updated when we receive new config.
     settings_updater_->setFromConfig(settings);
   }
-  return allNodesHaveName(
-      *config.getNodesConfigurationFromServerConfigSource());
+  return true;
 }
 
 bool StandaloneAdminServer::onNodesConfigurationUpdate(

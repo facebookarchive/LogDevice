@@ -36,7 +36,7 @@ TEST_F(NodesConfigurationInitIntegrationTest, SuccessScenario) {
                    ->nodes_configuration_seed_servers.empty());
 
   auto config = client_impl->getConfig();
-  auto nodes_cfg = config->getNodesConfigurationFromNCMSource();
+  auto nodes_cfg = config->getNodesConfiguration();
   ASSERT_NE(nullptr, nodes_cfg);
   EXPECT_EQ(get_protocol_addr(0),
             nodes_cfg->getNodeServiceDiscovery(0)

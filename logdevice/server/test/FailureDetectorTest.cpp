@@ -190,8 +190,6 @@ make_processor_with_detector(node_index_t nid,
   /* make config for this index */
   std::shared_ptr<UpdateableConfig> uconfig =
       std::make_shared<UpdateableConfig>(gen_config(num_nodes));
-  uconfig->updateableNCMNodesConfiguration()->update(
-      uconfig->getNodesConfiguration());
 
   auto processor_builder = TestServerProcessorBuilder{main_settings}
                                .setServerSettings(server_settings)

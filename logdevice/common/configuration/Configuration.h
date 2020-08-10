@@ -91,11 +91,6 @@ class Configuration {
   }
 
   const std::shared_ptr<const NodesConfiguration>&
-  getNodesConfigurationFromServerConfigSource() const {
-    return server_config_->getNodesConfigurationFromServerConfigSource();
-  }
-
-  const std::shared_ptr<const NodesConfiguration>&
   getNodesConfiguration() const {
     return nodes_configuration_;
   }

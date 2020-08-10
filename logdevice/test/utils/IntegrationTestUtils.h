@@ -88,7 +88,6 @@ class Client;
 class EpochStore;
 class FileConfigSource;
 class ShardedLocalLogStore;
-class NodesConfigurationPublisher;
 
 namespace configuration { namespace nodes {
 class NodesConfigurationStore;
