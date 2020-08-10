@@ -486,7 +486,8 @@ TEST_F(LogsConfigIntegrationTest, notifyOnLogsConfigVersionTest) {
 
 TEST_F(LogsConfigIntegrationTest, TextConfigUpdaterIsDisabled) {
   auto config = Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("logsconfig_manager_with_logs.conf"));
+                    TEST_CONFIG_FILE("logsconfig_manager_with_logs.conf"))
+                    ->withNodesConfiguration(createSimpleNodesConfig(4));
   ASSERT_NE(nullptr, config);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .enableLogsConfigManager()
@@ -601,7 +602,8 @@ TEST_F(LogsConfigIntegrationTest, LogsConfigAPIMetadataLogs) {
 
 TEST_F(LogsConfigIntegrationTest, ConfigManagerFromServerSettings) {
   auto config = Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("logsconfig_manager_with_logs.conf"));
+                    TEST_CONFIG_FILE("logsconfig_manager_with_logs.conf"))
+                    ->withNodesConfiguration(createSimpleNodesConfig(4));
   ASSERT_NE(nullptr, config);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setParam("--file-config-update-interval", "10ms")
@@ -623,7 +625,8 @@ TEST_F(LogsConfigIntegrationTest, ConfigManagerFromServerSettings) {
 
 TEST_F(LogsConfigIntegrationTest, StartServerWithNoLogsSection) {
   auto config = Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("logsconfig_manager_without_logs.conf"));
+                    TEST_CONFIG_FILE("logsconfig_manager_without_logs.conf"))
+                    ->withNodesConfiguration(createSimpleNodesConfig(4));
   ASSERT_NE(nullptr, config);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setParam("--file-config-update-interval", "10ms")
@@ -648,7 +651,8 @@ TEST_F(LogsConfigIntegrationTest, StartServerWithNoLogsSection) {
 
 TEST_F(LogsConfigIntegrationTest, StartClientWithNoLogsSection) {
   auto config = Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("logsconfig_manager_without_logs.conf"));
+                    TEST_CONFIG_FILE("logsconfig_manager_without_logs.conf"))
+                    ->withNodesConfiguration(createSimpleNodesConfig(4));
   ASSERT_NE(nullptr, config);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setParam("--file-config-update-interval", "10ms")
@@ -680,7 +684,8 @@ TEST_F(LogsConfigIntegrationTest, StartClientWithNoLogsSection) {
 
 TEST_F(LogsConfigIntegrationTest, StartWithNoLogsSectionCLI) {
   auto config = Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("logsconfig_manager_without_logs.conf"));
+                    TEST_CONFIG_FILE("logsconfig_manager_without_logs.conf"))
+                    ->withNodesConfiguration(createSimpleNodesConfig(4));
   ASSERT_NE(nullptr, config);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setParam("--file-config-update-interval", "10ms")
@@ -706,7 +711,8 @@ TEST_F(LogsConfigIntegrationTest, StartWithNoLogsSectionCLI) {
 
 TEST_F(LogsConfigIntegrationTest, RemoveLogsSection) {
   auto config = Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("logsconfig_manager_with_logs.conf"));
+                    TEST_CONFIG_FILE("logsconfig_manager_with_logs.conf"))
+                    ->withNodesConfiguration(createSimpleNodesConfig(4));
   ASSERT_NE(nullptr, config);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .enableLogsConfigManager()

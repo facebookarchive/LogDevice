@@ -71,8 +71,11 @@ TEST_F(LocalLogStoreIntegrationTest, StartWithCorruptDB) {
     nodes_config[i] = std::move(node);
   }
 
+  auto nodes_configuration =
+      NodesConfigurationTestUtil::provisionNodes(std::move(nodes_config));
+
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .setNodes(nodes_config)
+                     .setNodes(std::move(nodes_configuration))
                      .setNumDBShards(4)
                      .deferStart()
                      .create(NNODES);

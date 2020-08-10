@@ -73,8 +73,9 @@ static void trim_test_read_verify(ssize_t num_records_read,
 // credentials. The client with "appendFail" and no credentials should be unable
 // to write to log 1. All three should be able to write to log 2
 TEST_F(ConfigPermissionTest, Append) {
-  auto config = Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("conf_permission_test.conf"));
+  auto config =
+      Configuration::fromJsonFile(TEST_CONFIG_FILE("conf_permission_test.conf"))
+          ->withNodesConfiguration(createSimpleNodesConfig(1));
   ASSERT_NE(nullptr, config);
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
@@ -161,8 +162,9 @@ TEST_F(ConfigPermissionTest, Append) {
 // credentials should not be able to trim from log 1, but all three
 // should be able to trim from log 2
 TEST_F(ConfigPermissionTest, Trim) {
-  auto config = Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("conf_permission_test.conf"));
+  auto config =
+      Configuration::fromJsonFile(TEST_CONFIG_FILE("conf_permission_test.conf"))
+          ->withNodesConfiguration(createSimpleNodesConfig(1));
   ASSERT_NE(nullptr, config);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .doPreProvisionEpochMetaData() // to avoid gaps
@@ -286,8 +288,9 @@ TEST_F(ConfigPermissionTest, Trim) {
 // one with "allPass" credentials. The client with no credentials should be
 // unable to read form log 1 but still able to read form log 2
 TEST_F(ConfigPermissionTest, AsyncRead) {
-  auto config = Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("conf_permission_test.conf"));
+  auto config =
+      Configuration::fromJsonFile(TEST_CONFIG_FILE("conf_permission_test.conf"))
+          ->withNodesConfiguration(createSimpleNodesConfig(1));
   ASSERT_NE(nullptr, config);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .doPreProvisionEpochMetaData() // to avoid gaps
@@ -432,7 +435,8 @@ TEST_F(ConfigPermissionTest, AsyncRead) {
 // expected errors.
 TEST_F(ConfigPermissionTest, RequireAuthentication) {
   auto config = Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("conf_permission_test_req_auth.conf"));
+                    TEST_CONFIG_FILE("conf_permission_test_req_auth.conf"))
+                    ->withNodesConfiguration(createSimpleNodesConfig(1));
   ASSERT_NE(nullptr, config);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
@@ -508,8 +512,11 @@ TEST_F(ConfigPermissionTest, RequireAuthentication) {
 // This test that when enable_permission_checking is false permission checking
 // is truly disabled, even when permission_checker_type is still set to "config"
 TEST_F(ConfigPermissionTest, PermissionCheckingDisabled) {
-  auto config = Configuration::fromJsonFile(TEST_CONFIG_FILE(
-      "conf_permission_test_permission_checking_disabled.conf"));
+  auto config =
+      Configuration::fromJsonFile(
+          TEST_CONFIG_FILE(
+              "conf_permission_test_permission_checking_disabled.conf"))
+          ->withNodesConfiguration(createSimpleNodesConfig(1));
   ASSERT_NE(nullptr, config);
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
@@ -599,7 +606,8 @@ TEST_F(ConfigPermissionTest, PermissionCheckingDisabled) {
 
 TEST_F(ConfigPermissionTest, ACL) {
   auto config = Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("conf_permission_acl_test.conf"));
+                    TEST_CONFIG_FILE("conf_permission_acl_test.conf"))
+                    ->withNodesConfiguration(createSimpleNodesConfig(1));
   ASSERT_NE(nullptr, config);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .doPreProvisionEpochMetaData() // to avoid gaps
@@ -611,7 +619,8 @@ TEST_F(ConfigPermissionTest, ACL) {
 // Verifies that configPermissionChecker works with internal logs.
 TEST_F(ConfigPermissionTest, InternalLogs) {
   auto config = Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("conf_internal_logs_permission_test.conf"));
+                    TEST_CONFIG_FILE("conf_internal_logs_permission_test.conf"))
+                    ->withNodesConfiguration(createSimpleNodesConfig(1));
   ASSERT_NE(nullptr, config);
   auto cluster =
       IntegrationTestUtils::ClusterFactory()

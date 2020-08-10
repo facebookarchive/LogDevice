@@ -44,20 +44,17 @@ TEST_F(ByteOffsetTest, InBandByteOffsetBasic) {
     }
   }
 
-  Configuration::NodesConfig nodes_config(nodes);
-
   // set replication factor for metadata log to be 2
   // otherwise recovery cannot complete for metadata log
-  Configuration::MetaDataLogsConfig meta_config =
-      createMetaDataLogsConfig(nodes_config, nodes.size(), 2);
+  auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
+      std::move(nodes), ReplicationProperty{{NodeLocationScope::NODE, 2}});
 
   // set byte-offset-interval as one record size so that offset_within_epoch
   // will be written with each record.
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .setNodes(nodes)
+                     .setNodes(nodes_configuration)
                      .setParam("--byte-offsets")
                      .setParam("--log-state-recovery-interval", "0ms")
-                     .setMetaDataLogsConfig(meta_config)
                      .create(4);
 
   std::shared_ptr<const Configuration> config = cluster->getConfig()->get();

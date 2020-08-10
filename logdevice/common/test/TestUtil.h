@@ -86,7 +86,10 @@ inline void writeSimpleConfig(const char* path, int server_generation) {
 }
 
 std::shared_ptr<const NodesConfiguration>
-createSimpleNodesConfig(size_t nnodes);
+createSimpleNodesConfig(size_t nnodes,
+                        shard_size_t num_shards = 2,
+                        bool all_metadata = false,
+                        int replication_factor = 1);
 
 /**
  * Create a MetaDataLogsConfig object from an existing NodesConfig. Nodes

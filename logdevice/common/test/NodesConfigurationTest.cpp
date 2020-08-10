@@ -501,8 +501,8 @@ TEST_F(NodesConfigurationTest, RoleConflict) {
   auto config = provisionNodes();
   ASSERT_TRUE(config->validate());
   {
-    // node 7 is provisioned to be sequencer-only. try adding it to the storage
-    // membership with attribute provided.
+    // node 7 is provisioned to be sequencer-only. try adding it to the
+    // storage membership with attribute provided.
     NodesConfiguration::Update update{};
     update.storage_config_update = std::make_unique<StorageConfig::Update>();
     update.storage_config_update->membership_update =
@@ -527,8 +527,8 @@ TEST_F(NodesConfigurationTest, RoleConflict) {
     EXPECT_EQ(E::INVALID_CONFIG, err);
   }
   {
-    // node 2 is provisioned to be storage-only. try adding it to the sequencer
-    // membership.
+    // node 2 is provisioned to be storage-only. try adding it to the
+    // sequencer membership.
     NodesConfiguration::Update update{};
     update.sequencer_config_update =
         std::make_unique<SequencerConfig::Update>();
@@ -643,7 +643,8 @@ TEST_F(NodesConfigurationTest, StorageHash) {
           hash1);
   ASSERT_NE(original_hash, hash1);
 
-  // change the storage state back, verify that the hash go back to the original
+  // change the storage state back, verify that the hash go back to the
+  // original
   NodesConfiguration::Update update{};
   update.storage_config_update = std::make_unique<StorageConfig::Update>();
   update.storage_config_update->membership_update =

@@ -454,6 +454,7 @@ TEST(MessagingTest, SendFromCallback) {
   node.address = Sockaddr("127.0.0.1", "65534"),
   node.gossip_address = Sockaddr("127.0.0.1", "65535"), node.generation = 1;
   node.addStorageRole();
+  node.addSequencerRole();
 
   configuration::Nodes nodes({{0, std::move(node)}});
 

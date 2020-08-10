@@ -37,23 +37,15 @@ void MaintenanceManagerTest::init() {
   const size_t num_nodes = 5;
   const size_t num_shards = 2;
 
-  Configuration::Nodes nodes;
-
-  for (int i = 0; i < num_nodes; ++i) {
-    nodes[i].generation = 1;
-    nodes[i].addSequencerRole();
-    nodes[i].addStorageRole(num_shards);
-  }
+  auto nodes_configuration =
+      createSimpleNodesConfig(num_nodes, num_shards, true, 2);
 
   auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(2);
-
-  auto meta_configs =
-      createMetaDataLogsConfig({0, 1, 2, 3, 4}, 2, NodeLocationScope::NODE);
 
   cluster_ =
       IntegrationTestUtils::ClusterFactory()
           .setNumLogs(1)
-          .setNodes(nodes)
+          .setNodes(std::move(nodes_configuration))
           .setNodesConfigurationSourceOfTruth(
               IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
           .enableSelfInitiatedRebuilding("10s")
@@ -73,7 +65,6 @@ void MaintenanceManagerTest::init() {
           .setNumDBShards(num_shards)
           .setLogGroupName("test_logrange")
           .setLogAttributes(log_attrs)
-          .setMetaDataLogsConfig(meta_configs)
           .deferStart()
           .create(num_nodes);
 }
@@ -302,23 +293,15 @@ TEST_P(MaintenanceManagerTest, Snapshotting) {
   const size_t num_nodes = 5;
   const size_t num_shards = 2;
 
-  Configuration::Nodes nodes;
-
-  for (int i = 0; i < num_nodes; ++i) {
-    nodes[i].generation = 1;
-    nodes[i].addSequencerRole();
-    nodes[i].addStorageRole(num_shards);
-  }
+  auto nodes_configuration =
+      createSimpleNodesConfig(num_nodes, num_shards, true, 2);
 
   auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(2);
-
-  auto meta_configs =
-      createMetaDataLogsConfig({0, 1, 2, 3, 4}, 2, NodeLocationScope::NODE);
 
   cluster_ =
       IntegrationTestUtils::ClusterFactory()
           .setNumLogs(1)
-          .setNodes(nodes)
+          .setNodes(std::move(nodes_configuration))
           .enableSelfInitiatedRebuilding("10s")
           .setNodesConfigurationSourceOfTruth(
               IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
@@ -341,7 +324,6 @@ TEST_P(MaintenanceManagerTest, Snapshotting) {
           .setNumDBShards(num_shards)
           .setLogGroupName("test_logrange")
           .setLogAttributes(log_attrs)
-          .setMetaDataLogsConfig(meta_configs)
           .deferStart()
           .create(num_nodes);
 
@@ -456,13 +438,8 @@ TEST_P(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
   const size_t num_nodes = 6;
   const size_t num_shards = 2;
 
-  Configuration::Nodes nodes;
-
-  for (int i = 0; i < num_nodes; ++i) {
-    nodes[i].generation = 1;
-    nodes[i].addSequencerRole();
-    nodes[i].addStorageRole(num_shards);
-  }
+  auto nodes_configuration =
+      createSimpleNodesConfig(num_nodes, num_shards, true, 2);
 
   auto data_log_attrs = logsconfig::LogAttributes().with_replicationFactor(5);
 
@@ -472,13 +449,10 @@ TEST_P(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(2048);
 
-  auto meta_configs =
-      createMetaDataLogsConfig({0, 1, 2, 3, 4, 5}, 2, NodeLocationScope::NODE);
-
   cluster_ =
       IntegrationTestUtils::ClusterFactory()
           .setNumLogs(1)
-          .setNodes(nodes)
+          .setNodes(std::move(nodes_configuration))
           .enableSelfInitiatedRebuilding("10s")
           .setNodesConfigurationSourceOfTruth(
               IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
@@ -511,7 +485,6 @@ TEST_P(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
           .setMaintenanceLogAttributes(log_attrs)
           .setEventLogAttributes(log_attrs)
           .setLogGroupName("test_logrange")
-          .setMetaDataLogsConfig(meta_configs)
           .deferStart()
           .create(num_nodes);
 

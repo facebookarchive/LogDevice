@@ -22,6 +22,7 @@ SelfRegisteredCluster::create(ClusterFactory&& factory) {
       // provisioned.
       .enableSelfInitiatedRebuilding()
       .setParam("--enable-node-self-registration", "true")
+      .setNodes(std::make_shared<const NodesConfiguration>())
       .create(0);
 }
 

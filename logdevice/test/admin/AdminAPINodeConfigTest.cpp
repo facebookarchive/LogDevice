@@ -42,7 +42,7 @@ TEST_F(AdminAPINodeConfigTest, getNodeConfig) {
   index_filter.set_node(node_identifier);
   admin_client->sync_getNodesConfig(response2, index_filter);
   auto resp_nodes = response2.get_nodes();
-  ASSERT_EQ(1, response2.get_version());
+  ASSERT_EQ(5, response2.get_version());
   ASSERT_EQ(1, resp_nodes.size());
   auto node1 = resp_nodes[0];
   ASSERT_EQ(0, node1.get_node_index());

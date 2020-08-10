@@ -463,23 +463,8 @@ ClusterFactory::createDefaultLogAttributes(int nstorage_nodes) {
 
 std::shared_ptr<const NodesConfiguration>
 ClusterFactory::provisionNodesConfiguration(int nnodes) const {
-  if (node_configs_.has_value()) {
-    // TODO: Remove in the next diff when `ClusterFactory::setNodes` accept
-    // NodesConfiguration structure directly.
-    auto meta_config = meta_config_;
-    if (!meta_config.has_value()) {
-      meta_config =
-          createMetaDataLogsConfig(Configuration::NodesConfig(*node_configs_),
-                                   node_configs_->size(),
-                                   internal_logs_replication_factor_ > 0
-                                       ? internal_logs_replication_factor_
-                                       : 3);
-    }
-
-    return configuration::nodes::NodesConfigLegacyConverter::
-        fromLegacyNodesConfig(Configuration::NodesConfig(*node_configs_),
-                              *meta_config_,
-                              config_version_t(1));
+  if (nodes_config_ != nullptr) {
+    return nodes_config_;
   }
 
   configuration::Nodes nodes;
@@ -597,7 +582,7 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
   if (meta_config_.has_value()) {
     meta_config = meta_config_.value();
   } else {
-    meta_config = ServerConfig::MetaDataLogsConfig();
+    meta_config = createMetaDataLogsConfig({}, 0);
     if (!let_sequencers_provision_metadata_) {
       meta_config.sequencers_write_metadata_logs = false;
       meta_config.sequencers_provision_epoch_store = false;

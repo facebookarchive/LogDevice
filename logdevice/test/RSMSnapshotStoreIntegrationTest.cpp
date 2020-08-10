@@ -237,6 +237,9 @@ TEST_P(VerifySequencerOnlyNodes, CanCatchupToLatestRsmState) {
   auto& node = nodes[num_nodes];
   node.generation = 1;
   node.addSequencerRole();
+
+  auto nodes_configuration =
+      NodesConfigurationTestUtil::provisionNodes(std::move(nodes));
   auto factory = IntegrationTestUtils::ClusterFactory()
                      .setParam("--rsm-snapshot-store-type", cluster_store_type)
                      .setParam("--logsconfig-max-delta-records",
@@ -244,7 +247,7 @@ TEST_P(VerifySequencerOnlyNodes, CanCatchupToLatestRsmState) {
                                     // write a delta record
                      .enableLogsConfigManager()
                      .useHashBasedSequencerAssignment()
-                     .setNodes(nodes);
+                     .setNodes(std::move(nodes_configuration));
 
   std::unique_ptr<Cluster> cluster;
   std::shared_ptr<Client> client;
@@ -300,6 +303,10 @@ TEST_F(RSMSnapshotStoreIntegrationTest, LocalStoreDurableVersionCatchesUp) {
   auto& node = nodes[num_nodes];
   node.generation = 1;
   node.addSequencerRole();
+
+  auto nodes_configuration =
+      NodesConfigurationTestUtil::provisionNodes(std::move(nodes));
+
   auto factory = IntegrationTestUtils::ClusterFactory()
                      .setParam("--rsm-snapshot-store-type", "local-store")
                      .setParam("--logsconfig-snapshotting-period", "5s")
@@ -308,7 +315,7 @@ TEST_F(RSMSnapshotStoreIntegrationTest, LocalStoreDurableVersionCatchesUp) {
                                     // write a delta record
                      .enableLogsConfigManager()
                      .useHashBasedSequencerAssignment()
-                     .setNodes(nodes);
+                     .setNodes(std::move(nodes_configuration));
 
   std::unique_ptr<Cluster> cluster;
   std::shared_ptr<Client> client;
@@ -407,6 +414,10 @@ TEST_F(RSMSnapshotStoreIntegrationTest,
   auto& node = nodes[num_nodes];
   node.generation = 1;
   node.addSequencerRole();
+
+  auto nodes_configuration =
+      NodesConfigurationTestUtil::provisionNodes(std::move(nodes));
+
   auto factory = IntegrationTestUtils::ClusterFactory()
                      .setParam("--rsm-snapshot-store-type", "local-store")
                      .setParam("--logsconfig-snapshotting-period", "5s")
@@ -415,7 +426,7 @@ TEST_F(RSMSnapshotStoreIntegrationTest,
                                     // write a delta record
                      .enableLogsConfigManager()
                      .useHashBasedSequencerAssignment()
-                     .setNodes(nodes);
+                     .setNodes(std::move(nodes_configuration));
 
   std::unique_ptr<Cluster> cluster;
   std::shared_ptr<Client> client;
@@ -493,14 +504,7 @@ TEST_F(RSMSnapshotStoreIntegrationTest,
 TEST_F(RSMSnapshotStoreIntegrationTest,
        VerifyLogsConfigIsIntactOnClusterRestart) {
   int num_nodes = 5;
-  // Configure nodes
-  Configuration::Nodes nodes;
-  for (int i = 0; i < num_nodes; ++i) {
-    auto& node = nodes[i];
-    node.generation = 1;
-    node.addSequencerRole();
-    node.addStorageRole(2);
-  }
+  auto nodes = createSimpleNodesConfig(num_nodes, 2, true);
   auto factory = IntegrationTestUtils::ClusterFactory()
                      .setParam("--rsm-snapshot-store-type", "local-store")
                      .setParam("--logsconfig-snapshotting-period", "5s")
@@ -602,6 +606,9 @@ TEST_F(RSMSnapshotStoreIntegrationTest, getTrimmableVersion) {
   node.generation = 1;
   node.addSequencerRole();
 
+  auto nodes_configuration =
+      NodesConfigurationTestUtil::provisionNodes(std::move(nodes));
+
   auto factory = IntegrationTestUtils::ClusterFactory()
                      .setParam("--rsm-snapshot-store-type", "local-store")
                      .setParam("--logsconfig-snapshotting-period", "5s")
@@ -610,7 +617,7 @@ TEST_F(RSMSnapshotStoreIntegrationTest, getTrimmableVersion) {
                                     // write a delta record
                      .enableLogsConfigManager()
                      .useHashBasedSequencerAssignment()
-                     .setNodes(nodes);
+                     .setNodes(std::move(nodes_configuration));
 
   std::unique_ptr<Cluster> cluster;
   std::shared_ptr<Client> client;

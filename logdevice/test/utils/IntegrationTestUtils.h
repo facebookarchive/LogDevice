@@ -286,8 +286,8 @@ class ClusterFactory {
   /**
    * If called, create() will use specified node configs.
    */
-  ClusterFactory& setNodes(Configuration::Nodes nodes) {
-    node_configs_ = std::move(nodes);
+  ClusterFactory& setNodes(std::shared_ptr<const NodesConfiguration> nodes) {
+    nodes_config_ = std::move(nodes);
     return *this;
   }
 
@@ -640,7 +640,7 @@ class ClusterFactory {
 
  private:
   folly::Optional<logsconfig::LogAttributes> log_attributes_;
-  folly::Optional<Configuration::Nodes> node_configs_;
+  std::shared_ptr<const NodesConfiguration> nodes_config_;
   folly::Optional<Configuration::MetaDataLogsConfig> meta_config_;
   bool enable_logsconfig_manager_ = false;
 

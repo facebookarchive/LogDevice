@@ -566,15 +566,16 @@ TEST_P(ReadingIntegrationTest, PurgingSmokeTest) {
       node.addSequencerRole();
     } else {
       node.addStorageRole(/*num_shards*/ 2);
+      node.metadata_node = true;
     }
   }
 
-  Configuration::NodesConfig nodes_config(nodes);
-
   // set replication factor for metadata log to be 2
   // otherwise recovery cannot complete for metadata log
-  Configuration::MetaDataLogsConfig meta_config =
-      createMetaDataLogsConfig(nodes_config, nodes.size(), 2);
+  auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
+      std::move(nodes), ReplicationProperty{{NodeLocationScope::NODE, 2}});
+
+  Configuration::MetaDataLogsConfig meta_config;
   // Sequencers writing into metadata logs throw off the epoch counting logic
   // below
   meta_config.sequencers_write_metadata_logs = false;
@@ -582,7 +583,7 @@ TEST_P(ReadingIntegrationTest, PurgingSmokeTest) {
 
   auto cluster = clusterFactory()
                      .doPreProvisionEpochMetaData()
-                     .setNodes(nodes)
+                     .setNodes(std::move(nodes_configuration))
                      .setMetaDataLogsConfig(meta_config)
                      .create(4);
 
@@ -966,14 +967,12 @@ TEST_P(ReadingIntegrationTest, LogTailAttributes) {
       node.addStorageRole(/*num_shards*/ 2);
     }
   }
-
-  Configuration::NodesConfig nodes_config(nodes);
-
   // set replication factor for metadata log to be 2
   // otherwise recovery cannot complete for metadata log
-  Configuration::MetaDataLogsConfig meta_config =
-      createMetaDataLogsConfig(nodes_config, nodes.size(), 2);
+  auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
+      std::move(nodes), ReplicationProperty{{NodeLocationScope::NODE, 2}});
 
+  Configuration::MetaDataLogsConfig meta_config;
   // Sequencers writing into metadata logs throw off the epoch counting logic
   // below
   meta_config.sequencers_write_metadata_logs = false;
@@ -981,7 +980,7 @@ TEST_P(ReadingIntegrationTest, LogTailAttributes) {
 
   auto cluster = clusterFactory()
                      .doPreProvisionEpochMetaData()
-                     .setNodes(nodes)
+                     .setNodes(std::move(nodes_configuration))
                      .setParam("--byte-offsets")
                      .setMetaDataLogsConfig(meta_config)
                      .create(4);

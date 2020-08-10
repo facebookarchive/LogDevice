@@ -51,7 +51,7 @@ NodesConfiguration::Update buildSimpleUpdate() {
   NodesConfiguration::Update update{};
   update.sequencer_config_update = std::make_unique<SequencerConfig::Update>();
   update.sequencer_config_update->membership_update =
-      std::make_unique<SequencerMembership::Update>(MembershipVersion::Type(1));
+      std::make_unique<SequencerMembership::Update>(MembershipVersion::Type(2));
   update.sequencer_config_update->membership_update->addNode(
       0,
       {SequencerMembershipTransition::SET_WEIGHT,

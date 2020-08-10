@@ -48,13 +48,10 @@ TEST_F(NodesConfigurationInitIntegrationTest, SuccessScenario) {
 
 TEST_F(NodesConfigurationInitIntegrationTest, SeedDown) {
   auto cluster = buildCluster();
-  cluster->shutdownNodes({0});
+  cluster->stop();
 
-  auto seed_addr = "data:" + cluster->getNode(0).addrs_.protocol.toString();
   auto settings = std::unique_ptr<ClientSettings>(ClientSettings::create());
   settings->set("enable-nodes-configuration-manager", "true");
-  settings->set("nodes-configuration-seed-servers", seed_addr);
-
   auto client =
       cluster->createClient(getDefaultTestTimeout(), std::move(settings));
   EXPECT_EQ(nullptr, client);
@@ -64,7 +61,8 @@ TEST_F(NodesConfigurationInitIntegrationTest, SeedDown) {
  * Makes sure that the bootstrapping fails if the seed that was provided to the
  * client points to the wrong cluster based on the cluster name.
  */
-TEST_F(NodesConfigurationInitIntegrationTest, SeedPointingToWrongCluster) {
+TEST_F(NodesConfigurationInitIntegrationTest,
+       DISABLED_SeedPointingToWrongCluster) {
   auto cluster1 = IntegrationTestUtils::ClusterFactory{}
                       .setClusterName("cluster1")
                       .setNodesConfigurationSourceOfTruth(

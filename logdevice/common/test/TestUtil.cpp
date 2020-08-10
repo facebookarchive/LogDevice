@@ -142,16 +142,20 @@ TemporaryDirectory::~TemporaryDirectory() {
 }
 
 std::shared_ptr<const NodesConfiguration>
-createSimpleNodesConfig(size_t nnodes) {
+createSimpleNodesConfig(size_t nnodes,
+                        shard_size_t num_shards,
+                        bool all_metadata,
+                        int replication_factor) {
   configuration::Nodes nodes;
   for (size_t i = 0; i < nnodes; ++i) {
     nodes[i] = configuration::Node::withTestDefaults(i)
                    .addSequencerRole()
-                   .addStorageRole(2)
-                   .setIsMetadataNode(i == 0);
+                   .addStorageRole(num_shards)
+                   .setIsMetadataNode(all_metadata || i == 0);
   }
   return NodesConfigurationTestUtil::provisionNodes(
-      std::move(nodes), ReplicationProperty{{NodeLocationScope::NODE, 1}});
+      std::move(nodes),
+      ReplicationProperty{{NodeLocationScope::NODE, replication_factor}});
 }
 
 ServerConfig::MetaDataLogsConfig

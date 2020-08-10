@@ -320,13 +320,7 @@ TEST_F(SequencerBatchingTest, DISABLED_RollingRestart) {
   const int NLOGS = 100;
 
   // Make all nodes sequencers and storage nodes
-  Configuration::Nodes nodes;
-  for (node_index_t i = 0; i < NNODES; ++i) {
-    Configuration::Node& node = nodes[i];
-    node.generation = 1;
-    node.addSequencerRole();
-    node.addStorageRole(/*num_shards*/ 2);
-  }
+  auto nodes = createSimpleNodesConfig(NNODES, 2, true);
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
           .useHashBasedSequencerAssignment()
@@ -337,7 +331,7 @@ TEST_F(SequencerBatchingTest, DISABLED_RollingRestart) {
                   1))
           .setNodes(nodes)
           .setNumLogs(NLOGS)
-          .create(nodes.size());
+          .create(nodes->clusterSize());
   auto client = cluster->createClient();
 
   std::mutex mutex;

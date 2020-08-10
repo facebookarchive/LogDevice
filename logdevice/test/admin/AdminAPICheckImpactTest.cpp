@@ -42,13 +42,8 @@ TEST_F(AdminAPICheckImpactTest, DisableReads) {
   const size_t num_nodes = 5;
   const size_t num_shards = 3;
 
-  Configuration::Nodes nodes;
-
-  for (int i = 0; i < num_nodes; ++i) {
-    nodes[i].generation = 1;
-    nodes[i].addSequencerRole();
-    nodes[i].addStorageRole(num_shards);
-  }
+  auto nodes_configuration =
+      createSimpleNodesConfig(num_nodes, num_shards, true, 3);
 
   auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(3);
 
@@ -60,7 +55,7 @@ TEST_F(AdminAPICheckImpactTest, DisableReads) {
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNumLogs(2)
-                     .setNodes(nodes)
+                     .setNodes(std::move(nodes_configuration))
                      // switches on gossip
                      .useHashBasedSequencerAssignment()
                      .setNumDBShards(num_shards)

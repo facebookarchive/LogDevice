@@ -69,13 +69,8 @@ void MaintenanceAPITest::init(size_t max_unavailable_storage_capacity_pct,
   const size_t num_nodes = 6;
   const size_t num_shards = 2;
 
-  Configuration::Nodes nodes;
-
-  for (int i = 0; i < num_nodes; ++i) {
-    nodes[i].generation = 1;
-    nodes[i].addSequencerRole();
-    nodes[i].addStorageRole(num_shards);
-  }
+  auto nodes_configuration =
+      createSimpleNodesConfig(num_nodes, num_shards, true, 3);
 
   auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(2);
 
@@ -85,13 +80,10 @@ void MaintenanceAPITest::init(size_t max_unavailable_storage_capacity_pct,
                                 .with_syncedCopies(0)
                                 .with_maxWritesInFlight(2048);
 
-  auto meta_configs =
-      createMetaDataLogsConfig({0, 1, 2, 3, 4, 5}, 3, NodeLocationScope::NODE);
-
   cluster_ =
       IntegrationTestUtils::ClusterFactory()
           .setNumLogs(100)
-          .setNodes(nodes)
+          .setNodes(std::move(nodes_configuration))
           .setNodesConfigurationSourceOfTruth(
               IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
           .enableSelfInitiatedRebuilding("3600s")
@@ -125,7 +117,6 @@ void MaintenanceAPITest::init(size_t max_unavailable_storage_capacity_pct,
           .setMaintenanceLogAttributes(internal_log_attrs)
           .setEventLogAttributes(internal_log_attrs)
           .setConfigLogAttributes(internal_log_attrs)
-          .setMetaDataLogsConfig(meta_configs)
           .deferStart()
           .create(num_nodes);
 }

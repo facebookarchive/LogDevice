@@ -614,6 +614,8 @@ TEST_F(ConfigIntegrationTest, MetaDataLog) {
   client_config->updateableServerConfig()->update(
       cluster_config->serverConfig());
   client_config->updateableLogsConfig()->update(logs_config);
+  client_config->updateableNodesConfiguration()->update(
+      cluster_config->getNodesConfiguration());
   // Creating a client through instantiating an instance of ClientImpl directly
   // makes it ignore the settings in the config, so we have to set this here
   std::unique_ptr<ClientSettings> client_settings(ClientSettings::create());
@@ -643,29 +645,35 @@ TEST_F(ConfigIntegrationTest, MetaDataLog) {
 
 TEST_F(ConfigIntegrationTest, Stats) {
   size_t num_logs = 5;
-  dbg::parseLoglevelOption("debug");
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNumLogs(num_logs)
                      .useHashBasedSequencerAssignment()
                      .create(1);
 
-  std::shared_ptr<Configuration> old_config = cluster->getConfig()->get();
-  auto new_server_config =
-      old_config->serverConfig()->withVersion(config_version_t(1));
-  Configuration new_config(
-      std::move(new_server_config), old_config->logsConfig());
-  std::string config_str = new_config.toString();
-  ld_info("CFG: %s", config_str.c_str() + 2000);
-  cluster->writeConfig(new_config);
-  cluster->waitForServersToPartiallyProcessConfigUpdate();
+  auto change_config = [&](std::string name,
+                           config_version_t version,
+                           bool wait_for_config = true) {
+    std::shared_ptr<Configuration> old_config = cluster->getConfig()->get();
+    auto new_server_config_json = old_config->serverConfig()->toJson(
+        old_config->logsConfig().get(), old_config->zookeeperConfig().get());
+    new_server_config_json["cluster"] = name;
+    new_server_config_json["version"] = version.val();
+    auto new_config = Configuration::fromJson(new_server_config_json, nullptr);
+
+    cluster->writeConfig(*new_config, wait_for_config);
+    if (wait_for_config) {
+      cluster->waitForServersToPartiallyProcessConfigUpdate();
+    }
+  };
+
+  change_config("cluster1", config_version_t(1));
 
   // take a snapshot of the stats
   auto initial_stats = cluster->getNode(0).stats();
 
   // test #1: no change but overwrite config to trigger reload and verify that
   // config_update_same_version is incremented
-  EXPECT_EQ(config_str, cluster->getConfig()->get()->toString());
-  cluster->writeConfig(new_config);
+  change_config("cluster1", config_version_t(1));
 
   wait_until([&]() {
     auto tmp_stats = cluster->getNode(0).stats();
@@ -684,7 +692,7 @@ TEST_F(ConfigIntegrationTest, Stats) {
 
   // test #2: change config without updating version. expect
   // config_update_hash_mismatch and updated_config to be incremented.
-  cluster->expand(1, /*start*/ true);
+  change_config("cluster2", config_version_t(1));
 
   auto stats2 = cluster->getNode(0).stats();
   EXPECT_LE(stats["config_update_same_version"],
@@ -697,7 +705,7 @@ TEST_F(ConfigIntegrationTest, Stats) {
 
   // test #3: change config and update version. expect updated_config
   // to be incremented
-  cluster->expand(1);
+  change_config("cluster3", config_version_t(2));
 
   auto stats3 = cluster->getNode(0).stats();
   EXPECT_LE(stats2["config_update_same_version"],
@@ -710,7 +718,8 @@ TEST_F(ConfigIntegrationTest, Stats) {
 
   // test #4: change config with older version. expect
   // config_update_old_version to be incremented
-  cluster->writeConfig(new_config, false);
+  change_config("cluster1", config_version_t(1), false);
+
   wait_until([&]() {
     auto tmp_stats = cluster->getNode(0).stats();
     return (stats3["config_update_old_version"] + 1) ==
@@ -750,8 +759,13 @@ TEST_F(ConfigIntegrationTest, InvalidConfigClientCreationTest2) {
 }
 
 TEST_F(ConfigIntegrationTest, SslClientCertUnsetByDefault) {
+  auto ncs_path = provisionTempNodesConfiguration(*createSimpleNodesConfig(1));
   std::string client_config_path = TEST_CONFIG_FILE("sample_no_ssl.conf");
-  auto client = ClientFactory().create(client_config_path);
+  auto client = ClientFactory()
+                    .setSetting("nodes-configuration-file-store-dir",
+                                ncs_path->path().string())
+                    .setSetting("admin-client-capabilities", "true")
+                    .create(client_config_path);
   ASSERT_NE(nullptr, client);
 
   ClientImpl* client_impl = dynamic_cast<ClientImpl*>(client.get());

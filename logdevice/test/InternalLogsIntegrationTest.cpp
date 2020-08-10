@@ -410,7 +410,10 @@ TEST_F(InternalLogsIntegrationTest, RecoverAfterStallingDueToTrimmingDeltaLog) {
   node.generation = 1;
   node.addSequencerRole();
 
-  factory.setNodes(nodes);
+  auto nodes_configuration =
+      NodesConfigurationTestUtil::provisionNodes(std::move(nodes));
+
+  factory.setNodes(std::move(nodes_configuration));
 
   // Prevent client's logsconfig API from picking N3 to execute requests, since
   // N3 will be isolated for part of the test.
@@ -563,7 +566,10 @@ TEST_F(InternalLogsIntegrationTest, StallingBumpsStat) {
   node.generation = 1;
   node.addSequencerRole();
 
-  factory.setNodes(nodes);
+  auto nodes_configuration =
+      NodesConfigurationTestUtil::provisionNodes(std::move(nodes));
+
+  factory.setNodes(std::move(nodes_configuration));
 
   buildClusterAndClient(
       std::move(factory), {{"logsconfig-api-blacklist-nodes", "3"}});
@@ -696,7 +702,8 @@ TEST_F(InternalLogsIntegrationTest, LCM_VerifyClientCannotTakeSnapshot) {
   // so with the default setting of 1h, client will never even attempt
   // to write snapshot
   auto config = Configuration::fromJsonFile(
-      TEST_CONFIG_FILE("lcm_client_cannot_take_snapshot.conf"));
+                    TEST_CONFIG_FILE("lcm_client_cannot_take_snapshot.conf"))
+                    ->withNodesConfiguration(createSimpleNodesConfig(4));
   ASSERT_NE(nullptr, config);
   cluster = IntegrationTestUtils::ClusterFactory()
                 .enableLogsConfigManager()

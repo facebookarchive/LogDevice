@@ -48,11 +48,14 @@ TEST_F(FailureDetectorIntegrationTest, GossipListOnNodeRestarts) {
     }
   }
 
+  auto nodes_configuration =
+      NodesConfigurationTestUtil::provisionNodes(std::move(nodes));
+
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .enableMessageErrorInjection()
-                     .setNodes(nodes)
+                     .setNodes(nodes_configuration)
                      .useHashBasedSequencerAssignment(10)
-                     .create(nodes.size());
+                     .create(nodes_configuration->clusterSize());
 
   // test liveness of all nodes in gossip list of node `src`
   auto fd_test_alive = [&](node_index_t src, bool alive) {
@@ -164,12 +167,14 @@ TEST_F(FailureDetectorIntegrationTest, DetectDomainIsolation) {
   // node 1, 2 is in the same rack in region 1
   // node 3-5 is in the same rack in region 2
   Configuration::Nodes nodes = createFailureDomainNodes();
+  auto nodes_configuration =
+      NodesConfigurationTestUtil::provisionNodes(std::move(nodes));
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
-          .setNodes(nodes)
+          .setNodes(nodes_configuration)
           .useHashBasedSequencerAssignment() // enable failure detector
           .enableMessageErrorInjection()
-          .create(nodes.size());
+          .create(nodes_configuration->clusterSize());
 
   for (const auto& it : nodes) {
     node_index_t idx = it.first;
@@ -238,8 +243,9 @@ TEST_F(FailureDetectorIntegrationTest, ResetStoreTimerAfterIsolation) {
   // node 0 is in region 0
   // node 1-4 is in the same rack in region 1
   // node 5 is in the same rack in region 2
+  const auto nnodes = 6;
   Configuration::Nodes nodes;
-  for (int i = 0; i < 6; ++i) {
+  for (int i = 0; i < nnodes; ++i) {
     auto& node = nodes[i];
     node.addSequencerRole();
     node.addStorageRole(/*num_shards*/ 2);
@@ -255,6 +261,11 @@ TEST_F(FailureDetectorIntegrationTest, ResetStoreTimerAfterIsolation) {
     location.fromDomainString(domain_string);
     node.location = location;
   }
+  // Set metadata nodeset
+  nodes[0].metadata_node = true;
+  nodes[1].metadata_node = true;
+  nodes[5].metadata_node = true;
+
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(2)
                        .with_extraCopies(0)
@@ -263,24 +274,27 @@ TEST_F(FailureDetectorIntegrationTest, ResetStoreTimerAfterIsolation) {
                        .with_syncReplicationScope(NodeLocationScope::REGION);
   int num_logs = 100;
 
-  // metadata logs are replicated cross-region as well
-  Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(
-      /*nodeset=*/{0, 1, 5}, /*replication=*/3, NodeLocationScope::REGION);
+  Configuration::MetaDataLogsConfig meta_config =
+      ServerConfig::MetaDataLogsConfig();
   meta_config.nodeset_selector_type = NodeSetSelectorType::SELECT_ALL;
+
+  // metadata logs are replicated cross-region as well
+  auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
+      std::move(nodes), ReplicationProperty{{NodeLocationScope::REGION, 3}});
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
-          .setNodes(nodes)
+          .setNodes(nodes_configuration)
           .setLogGroupName("mylogs")
           .setLogAttributes(log_attrs)
           .setNumLogs(num_logs)
           .setMetaDataLogsConfig(std::move(meta_config))
           .useHashBasedSequencerAssignment() // enable failure detector
-          .create(nodes.size());
+          .create(nnodes);
 
   // look for a log with a sequencer running on node 2
   int log_id = -1;
-  std::vector<double> weights(nodes.size(), 1.0);
+  std::vector<double> weights(nnodes, 1.0);
   for (int i = 0; i < num_logs; i++) {
     auto seq = hashing::weighted_ch(i, weights);
     if (seq == 2) {
@@ -291,14 +305,14 @@ TEST_F(FailureDetectorIntegrationTest, ResetStoreTimerAfterIsolation) {
   EXPECT_NE(log_id, -1);
 
   // wait until domain isolation detection is enabled
-  for (int i = 0; i < nodes.size(); ++i) {
+  for (int i = 0; i < nnodes; ++i) {
     wait_until(
         [&]() { return domainIsolationDetectionEnabled(cluster.get(), i); });
   }
 
   // for each node, isolation status should eventually be NOT_ISOLATED on
   // all scopes
-  for (int i = 0; i < nodes.size(); ++i) {
+  for (int i = 0; i < nnodes; ++i) {
     wait_until([&]() { return noIsolatedScope(cluster.get(), i); });
   }
 
@@ -604,9 +618,11 @@ TEST_F(FailureDetectorIntegrationTest, GetClusterStatePeerUnavailable) {
     nodes[i].generation = 1;
     nodes[i].addStorageRole(/*num_shards*/ 2);
   }
+  auto nodes_configuration =
+      NodesConfigurationTestUtil::provisionNodes(std::move(nodes));
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .setNodes(nodes)
+                     .setNodes(std::move(nodes_configuration))
                      .useHashBasedSequencerAssignment(10)
                      .enableMessageErrorInjection()
                      .useTcp()
@@ -668,16 +684,7 @@ TEST_F(FailureDetectorIntegrationTest, FDClusterExpandStateTransition) {
   // This number is after expansion, we'll start NUM_NODES-1 initially
   const int NUM_NODES = 3;
 
-  Configuration::Nodes nodes;
-  /* make all nodes as sequencers */
-  for (int i = 0; i < NUM_NODES - 1; ++i) {
-    nodes[i].generation = 1;
-    nodes[i].addSequencerRole();
-    nodes[i].addStorageRole(/*num_shards*/ 2);
-  }
-
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .setNodes(nodes)
                      .useHashBasedSequencerAssignment()
                      .setParam("--gossip-interval", "100ms")
                      .setParam("--gossip-threshold", "20")

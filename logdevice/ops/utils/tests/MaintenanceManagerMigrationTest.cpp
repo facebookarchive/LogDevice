@@ -40,23 +40,15 @@ void MaintenanceManagerMigrationTest::init() {
   const size_t num_nodes = 6;
   const size_t num_shards = 2;
 
-  Configuration::Nodes nodes;
-
-  for (int i = 0; i < num_nodes; ++i) {
-    nodes[i].generation = 1;
-    nodes[i].addSequencerRole();
-    nodes[i].addStorageRole(num_shards);
-  }
+  auto nodes_configuration =
+      createSimpleNodesConfig(num_nodes, num_shards, true, 3);
 
   auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(3);
-
-  auto meta_configs =
-      createMetaDataLogsConfig({0, 1, 2, 3, 4, 5}, 3, NodeLocationScope::NODE);
 
   cluster_ =
       IntegrationTestUtils::ClusterFactory()
           .setNumLogs(1)
-          .setNodes(nodes)
+          .setNodes(nodes_configuration)
           .setNodesConfigurationSourceOfTruth(
               IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
           .enableSelfInitiatedRebuilding("10s")
@@ -73,7 +65,6 @@ void MaintenanceManagerMigrationTest::init() {
           .setNumDBShards(num_shards)
           .setLogGroupName("test_logrange")
           .setLogAttributes(log_attrs)
-          .setMetaDataLogsConfig(meta_configs)
           .deferStart()
           .create(num_nodes);
 }

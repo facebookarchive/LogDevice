@@ -62,6 +62,14 @@ TEST_F(FailureDomainIntegrationTest, TolerateRegionFailure) {
   // cluster is still able to perform writing and reading.
   const logid_t logid(2);
   Configuration::Nodes nodes = createFailureDomainNodes();
+  // Set metadata nodeset
+  nodes[0].metadata_node = true;
+  nodes[1].metadata_node = true;
+  nodes[3].metadata_node = true;
+
+  // metadata logs are replicated cross-region as well
+  auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
+      std::move(nodes), ReplicationProperty{{NodeLocationScope::REGION, 2}});
 
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(2)
@@ -71,15 +79,13 @@ TEST_F(FailureDomainIntegrationTest, TolerateRegionFailure) {
                        // cross-region replication
                        .with_syncReplicationScope(NodeLocationScope::REGION);
 
-  // metadata logs are replicated cross-region as well
-  // this nodeset, with replication = 2, enforces cross-region replication
-  Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(
-      /*nodeset=*/{0, 1, 3}, /*replication=*/2, NodeLocationScope::REGION);
+  Configuration::MetaDataLogsConfig meta_config =
+      ServerConfig::MetaDataLogsConfig();
   meta_config.nodeset_selector_type = NodeSetSelectorType::SELECT_ALL;
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
-          .setNodes(nodes)
+          .setNodes(nodes_configuration)
           .setLogGroupName("mylog")
           .setLogAttributes(log_attrs)
           .setMetaDataLogsConfig(meta_config)
@@ -87,7 +93,7 @@ TEST_F(FailureDomainIntegrationTest, TolerateRegionFailure) {
               IntegrationTestUtils::ClusterFactory::EventLogMode::NONE)
           .setConfigLogAttributes(log_attrs)
           .setMaintenanceLogAttributes(log_attrs)
-          .create(nodes.size());
+          .create(nodes_configuration->clusterSize());
 
   cluster->waitUntilAllSequencersQuiescent();
 
@@ -177,6 +183,13 @@ TEST_F(FailureDomainIntegrationTest, TolerateRegionFailure) {
 TEST_F(FailureDomainIntegrationTest, ReadHealthWithFailureDomain) {
   const logid_t LOG_ID(1);
   Configuration::Nodes nodes = createFailureDomainNodes();
+  // Set metadata nodeset
+  nodes[0].metadata_node = true;
+  nodes[1].metadata_node = true;
+  nodes[3].metadata_node = true;
+
+  auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
+      std::move(nodes), ReplicationProperty{{NodeLocationScope::REGION, 2}});
 
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(2)
@@ -187,15 +200,15 @@ TEST_F(FailureDomainIntegrationTest, ReadHealthWithFailureDomain) {
                        .with_syncReplicationScope(NodeLocationScope::REGION);
 
   Configuration::MetaDataLogsConfig meta_config =
-      createMetaDataLogsConfig({0, 1, 3}, 2, NodeLocationScope::REGION);
+      ServerConfig::MetaDataLogsConfig();
   meta_config.nodeset_selector_type = NodeSetSelectorType::SELECT_ALL;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .setNodes(nodes)
+                     .setNodes(nodes_configuration)
                      .setLogGroupName("mylog")
                      .setLogAttributes(log_attrs)
                      .setMetaDataLogsConfig(meta_config)
-                     .create(nodes.size());
+                     .create(nodes_configuration->clusterSize());
 
   std::shared_ptr<Client> client = cluster->createClient();
   std::shared_ptr<const Configuration> config = cluster->getConfig()->get();
@@ -257,6 +270,15 @@ TEST_F(FailureDomainIntegrationTest,
     auto& node = it.second;
     node.addSequencerRole();
   }
+  // Set metadata nodeset
+  nodes[0].metadata_node = true;
+  nodes[1].metadata_node = true;
+  nodes[3].metadata_node = true;
+
+  // metadata logs are replicated cross-region as well
+  // this nodeset, with replication = 2, enforces cross-region replication
+  auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
+      std::move(nodes), ReplicationProperty{{NodeLocationScope::REGION, 2}});
 
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(2)
@@ -267,23 +289,17 @@ TEST_F(FailureDomainIntegrationTest,
                        .with_syncReplicationScope(NodeLocationScope::REGION)
                        .with_nodeSetSize(3); // 3 regions
 
-  // metadata logs are replicated cross-region as well
-  // this nodeset, with replication = 2, enforces cross-region replication
-  Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(
-      /*nodeset=*/{0, 1, 3}, 2, NodeLocationScope::REGION);
-
   auto cluster =
       IntegrationTestUtils::ClusterFactory()
-          .setNodes(nodes)
+          .setNodes(nodes_configuration)
           .setLogGroupName("mylog")
           .setLogAttributes(log_attrs)
-          .setMetaDataLogsConfig(meta_config)
           // TODO(#8466255): remove.
           .eventLogMode(
               IntegrationTestUtils::ClusterFactory::EventLogMode::NONE)
           .useHashBasedSequencerAssignment(100, "10s")
           .enableMessageErrorInjection()
-          .create(nodes.size());
+          .create(nodes_configuration->clusterSize());
 
   cluster->waitUntilAllStartedAndPropagatedInGossip();
 
@@ -391,28 +407,25 @@ TEST_F(FailureDomainIntegrationTest, ThreeRackReplication) {
   NodeSetTestUtil::addNodes(nodes, 2, 1, "region.dc.cl.ro.rk4"); // 9, 10
   rack_start.push_back(nodes->clusterSize());
 
-  // TODO Remove legacy conversion when it's accepted in ClusterUtility
-  configuration::NodesConfig nodes_cfg;
-  configuration::nodes::NodesConfigLegacyConverter::toLegacyNodesConfig(
-      *nodes, &nodes_cfg);
+  // Metadata nodeset is whole cluster.
+  nodes =
+      nodes->applyUpdate(NodesConfigurationTestUtil::setStorageMembershipUpdate(
+          *nodes,
+          nodes->getStorageMembership()->getAllShards(),
+          folly::none,
+          membership::MetaDataStorageState::METADATA));
+
+  // Replicate metadata logs to all 4 racks.
+  nodes = nodes->applyUpdate(
+      NodesConfigurationTestUtil::setMetadataReplicationPropertyUpdate(
+          *nodes, ReplicationProperty{{NodeLocationScope::RACK, 4}}));
 
   configuration::MetaDataLogsConfig meta_logs_config;
-  // Metadata nodeset is whole cluster.
-  meta_logs_config.metadata_nodes.resize(rack_start.back());
-  std::iota(meta_logs_config.metadata_nodes.begin(),
-            meta_logs_config.metadata_nodes.end(),
-            0);
-  meta_logs_config.setMetadataLogGroup(logsconfig::LogGroupNode(
-      "metadata logs",
-      logsconfig::LogAttributes()
-          // Replicate internal logs to all 4 racks.
-          .with_replicateAcross({{NodeLocationScope::RACK, 4}}),
-      logid_range_t()));
   meta_logs_config.sequencers_write_metadata_logs = true;
   meta_logs_config.sequencers_provision_epoch_store = true;
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .setNodes(nodes_cfg.getNodes())
+                     .setNodes(std::move(nodes))
                      .setLogGroupName("test_logs")
                      .setLogAttributes(logsconfig::LogAttributes()
                                            .with_replicateAcross(

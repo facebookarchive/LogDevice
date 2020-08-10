@@ -43,7 +43,7 @@ void waitForSocketActivation(
   auto cb = [&]() {
     auto reply = cluster->getNode(index).socketInfo();
     for (auto const& value : reply) {
-      if (value.at("State") != "A")
+      if (value.at("State") != "A" && value.at("State") != "I")
         return false;
     }
     return true;
@@ -59,36 +59,31 @@ TEST_F(NodeConfigChangeTest, ChangeDataIP) {
   std::string old_host;
 
   // Spawn a cluster
-  auto cluster = IntegrationTestUtils::ClusterFactory().create(2);
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .setParam("--use-dedicated-server-to-server-address", "true")
+          .create(2);
   // Create a client
-  std::shared_ptr<Client> client =
-      cluster->createClient(getDefaultTestTimeout(),
-                            std::unique_ptr<ClientSettings>(),
-                            "",
-                            /* use_file_based_ncs */ true);
+  std::shared_ptr<Client> client = cluster->createClient();
 
   // Wait for all sockets on node 0 to become active
   waitForSocketActivation(cluster, 0);
 
   // Get the current config
-  std::shared_ptr<Configuration> current_config = cluster->getConfig()->get();
+  auto nodes_config = cluster->getConfig()->getNodesConfiguration();
 
-  // Get the nodes in the server config
-  Configuration::Nodes nodes = current_config->serverConfig()->getNodes();
-  old_host = nodes[1].address.toString();
+  auto old_svc = nodes_config->getNodeServiceDiscovery(1);
+  ld_check(old_svc);
+  old_host = old_svc->server_to_server_address->toString();
 
   // modify the data address for node 1
-  std::string addr = "/nuked";
-  nodes[1].address = Sockaddr(addr);
+  auto new_svc = *old_svc;
+  new_svc.server_to_server_address = Sockaddr("/nuked");
 
-  Configuration::NodesConfig nodes_config(std::move(nodes));
-  // create a new config with the modified node config
-  Configuration config(current_config->serverConfig()
-                           ->withNodes(nodes_config)
-                           ->withIncrementedVersion(),
-                       current_config->logsConfig());
-  // Write it out to the logdevice.conf file
-  cluster->writeConfig(config);
+  nodes_config = nodes_config->applyUpdate(
+      NodesConfigurationTestUtil::setNodeAttributesUpdate(
+          1, std::move(new_svc), folly::none, folly::none));
+  cluster->updateNodesConfiguration(*nodes_config);
 
   // Now check the socket info of node 0, to verify that
   // it is not connected with the old host anymore

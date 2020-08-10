@@ -61,26 +61,25 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
   const size_t num_nodes = 3;
   const size_t num_shards = 2;
 
-  Configuration::Nodes nodes;
+  auto nodes_configuration =
+      createSimpleNodesConfig(num_nodes, num_shards, false, 2);
 
-  for (int i = 0; i < num_nodes; ++i) {
-    nodes[i].generation = 1;
-    nodes[i].addSequencerRole();
-    nodes[i].addStorageRole(num_shards);
-  }
+  // Promote N0 and N2 to become metadata nodes
+  nodes_configuration = nodes_configuration->applyUpdate(
+      NodesConfigurationTestUtil::setStorageMembershipUpdate(
+          *nodes_configuration,
+          {ShardID(0, -1), ShardID(2, -1)},
+          folly::none,
+          membership::MetaDataStorageState::METADATA));
 
   auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(2);
 
-  auto meta_configs =
-      createMetaDataLogsConfig({0, 2}, 2, NodeLocationScope::NODE);
-
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNumLogs(1)
-                     .setNodes(nodes)
+                     .setNodes(std::move(nodes_configuration))
                      // switches on gossip
                      .useHashBasedSequencerAssignment()
                      .setNumDBShards(num_shards)
-                     .setMetaDataLogsConfig(meta_configs)
                      .setLogGroupName("test_range")
                      .setLogAttributes(log_attrs)
                      .create(num_nodes);
@@ -225,28 +224,19 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithSetWeight) {
   const size_t num_nodes = 5;
   const size_t num_shards = 2;
 
-  Configuration::Nodes nodes;
-
-  for (int i = 0; i < num_nodes; ++i) {
-    nodes[i].generation = 1;
-    nodes[i].addSequencerRole();
-    nodes[i].addStorageRole(num_shards);
-  }
+  auto nodes_configuration =
+      createSimpleNodesConfig(num_nodes, num_shards, true, 3);
 
   auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(2);
 
-  auto meta_configs =
-      createMetaDataLogsConfig({0, 1, 2, 3, 4}, 2, NodeLocationScope::NODE);
-
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNumLogs(1)
-                     .setNodes(nodes)
+                     .setNodes(std::move(nodes_configuration))
                      // switches on gossip
                      .useHashBasedSequencerAssignment()
                      .setNumDBShards(num_shards)
                      .setLogGroupName("test_range")
                      .setLogAttributes(log_attrs)
-                     .setMetaDataLogsConfig(meta_configs)
                      .create(num_nodes);
 
   cluster->waitUntilAllStartedAndPropagatedInGossip();
@@ -410,13 +400,8 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
   const size_t num_nodes = 5;
   const size_t num_shards = 3;
 
-  Configuration::Nodes nodes;
-
-  for (int i = 0; i < num_nodes; ++i) {
-    nodes[i].generation = 1;
-    nodes[i].addSequencerRole();
-    nodes[i].addStorageRole(num_shards);
-  }
+  auto nodes_configuration =
+      createSimpleNodesConfig(num_nodes, num_shards, true, 3);
 
   auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(3);
 
@@ -424,7 +409,7 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNumLogs(2)
-                     .setNodes(nodes)
+                     .setNodes(std::move(nodes_configuration))
                      // switches on gossip
                      .useHashBasedSequencerAssignment()
                      .setNumDBShards(num_shards)
@@ -558,13 +543,8 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
   const size_t num_nodes = 5;
   const size_t num_shards = 5;
 
-  Configuration::Nodes nodes;
-
-  for (int i = 0; i < num_nodes; ++i) {
-    nodes[i].generation = 1;
-    nodes[i].addSequencerRole();
-    nodes[i].addStorageRole(num_shards);
-  }
+  auto nodes_configuration =
+      createSimpleNodesConfig(num_nodes, num_shards, true, 3);
 
   auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(3);
 
@@ -572,7 +552,7 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setNumLogs(1)
-                     .setNodes(nodes)
+                     .setNodes(std::move(nodes_configuration))
                      // switches on gossip
                      .useHashBasedSequencerAssignment()
                      .setNumDBShards(num_shards)
@@ -814,8 +794,19 @@ TEST_F(SafetyAPIIntegrationTest, Capacity) {
     }
   }
 
+  auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
+      std::move(nodes), ReplicationProperty{{NodeLocationScope::NODE, 2}});
+
+  // N0 is READ_ONLY.
+  nodes_configuration = nodes_configuration->applyUpdate(
+      NodesConfigurationTestUtil::setStorageMembershipUpdate(
+          *nodes_configuration,
+          {ShardID(0, -1)},
+          membership::StorageState::READ_ONLY,
+          folly::none));
+
   auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .setNodes(nodes)
+                     .setNodes(std::move(nodes_configuration))
                      // switches on gossip
                      .useHashBasedSequencerAssignment()
                      .setNumDBShards(num_shards)

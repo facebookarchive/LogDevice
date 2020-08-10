@@ -197,7 +197,7 @@ class RecoveryTest : public ::testing::TestWithParam<PopulateRecordCache> {
   bool bridge_empty_epoch_{false};
 
   NodeLocationScope sync_replication_scope_{NodeLocationScope::NODE};
-  folly::Optional<Configuration::Nodes> node_configs_;
+  std::shared_ptr<const NodesConfiguration> node_configs_;
   folly::Optional<Configuration::MetaDataLogsConfig> metadata_config_;
 
   // number of data logs in the config
@@ -408,9 +408,9 @@ void RecoveryTest::init(bool can_tail_optimize) {
     factory.setNumLogs(num_logs_.value());
   }
 
-  if (node_configs_.has_value()) {
-    ASSERT_EQ(nodes_, node_configs_.value().size());
-    factory.setNodes(node_configs_.value());
+  if (node_configs_) {
+    ASSERT_EQ(nodes_, node_configs_->clusterSize());
+    factory.setNodes(node_configs_);
   }
 
   if (metadata_config_.has_value()) {
@@ -1322,16 +1322,8 @@ TEST_P(RecoveryTest, Purging) {
 // should be in a consistent state after they are all done.
 TEST_P(RecoveryTest, MultipleSequencers) {
   // four nodes, all of them store records and run sequencers
-  Configuration::Nodes node_configs;
-  for (node_index_t i = 0; i < 4; ++i) {
-    auto& node = node_configs[i];
-    node.generation = 1;
-    node.addSequencerRole();
-    node.addStorageRole(/*num_shards*/ 2);
-  }
-
-  node_configs_ = node_configs;
-  nodes_ = node_configs_.value().size();
+  node_configs_ = createSimpleNodesConfig(4, 2);
+  nodes_ = node_configs_->clusterSize();
   replication_ = 2;
   // prepopulating metadata to avoid throwing off the epoch math below
   pre_provision_epoch_metadata_ = true;
@@ -1776,15 +1768,17 @@ TEST_P(RecoveryTest, FailureDomainAuthoritative) {
     location.fromDomainString(domain_string);
     node_configs[i].location = location;
   }
-  node_configs_ = node_configs;
-
   // metadata logs are replicated cross-region
   // use a smaller, cross-region nodeset to ensure all records must be
   // cross-region no matter how their copysets are selected. this is
   // a workaround since we just select copyset randomly in MetaDataProvisioner.
-  Configuration::MetaDataLogsConfig meta_config = createMetaDataLogsConfig(
-      /*nodeset=*/{0, 3, 5}, /*replication=*/2, NodeLocationScope::REGION);
-  metadata_config_ = meta_config;
+  node_configs[0].metadata_node = true;
+  node_configs[3].metadata_node = true;
+  node_configs[5].metadata_node = true;
+
+  node_configs_ = NodesConfigurationTestUtil::provisionNodes(
+      std::move(node_configs),
+      ReplicationProperty{{NodeLocationScope::REGION, 2}});
 
   pre_provision_epoch_metadata_ = true;
 

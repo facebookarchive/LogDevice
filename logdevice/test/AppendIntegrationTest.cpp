@@ -504,21 +504,11 @@ TEST_F(AppendIntegrationTest, NoSequencer) {
   auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(3);
   logs_config->insert(EXTRA_LOG_ID.val_, "test_log_log", log_attrs);
 
-  auto client_config = std::make_shared<UpdateableConfig>();
-  client_config->updateableServerConfig()->update(
-      cluster_config->serverConfig());
-  client_config->updateableLogsConfig()->update(logs_config);
-  auto plugin_registry =
-      std::make_shared<PluginRegistry>(getClientPluginProviders());
-  std::shared_ptr<Client> client = std::make_shared<ClientImpl>(
-      client_config->get()->serverConfig()->getClusterName(),
-      client_config,
-      "",
-      "",
-      this->testTimeout(),
-      std::unique_ptr<ClientSettings>(),
-      plugin_registry);
-  ASSERT_TRUE((bool)client);
+  std::shared_ptr<Client> client = cluster->createClient();
+  ClientImpl* client_impl = static_cast<ClientImpl*>(client.get());
+  ld_check(client_impl);
+  client_impl->getConfig()->updateableLogsConfig()->update(
+      std::move(logs_config));
 
   // make an appendSync() call for the new log. Expect "no sequencer for log"
   char data[20];
@@ -553,6 +543,8 @@ TEST_F(AppendIntegrationTest, LogIdNotInServerConfig) {
   auto client_config = std::make_shared<UpdateableConfig>();
   client_config->updateableServerConfig()->update(
       cluster_config->serverConfig());
+  client_config->updateableNodesConfiguration()->update(
+      cluster_config->getNodesConfiguration());
   client_config->updateableLogsConfig()->update(logs_config);
   auto plugin_registry =
       std::make_shared<PluginRegistry>(getClientPluginProviders());

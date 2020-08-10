@@ -2216,6 +2216,15 @@ TEST_P(RebuildingTest, SkipEverything) {
         : configuration::StorageState::READ_WRITE;
   }
 
+  auto nodes_configuration =
+      NodesConfigurationTestUtil::provisionNodes(std::move(nodes));
+  nodes_configuration = nodes_configuration->applyUpdate(
+      NodesConfigurationTestUtil::setStorageMembershipUpdate(
+          *nodes_configuration,
+          {ShardID(2, -1)},
+          membership::StorageState::READ_ONLY,
+          folly::none));
+
   ld_info("Creating cluster");
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
@@ -2223,7 +2232,7 @@ TEST_P(RebuildingTest, SkipEverything) {
                      .setLogAttributes(log_attrs)
                      .setEventLogAttributes(event_log_attrs)
                      .setMetaDataLogsConfig(meta_config)
-                     .setNodes(nodes)
+                     .setNodes(std::move(nodes_configuration))
                      .setNumDBShards(1)
                      .useHashBasedSequencerAssignment()
                      .create(3);
