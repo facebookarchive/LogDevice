@@ -245,6 +245,10 @@ bool RocksDBCustomiser::validateAndOverrideBasePath(
   return true;
 }
 
+bool RocksDBCustomiser::validateShardPath(const std::string& shard_path) {
+  return !shard_path.empty();
+}
+
 rocksdb::Env* RocksDBCustomiser::getEnv() {
   return rocksdb::Env::Default();
 }

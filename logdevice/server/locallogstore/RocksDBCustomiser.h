@@ -68,6 +68,10 @@ class RocksDBCustomiser {
                               std::string* out_new_base_path,
                               std::vector<shard_index_t>* out_disabled_shards);
 
+  // Called once for each shard directory. Validates it's ready for a RocksDB
+  // instance.
+  virtual bool validateShardPath(const std::string& shard_path);
+
   // Returns a rocksdb::Env or nullptr to use the default one.
   // The returned Env will be wrapped in logdevice::RocksDBEnv and shared
   // across all shards in current process. We'll never call destructor on it,

@@ -79,8 +79,14 @@ bool ShardedRocksDBLocalLogStore::createOrValidatePaths() {
 
   shard_paths_.resize(nshards_);
   for (shard_index_t shard_idx = 0; shard_idx < nshards_; ++shard_idx) {
-    shard_paths_.at(shard_idx) =
+    fs::path shard_path =
         fs::path(base_path_) / fs::path("shard" + std::to_string(shard_idx));
+
+    if (!customiser_->validateShardPath(shard_path.string())) {
+      return false;
+    }
+
+    shard_paths_.at(shard_idx) = shard_path;
   }
 
   return true;
