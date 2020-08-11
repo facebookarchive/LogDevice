@@ -61,10 +61,10 @@ void verify_update(std::shared_ptr<const NodesConfiguration> base_config,
 } // namespace
 
 TEST(ShardStateTrackerTest, basic) {
-  ShardStateTracker t{};
+  ShardStateTracker tracker{};
   auto nc = provisionNodes();
   ASSERT_TRUE(nc->validate());
-  t.onNewConfig(nc);
+  tracker.onNewConfig(nc);
 
   SystemTimestamp ts1 = SystemTimestamp::now();
   // NodesConfiguration::applyUpdate takes the current timestamp as the
@@ -76,20 +76,20 @@ TEST(ShardStateTrackerTest, basic) {
   auto nc2 = nc->applyUpdate(addNewNodeUpdate(*nc, 17));
   ASSERT_TRUE(nc2->validate());
   auto ts2 = nc2->getLastChangeTimestamp();
-  t.onNewConfig(nc2);
+  tracker.onNewConfig(nc2);
   {
     // nc2 has no shards in intermediary states
-    auto update_opt = t.extractNCUpdate(SystemTimestamp::now());
+    auto update_opt = tracker.extractNCUpdate(SystemTimestamp::now());
     EXPECT_FALSE(update_opt.has_value());
   }
 
   nc2 = nc2->applyUpdate(markAllShardProvisionedUpdate(*nc2));
   ASSERT_TRUE(nc2->validate());
   ts2 = nc2->getLastChangeTimestamp();
-  t.onNewConfig(nc2);
+  tracker.onNewConfig(nc2);
   {
     // nc2 has no shards in intermediary states
-    auto update_opt = t.extractNCUpdate(SystemTimestamp::now());
+    auto update_opt = tracker.extractNCUpdate(SystemTimestamp::now());
     EXPECT_FALSE(update_opt.has_value());
   }
 
@@ -97,7 +97,7 @@ TEST(ShardStateTrackerTest, basic) {
   ASSERT_TRUE(nc3->validate());
   auto ts3 = nc3->getLastChangeTimestamp();
   ASSERT_GE(ts3, ts2);
-  t.onNewConfig(nc3);
+  tracker.onNewConfig(nc3);
 
   auto verify_n17_enabling_read = [](std::shared_ptr<const NodesConfiguration>
                                          base_config,
@@ -122,9 +122,9 @@ TEST(ShardStateTrackerTest, basic) {
   };
 
   {
-    auto update_opt = t.extractNCUpdate(SystemTimestamp::now());
+    auto update_opt = tracker.extractNCUpdate(SystemTimestamp::now());
     EXPECT_TRUE(update_opt.has_value());
-    auto update_opt2 = t.extractNCUpdate(ts3);
+    auto update_opt2 = tracker.extractNCUpdate(ts3);
     EXPECT_TRUE(update_opt2.has_value());
 
     EXPECT_TRUE(update_opt->isValid());
@@ -137,7 +137,7 @@ TEST(ShardStateTrackerTest, basic) {
   }
   {
     // using an old ts will return no shards in intermediary states
-    auto update_opt = t.extractNCUpdate(ts1);
+    auto update_opt = tracker.extractNCUpdate(ts1);
     EXPECT_FALSE(update_opt.has_value());
   }
 
@@ -161,19 +161,19 @@ TEST(ShardStateTrackerTest, basic) {
 
   ASSERT_TRUE(nc4->validate());
   ASSERT_GT(ts4, ts2);
-  t.onNewConfig(nc4);
+  tracker.onNewConfig(nc4);
   {
     // N17 stays in the same intermediary state, other shards enter
     // intermediary states. check that ts of N17 does not change.
-    auto update_opt = t.extractNCUpdate(ts3);
+    auto update_opt = tracker.extractNCUpdate(ts3);
     EXPECT_TRUE(update_opt.has_value());
     verify_n17_enabling_read(nc4, std::move(update_opt));
 
-    update_opt = t.extractNCUpdate(ts3_2);
+    update_opt = tracker.extractNCUpdate(ts3_2);
     EXPECT_TRUE(update_opt.has_value());
     verify_n17_enabling_read(nc4, std::move(update_opt));
 
-    auto update_opt2 = t.extractNCUpdate(ts4);
+    auto update_opt2 = tracker.extractNCUpdate(ts4);
     EXPECT_TRUE(update_opt2.has_value());
     verify_update(nc4, std::move(update_opt2));
   }
@@ -253,18 +253,18 @@ TEST(ShardStateTrackerTest, basic) {
     EXPECT_NE(nullptr, nc7);
     EXPECT_TRUE(nc7->validate());
 
-    t.onNewConfig(nc7);
+    tracker.onNewConfig(nc7);
   }
   {
     // N17 is no longer in intermediary state, even if we query with an earlier
     // timestamp
-    auto update_opt = t.extractNCUpdate(ts5);
+    auto update_opt = tracker.extractNCUpdate(ts5);
     EXPECT_FALSE(update_opt.has_value());
   }
   SystemTimestamp ts7 = nc7->getLastChangeTimestamp();
   {
-    auto update_opt = t.extractNCUpdate(ts7);
-    auto update_opt2 = t.extractNCUpdate(SystemTimestamp::now());
+    auto update_opt = tracker.extractNCUpdate(ts7);
+    auto update_opt2 = tracker.extractNCUpdate(SystemTimestamp::now());
     EXPECT_TRUE(update_opt.has_value());
     EXPECT_TRUE(update_opt->isValid());
     EXPECT_EQ(
@@ -282,8 +282,6 @@ TEST(ShardStateTrackerTest, basic) {
               sm->getShardState(ShardID{17, 0})->storage_state);
     EXPECT_EQ(MetaDataStorageState::METADATA,
               sm->getShardState(ShardID{17, 0})->metadata_state);
-    EXPECT_EQ(toNonIntermediaryState(MetaDataStorageState::PROMOTING),
-              sm->getShardState(ShardID{11, 0})->metadata_state);
   }
 
   std::shared_ptr<const NodesConfiguration> nc8;
@@ -311,13 +309,13 @@ TEST(ShardStateTrackerTest, basic) {
     std::this_thread::sleep_for(std::chrono::milliseconds(2));
     nc8 = nc8->withIncrementedVersionAndTimestamp();
     ts8 = nc8->getLastChangeTimestamp();
-    t.onNewConfig(nc8);
+    tracker.onNewConfig(nc8);
   }
   {
-    auto update_opt = t.extractNCUpdate(ts7);
+    auto update_opt = tracker.extractNCUpdate(ts7);
     EXPECT_FALSE(update_opt.has_value());
 
-    update_opt = t.extractNCUpdate(ts8);
+    update_opt = tracker.extractNCUpdate(ts8);
     EXPECT_TRUE(update_opt.has_value());
     EXPECT_TRUE(update_opt->isValid());
     auto& shard_updates =
@@ -328,8 +326,8 @@ TEST(ShardStateTrackerTest, basic) {
 
   {
     // The tracker should ignore old nc versions
-    t.onNewConfig(nc3);
-    auto update_opt = t.extractNCUpdate(ts7);
+    tracker.onNewConfig(nc3);
+    auto update_opt = tracker.extractNCUpdate(ts7);
     EXPECT_FALSE(update_opt.has_value());
   }
 }

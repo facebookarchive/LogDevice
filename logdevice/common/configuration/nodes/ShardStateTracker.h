@@ -21,7 +21,7 @@ namespace nodes {
 // the NCM such that NCM could propose updates to transition shards out of the
 // intermediary states after a certain timeout.
 //
-// The tracker will ignore lower-versioned NodesConfiguration-s. Since the
+// The tracker will ignore lower-versioned NodesConfiguration(s). Since the
 // tracker may not hear about each NC, the timestamp(s) it has for each shard
 // transition may be later than when the transition happened; however, this is
 // sufficient for time-out purposes.
@@ -35,7 +35,7 @@ class ShardStateTracker {
   // * add new shards that entered an intermediary state;
   // * update shards that transitioned into a different intermediary state (from
   //   what we previously knew of);
-  // * remove shards that transitioned out of an intermediary state;
+  // * remove shards that transitioned out of an intermediary state
   void onNewConfig(std::shared_ptr<const NodesConfiguration> config);
 
   // Compile all shard states that are known to have happened before or at

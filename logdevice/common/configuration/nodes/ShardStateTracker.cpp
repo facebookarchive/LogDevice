@@ -19,16 +19,18 @@ namespace {
 ShardState::Update
 transitionToNonIntermediaryState(const ShardState& shard_state) {
   ShardState::Update update{};
-  update.transition = StorageStateTransition::OVERRIDE_STATE;
-  update.conditions = Condition::FORCE;
 
-  ShardState::Update::StateOverride state_override{};
-  state_override.storage_state =
-      toNonIntermediaryState(shard_state.storage_state);
-  state_override.metadata_state =
-      toNonIntermediaryState(shard_state.metadata_state);
-  // TODO: handle UNRECOVERABLE flag
-  update.state_override = std::move(state_override);
+  if (shard_state.storage_state == StorageState::NONE_TO_RO) {
+    update.transition = StorageStateTransition::COMMIT_READ_ENABLED;
+    update.conditions = Condition::COPYSET_CONFIRMATION;
+  } else if (shard_state.storage_state == StorageState::RW_TO_RO) {
+    update.transition = StorageStateTransition::COMMIT_WRITE_DISABLED;
+    update.conditions = Condition::FMAJORITY_CONFIRMATION;
+  } else if (shard_state.metadata_state == MetaDataStorageState::PROMOTING) {
+    update.transition = StorageStateTransition::COMMIT_PROMOTION_METADATA_SHARD;
+    update.conditions = Condition::COPYSET_CONFIRMATION;
+  }
+
   ld_assert(update.isValid());
   return update;
 }
@@ -71,7 +73,7 @@ void ShardStateTracker::onNewConfig(
         std::chrono::seconds(10),
         5,
         "Got a newer NodesConfiguration with an older StorageMembership "
-        "version. last known StorageMembership version: %s. Got "
+        "version. Last known StorageMembership version: %s. Got "
         "StorageMembership (version: %s) in new NodesConfiguration (version: "
         "%s).",
         toString(last_known_storage_membership_version_).c_str(),

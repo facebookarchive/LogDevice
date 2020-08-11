@@ -102,17 +102,6 @@ constexpr bool isIntermediaryState(StorageState state) {
   return state == StorageState::NONE_TO_RO || state == StorageState::RW_TO_RO;
 }
 
-constexpr StorageState toNonIntermediaryState(StorageState state) {
-  switch (state) {
-    case StorageState::NONE_TO_RO:
-      return StorageState::READ_ONLY;
-    case StorageState::RW_TO_RO:
-      return StorageState::READ_ONLY;
-    default:
-      return state;
-  }
-}
-
 /**
  * Metadata storage state w.r.t. if the storage shard is also storing metadata
  * for LogDevice.
@@ -164,16 +153,6 @@ constexpr bool shouldReadMetaDataFrom(StorageState state,
  */
 constexpr bool isIntermediaryState(MetaDataStorageState metadata_state) {
   return metadata_state == MetaDataStorageState::PROMOTING;
-}
-
-constexpr MetaDataStorageState
-toNonIntermediaryState(MetaDataStorageState metadata_state) {
-  switch (metadata_state) {
-    case MetaDataStorageState::PROMOTING:
-      return MetaDataStorageState::METADATA;
-    default:
-      return metadata_state;
-  }
 }
 
 namespace StorageStateFlags {
