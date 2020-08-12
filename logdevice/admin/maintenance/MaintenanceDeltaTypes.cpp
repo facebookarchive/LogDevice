@@ -145,7 +145,7 @@ int MaintenanceDeltaTypes::removeMaintenances(
     const auto& def = *pos_it;
     ld_info("Removing Group: %s Reason: %s",
             def->group_id_ref().value_or("UNSET").c_str(),
-            def->reason_ref().value().c_str());
+            req.get_reason().c_str());
     modified_defs.erase(*pos_it);
     pos_it++;
   }
