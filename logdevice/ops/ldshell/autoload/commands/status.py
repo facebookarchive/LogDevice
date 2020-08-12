@@ -20,7 +20,7 @@ from typing import Any, Dict, List, Optional
 
 from humanize import naturaltime
 from ldops import admin_api
-from ldops.const import DEFAULT_THRIFT_PORT
+from ldops.const import DEFAULT_ADMIN_API_PORT
 from logdevice.admin.nodes.types import (
     MaintenanceStatus,
     NodesStateRequest,
@@ -419,7 +419,7 @@ async def run_status(nodes, hostnames, extended, formatter, force, **kwargs):
                 SocketAddress(
                     address_family=SocketAddressFamily.INET,
                     address=config.data_address.address,
-                    port=DEFAULT_THRIFT_PORT,
+                    port=DEFAULT_ADMIN_API_PORT,
                 )
                 if use_data_address
                 else config.other_addresses.admin

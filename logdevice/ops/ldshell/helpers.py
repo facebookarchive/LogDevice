@@ -8,7 +8,7 @@
 import sys
 from typing import Optional
 
-from ldops.const import DEFAULT_THRIFT_PORT
+from ldops.const import DEFAULT_ADMIN_API_PORT
 from logdevice.common.types import SocketAddress, SocketAddressFamily
 
 
@@ -37,7 +37,7 @@ def ask_prompt(prompt, options=None, help_str=None, stream=sys.stdout):
 
 def create_socket_address(
     server_host: Optional[str],
-    server_port: int = DEFAULT_THRIFT_PORT,
+    server_port: int = DEFAULT_ADMIN_API_PORT,
     server_path: Optional[str] = None,
 ) -> SocketAddress:
     """
@@ -57,7 +57,7 @@ def create_socket_address(
 
 def parse_socket_address(raw: str, is_unix: bool = False) -> SocketAddress:
     if not is_unix:
-        port = DEFAULT_THRIFT_PORT
+        port = DEFAULT_ADMIN_API_PORT
         tup = raw.rsplit(":", 1)
         if len(tup) >= 2:
             port = int(tup[1])

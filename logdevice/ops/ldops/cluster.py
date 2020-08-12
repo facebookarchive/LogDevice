@@ -38,11 +38,11 @@ from logdevice.admin.nodes.types import (
 from logdevice.common.types import LocationScope, NodeID
 
 
-DEFAULT_THRIFT_PORT = 6440
+DEFAULT_ADMIN_API_PORT = 6440
 
 
 async def get_cluster_by_hostname(
-    hostname: str, port: int = DEFAULT_THRIFT_PORT
+    hostname: str, port: int = DEFAULT_ADMIN_API_PORT
 ) -> Cluster:
     """
     Convenience method which automatically resolves given hostname and returns
