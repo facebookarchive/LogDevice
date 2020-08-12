@@ -186,10 +186,6 @@ static void provision_empty_nodes_configuration(std::string config_json) {
   do_provision_write(*config, NodesConfiguration());
 }
 
-static void provision_initial_nodes_configuration(std::string config_json) {
-  throw std::runtime_error("Not implemented");
-}
-
 static bool nodes_configuration_exists(std::string config_json) {
   // 1. Parse the passed config json
   auto config = Configuration::fromJson(config_json, nullptr);
@@ -210,28 +206,6 @@ static bool nodes_configuration_exists(std::string config_json) {
     throw_python_exception(apiException, object(exception.c_str()));
   }
   return status == Status::OK;
-}
-
-static std::string update_server_config_with_nodes_configuration(
-    std::string server_config_str,
-    std::string binary_nodes_configuration) {
-  throw std::runtime_error("Not implemented");
-}
-
-static std::string normalize_server_config(std::string server_config_str) {
-  auto config = Configuration::fromJson(server_config_str, nullptr);
-  if (config == nullptr) {
-    auto exception = folly::sformat(
-        "Failed to parse config json: {}", errorStrings()[err].name);
-    throw_python_exception(parseException, object(exception.c_str()));
-  }
-  return config->toString();
-}
-
-static object
-nodes_configuration_from_server_config(std::string server_config_str) {
-  throw std::runtime_error("Not implemented");
-  return object();
 }
 
 }}}} // namespace facebook::logdevice::configuration::nodes
@@ -286,45 +260,6 @@ BOOST_PYTHON_MODULE(nodes_configuration_manager) {
 
   )");
 
-  def("update_server_config_with_nodes_configuration",
-      update_server_config_with_nodes_configuration,
-      R"(
-    Returns a JSON ServerConfig that's the result of merging the passed
-    JSON ServerConfig with the the passed binary NodesConfiguration.
-
-    @param server_config_str: The JSON serialized ServerConfig
-
-    @param binary_nodes_configuration: The binary serialized NodesConfiguration
-
-    @raises NodesConfigurationManagerParseException if either the ServerConfig
-      or the NodesConfiguration are not parsable.
-  )");
-
-  def("normalize_server_config",
-      normalize_server_config,
-      R"(
-    Reserializes the passed server config with the cpp ServerConfig serializer
-    to allow cleaner comparison with other cpp serialized server configs (e.g.
-    the one returned by update_server_config_with_nodes_configuration).
-
-    @param server_config_str: The JSON serialized ServerConfig
-
-    @raises NodesConfigurationManagerParseException if the ServerConfig is not
-      parsable.
-  )");
-
-  def("nodes_configuration_from_server_config",
-      nodes_configuration_from_server_config,
-      R"(
-    Returns a binary serialized NodesConfiguration that's extracted from the
-    passed JSON ServerConfig.
-
-    @param server_config_str: The JSON serialized ServerConfig
-
-    @raises NodesConfigurationManagerParseException if either the ServerConfig
-      is not parsable.
-  )");
-
   def("provision_empty_nodes_configuration",
       provision_empty_nodes_configuration,
       R"(
@@ -339,26 +274,6 @@ BOOST_PYTHON_MODULE(nodes_configuration_manager) {
 
     @raises NodesConfigurationManagerApiException when the provision operation
       fails or if it fails to create the NodesConfigurationStore.
-  )");
-
-  def("provision_initial_nodes_configuration",
-      provision_initial_nodes_configuration,
-      R"(
-
-    Bootstraps the initial NodesConfigurationStore (e.g. creates znode / file)
-    and then writes the initial NodesConfiguration from a ServerConfig. It's
-    intended to be used during the migration period to move clusters to the NC
-    for the first time. When all the clusters are on NC and new clusters are
-    turned up with NC enabled, this binding will be removed.
-
-    @param server_config_str: The JSON serialized ServerConfig
-
-    @raises NodesConfigurationManagerParseException if either the ServerConfig
-      or the NodesConfiguration are not parsable.
-
-    @raises NodesConfigurationManagerApiException when the provision operation
-      fails or if it fails to create the NodesConfigurationStore.
-
   )");
 
   def("nodes_configuration_exists",

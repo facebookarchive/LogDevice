@@ -277,22 +277,6 @@ class NodesConfig:
                 return 1
 
     @nubia.command
-    async def provision(self):
-        """
-        Converts the server config into a nodes configuration and writes
-        the first NodesConfiguration to the NodesConfigurationStore
-        """
-
-        ctx = nubia.context.get_context()
-        try:
-            config = await ctx.get_config_contents()
-            ncm.provision_initial_nodes_configuration(config)
-        except Exception as e:
-            termcolor.cprint(str(e), "red")
-            return 1
-        return 0
-
-    @nubia.command
     @nubia.argument("node_indexes", description="Apply maintenance to specified nodes")
     async def shrink(self, node_indexes: typing.List[int]):
         """
