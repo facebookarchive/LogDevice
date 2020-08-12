@@ -6,8 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include "logdevice/admin/Conv.h"
 #include "logdevice/admin/safety/SafetyChecker.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/lib/ClientImpl.h"
@@ -15,6 +17,7 @@
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
+using namespace ::testing;
 using namespace facebook::logdevice;
 
 // There are at least three approaches to test drains / modify node sets
@@ -125,20 +128,25 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
                        /* max_unavailable_sequencing_capacity_pct = */ 100)
           .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::WRITE_AVAILABILITY_LOSS, impact->result);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(1, impact->impact_ref()->size());
+  ASSERT_EQ(thrift::OperationImpact::WRITE_AVAILABILITY_LOSS,
+            impact->impact_ref()->at(0));
 
-  ASSERT_TRUE(impact->internal_logs_affected);
-  ASSERT_GE(impact->logs_affected.size(), 1);
-  auto impact_on_epoch = impact->logs_affected[0];
-  ASSERT_EQ(Impact::ImpactResult::WRITE_AVAILABILITY_LOSS,
-            impact_on_epoch.impact_result);
+  ASSERT_TRUE(impact->internal_logs_affected_ref().value_or(false));
+  ASSERT_TRUE(impact->logs_affected_ref().has_value());
+  ASSERT_GE(impact->logs_affected_ref()->size(), 1);
+  auto impact_on_epoch = impact->logs_affected_ref()->at(0);
+  ASSERT_EQ(1, impact_on_epoch.impact_ref()->size());
+  ASSERT_EQ(thrift::OperationImpact::WRITE_AVAILABILITY_LOSS,
+            impact_on_epoch.impact_ref()->at(0));
 
   // Metadata logs
-  ASSERT_EQ(LOGID_INVALID, impact_on_epoch.log_id);
-  ASSERT_EQ(EPOCH_INVALID, impact_on_epoch.epoch);
-  ASSERT_EQ(ReplicationProperty({{NodeLocationScope::NODE, 2}}),
-            impact_on_epoch.replication);
+  ASSERT_EQ(0, *impact_on_epoch.log_id_ref());
+  ASSERT_EQ(0, *impact_on_epoch.epoch_ref());
+  ASSERT_EQ(
+      ReplicationProperty({{NodeLocationScope::NODE, 2}}),
+      toLogDevice<ReplicationProperty>(*impact_on_epoch.replication_ref()));
 
   // we have replication factor 2, NodeSet includes all nodes
   // it is safe to drain 1 node
@@ -160,8 +168,8 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
                             /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(0, impact->impact_ref()->size());
 
   // draining 2 nodes is unsafe as we will would have not enough nodes
   // to replicate
@@ -182,9 +190,11 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
                             /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::WRITE_AVAILABILITY_LOSS, impact->result);
-  ASSERT_TRUE(impact->internal_logs_affected);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(1, impact->impact_ref()->size());
+  ASSERT_EQ(thrift::OperationImpact::WRITE_AVAILABILITY_LOSS,
+            impact->impact_ref()->at(0));
+  ASSERT_TRUE(impact->internal_logs_affected_ref().value_or(false));
 
   // double cluster size
   cluster->expand(num_nodes);
@@ -215,9 +225,11 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithExpand) {
                             /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::WRITE_AVAILABILITY_LOSS, impact->result);
-  ASSERT_TRUE(impact->internal_logs_affected);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(1, impact->impact_ref()->size());
+  ASSERT_EQ(thrift::OperationImpact::WRITE_AVAILABILITY_LOSS,
+            impact->impact_ref()->at(0));
+  ASSERT_TRUE(impact->internal_logs_affected_ref().value_or(false));
 }
 
 TEST_F(SafetyAPIIntegrationTest, DrainWithSetWeight) {
@@ -278,8 +290,8 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithSetWeight) {
                        /* max_unavailable_sequencing_capacity_pct = */ 100)
           .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(0, impact->impact_ref()->size());
 
   // make nodes read only
   cluster->updateNodeAttributes(2, configuration::StorageState::READ_ONLY, 1);
@@ -301,11 +313,13 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithSetWeight) {
                             /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::REBUILDING_STALL |
-                Impact::ImpactResult::WRITE_AVAILABILITY_LOSS,
-            impact->result);
-  ASSERT_TRUE(impact->internal_logs_affected);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(2, impact->impact_ref()->size());
+  ASSERT_THAT(
+      *impact->impact_ref(),
+      UnorderedElementsAre(thrift::OperationImpact::REBUILDING_STALL,
+                           thrift::OperationImpact::WRITE_AVAILABILITY_LOSS));
+  ASSERT_TRUE(impact->internal_logs_affected_ref().value_or(false));
 }
 
 TEST_F(SafetyAPIIntegrationTest, DrainWithEventLogNotReadable) {
@@ -366,11 +380,13 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithEventLogNotReadable) {
                        /* max_unavailable_sequencing_capacity_pct = */ 100)
           .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::REBUILDING_STALL |
-                Impact::ImpactResult::WRITE_AVAILABILITY_LOSS,
-            impact->result);
-  ASSERT_TRUE(impact->internal_logs_affected);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(2, impact->impact_ref()->size());
+  ASSERT_THAT(
+      *impact->impact_ref(),
+      UnorderedElementsAre(thrift::OperationImpact::REBUILDING_STALL,
+                           thrift::OperationImpact::WRITE_AVAILABILITY_LOSS));
+  ASSERT_TRUE(impact->internal_logs_affected_ref().value_or(false));
 
   // with event log replication factor 3, it is fine to loose two node
   cluster->getNode(num_nodes - 1).suspend();
@@ -392,8 +408,8 @@ TEST_F(SafetyAPIIntegrationTest, DrainWithEventLogNotReadable) {
                             /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(0, impact->impact_ref()->size());
 }
 
 TEST_F(SafetyAPIIntegrationTest, DisableReads) {
@@ -458,12 +474,14 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
                        /* max_unavailable_sequencing_capacity_pct = */ 100)
           .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::READ_AVAILABILITY_LOSS |
-                Impact::ImpactResult::WRITE_AVAILABILITY_LOSS |
-                Impact::ImpactResult::REBUILDING_STALL,
-            impact->result);
-  ASSERT_TRUE(impact->internal_logs_affected);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(3, impact->impact_ref()->size());
+  ASSERT_THAT(
+      *impact->impact_ref(),
+      UnorderedElementsAre(thrift::OperationImpact::READ_AVAILABILITY_LOSS,
+                           thrift::OperationImpact::WRITE_AVAILABILITY_LOSS,
+                           thrift::OperationImpact::REBUILDING_STALL));
+  ASSERT_TRUE(impact->internal_logs_affected_ref().value_or(false));
 
   // we have replication factor 3, NodeSet includes all nodes
   // it is safe to stop 2 node
@@ -487,8 +505,8 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
                             /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(0, impact->impact_ref()->size());
 
   // stoping 3 same shards is unsafe
   shards.clear();
@@ -509,11 +527,13 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
                             /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::READ_AVAILABILITY_LOSS |
-                Impact::ImpactResult::WRITE_AVAILABILITY_LOSS |
-                Impact::ImpactResult::REBUILDING_STALL,
-            impact->result);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(3, impact->impact_ref()->size());
+  ASSERT_THAT(
+      *impact->impact_ref(),
+      UnorderedElementsAre(thrift::OperationImpact::READ_AVAILABILITY_LOSS,
+                           thrift::OperationImpact::WRITE_AVAILABILITY_LOSS,
+                           thrift::OperationImpact::REBUILDING_STALL));
 
   // stoping 3 different shards is fine
   shards.clear();
@@ -533,10 +553,11 @@ TEST_F(SafetyAPIIntegrationTest, DisableReads) {
                             /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
-  // Check that we don't set this on ImpactResult::NOME
-  ASSERT_FALSE(impact->internal_logs_affected);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(0, impact->impact_ref()->size());
+  // Check that we don't set this on empty OperationImpact
+  ASSERT_TRUE(impact->internal_logs_affected_ref().has_value());
+  ASSERT_FALSE(*impact->internal_logs_affected_ref());
 }
 
 TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
@@ -617,8 +638,8 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
                        /* max_unavailable_sequencing_capacity_pct = */ 100)
           .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(0, impact->impact_ref()->size());
 
   impact = safety_checker
                .checkImpact(shard_status,
@@ -633,8 +654,8 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
                             /* max_unavailable_sequencing_capacity_pct = */ 100)
 
                .get();
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(0, impact->impact_ref()->size());
 
   // it is safe if we want to have 1 extra node
   safety[NodeLocationScope::NODE] = 1;
@@ -651,8 +672,8 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
                             /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(0, impact->impact_ref()->size());
 
   impact = safety_checker
                .checkImpact(shard_status,
@@ -667,8 +688,8 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
                             /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(0, impact->impact_ref()->size());
 
   // it is unsafe if we wantto have 2 extra nodes
   safety[NodeLocationScope::NODE] = 2;
@@ -685,11 +706,13 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
                             /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::REBUILDING_STALL |
-                Impact::ImpactResult::WRITE_AVAILABILITY_LOSS,
-            impact->result);
-  ASSERT_TRUE(impact->internal_logs_affected);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(2, impact->impact_ref()->size());
+  ASSERT_THAT(
+      *impact->impact_ref(),
+      UnorderedElementsAre(thrift::OperationImpact::REBUILDING_STALL,
+                           thrift::OperationImpact::WRITE_AVAILABILITY_LOSS));
+  ASSERT_TRUE(impact->internal_logs_affected_ref().value_or(false));
 
   impact = safety_checker
                .checkImpact(shard_status,
@@ -704,12 +727,14 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
                             /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::READ_AVAILABILITY_LOSS |
-                Impact::ImpactResult::REBUILDING_STALL |
-                Impact::ImpactResult::WRITE_AVAILABILITY_LOSS,
-            impact->result);
-  ASSERT_TRUE(impact->internal_logs_affected);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(3, impact->impact_ref()->size());
+  ASSERT_THAT(
+      *impact->impact_ref(),
+      UnorderedElementsAre(thrift::OperationImpact::READ_AVAILABILITY_LOSS,
+                           thrift::OperationImpact::REBUILDING_STALL,
+                           thrift::OperationImpact::WRITE_AVAILABILITY_LOSS));
+  ASSERT_TRUE(impact->internal_logs_affected_ref().value_or(false));
 
   for (int i = 0; i < num_shards; ++i) {
     shards.insert(ShardID(2, i));
@@ -729,8 +754,8 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
                             /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(0, impact->impact_ref()->size());
 
   // but not enough if we want one extra node
   safety[NodeLocationScope::NODE] = 1;
@@ -747,12 +772,13 @@ TEST_F(SafetyAPIIntegrationTest, SafetyMargin) {
                             /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::READ_AVAILABILITY_LOSS |
-                Impact::ImpactResult::REBUILDING_STALL |
-                Impact::ImpactResult::WRITE_AVAILABILITY_LOSS,
-            impact->result);
-  ASSERT_TRUE(impact->internal_logs_affected);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(3, impact->impact_ref()->size());
+  ASSERT_THAT(
+      *impact->impact_ref(),
+      UnorderedElementsAre(thrift::OperationImpact::READ_AVAILABILITY_LOSS,
+                           thrift::OperationImpact::REBUILDING_STALL,
+                           thrift::OperationImpact::WRITE_AVAILABILITY_LOSS));
 }
 
 TEST_F(SafetyAPIIntegrationTest, Capacity) {
@@ -843,8 +869,10 @@ TEST_F(SafetyAPIIntegrationTest, Capacity) {
                        /* max_unavailable_sequencing_capacity_pct = */ 25)
           .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::SEQUENCING_CAPACITY_LOSS, impact->result);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(1, impact->impact_ref()->size());
+  ASSERT_EQ(thrift::OperationImpact::SEQUENCING_CAPACITY_LOSS,
+            impact->impact_ref()->at(0));
 
   // 50% of capacity via 2 nodes, that should be still fail. Because N2 is
   // disabled, we already lost 16.6% of capacity.
@@ -862,8 +890,10 @@ TEST_F(SafetyAPIIntegrationTest, Capacity) {
                .get();
 
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::SEQUENCING_CAPACITY_LOSS, impact->result);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(1, impact->impact_ref()->size());
+  ASSERT_EQ(thrift::OperationImpact::SEQUENCING_CAPACITY_LOSS,
+            impact->impact_ref()->at(0));
 
   // Pass since N1 = 25% and N2 is 16.6%, and the limit is 50%.
   impact = safety_checker
@@ -879,8 +909,8 @@ TEST_F(SafetyAPIIntegrationTest, Capacity) {
                             /* max_unavailable_sequencing_capacity_pct = */ 50)
                .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(0, impact->impact_ref()->size());
 
   // STORAGE CAPACITY
 
@@ -900,8 +930,10 @@ TEST_F(SafetyAPIIntegrationTest, Capacity) {
                             /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::STORAGE_CAPACITY_LOSS, impact->result);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(1, impact->impact_ref()->size());
+  ASSERT_EQ(thrift::OperationImpact::STORAGE_CAPACITY_LOSS,
+            impact->impact_ref()->at(0));
 
   // Success because the limit is 50% and we are losing 25% in addition to the
   // disabled node (N2 = 16.6%)
@@ -919,8 +951,8 @@ TEST_F(SafetyAPIIntegrationTest, Capacity) {
                             /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::NONE, impact->result);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(0, impact->impact_ref()->size());
 
   // Fail because N4:S0, N4:S1 are UNAVAILABLE/EMPTY (total capacity loss of 2/3
   // * 25% = 16.6%) the limit is 50% and we are losing 25% (N3) in addition to
@@ -941,6 +973,8 @@ TEST_F(SafetyAPIIntegrationTest, Capacity) {
                             /* max_unavailable_sequencing_capacity_pct = */ 100)
                .get();
   ASSERT_TRUE(impact.hasValue());
-  ld_info("IMPACT: %s", impact->toString().c_str());
-  ASSERT_EQ(Impact::ImpactResult::STORAGE_CAPACITY_LOSS, impact->result);
+  ld_info("IMPACT: %s", impactToString(*impact).c_str());
+  ASSERT_EQ(1, impact->impact_ref()->size());
+  ASSERT_EQ(thrift::OperationImpact::STORAGE_CAPACITY_LOSS,
+            impact->impact_ref()->at(0));
 }

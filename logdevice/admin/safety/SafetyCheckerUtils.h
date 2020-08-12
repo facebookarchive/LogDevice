@@ -9,6 +9,7 @@
 
 #include <folly/container/F14Set.h>
 
+#include "logdevice/admin/if/gen-cpp2/safety_types.h"
 #include "logdevice/admin/safety/LogMetaDataFetcher.h"
 #include "logdevice/admin/safety/SafetyAPI.h"
 #include "logdevice/common/ClusterState.h"
@@ -39,7 +40,7 @@ folly::Expected<Impact, Status> checkImpactOnLogs(
 /**
  * Perform safety check on a single log.
  */
-folly::Expected<Impact::ImpactOnEpoch, Status> checkImpactOnLog(
+folly::Expected<thrift::ImpactOnEpoch, Status> checkImpactOnLog(
     logid_t log_id,
     const std::shared_ptr<LogMetaDataFetcher::Results>& metadata,
     const ShardAuthoritativeStatusMap& shard_status,
@@ -124,7 +125,7 @@ extendReplicationWithSafetyMargin(const SafetyMargin& safety_margin,
                                   const ReplicationProperty& replication_base,
                                   bool add);
 
-Impact::StorageSetMetadata getStorageSetMetadata(
+thrift::StorageSetMetadata getStorageSetMetadata(
     const StorageSet& storage_set,
     const ShardAuthoritativeStatusMap& shard_status,
     const std::shared_ptr<const configuration::nodes::NodesConfiguration>&

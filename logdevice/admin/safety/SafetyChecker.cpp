@@ -287,15 +287,14 @@ SafetyChecker::performSafetyCheck(
                 max_unavailable_storage_capacity_pct);
           }
           capacity_impact =
-              Impact::merge(seq_impact, storage_impact, error_sample_size_);
-          if (abort_on_error_ &&
-              capacity_impact.result != Impact::ImpactResult::NONE) {
+              mergeImpact(seq_impact, storage_impact, error_sample_size_);
+          if (abort_on_error_ && !capacity_impact.impact_ref()->empty()) {
             // We will not proceed if we will impact capacity and
             // abort_on_error is set.
             std::chrono::seconds total_time =
                 std::chrono::duration_cast<std::chrono::seconds>(
                     std::chrono::steady_clock::now() - start_time);
-            capacity_impact.total_duration = total_time;
+            capacity_impact.set_total_duration(total_time.count());
             return folly::makeSemiFuture(
                 folly::Expected<Impact, Status>(capacity_impact));
           }
@@ -313,14 +312,13 @@ SafetyChecker::performSafetyCheck(
                                               nodes_config,
                                               cluster_state,
                                               error_sample_size_);
-          if (abort_on_error_ &&
-              metadata_impact.result != Impact::ImpactResult::NONE) {
+          if (abort_on_error_ && !metadata_impact.impact_ref()->empty()) {
             // We will not proceed if internal logs are unhappy and
             // abort_on_error is set.
             std::chrono::seconds total_time =
                 std::chrono::duration_cast<std::chrono::seconds>(
                     std::chrono::steady_clock::now() - start_time);
-            metadata_impact.total_duration = total_time;
+            metadata_impact.set_total_duration(total_time.count());
             return folly::makeSemiFuture(
                 folly::Expected<Impact, Status>(metadata_impact));
           }
@@ -333,7 +331,7 @@ SafetyChecker::performSafetyCheck(
           for (auto it = internal_logs.logsBegin();
                it != internal_logs.logsEnd();
                ++it) {
-            internal_log_ids.push_back(logid_t(it->first));
+            internal_log_ids.emplace_back(it->first);
           }
           // We fail the safety check immediately if we cannot schedule internal
           // logs to be checked.
@@ -355,14 +353,13 @@ SafetyChecker::performSafetyCheck(
             return folly::makeSemiFuture(impact);
           }
           internal_logs_impact = impact.value();
-          if (abort_on_error_ &&
-              internal_logs_impact.result != Impact::ImpactResult::NONE) {
+          if (abort_on_error_ && !internal_logs_impact.impact_ref()->empty()) {
             // We will not proceed if internal logs are unhappy and
             // abort_on_error is set.
             std::chrono::seconds total_time =
                 std::chrono::duration_cast<std::chrono::seconds>(
                     std::chrono::steady_clock::now() - start_time);
-            internal_logs_impact.total_duration = total_time;
+            internal_logs_impact.set_total_duration(total_time.count());
             return folly::makeSemiFuture(
                 folly::Expected<Impact, Status>(internal_logs_impact));
           }
@@ -438,17 +435,17 @@ SafetyChecker::performSafetyCheck(
 
         // Initial impact is the combined result of metadata, internal logs and
         // capacity.
-        folly::Expected<Impact, Status> initial_value = Impact::merge(
+        folly::Expected<Impact, Status> initial_value = mergeImpact(
             metadata_impact, internal_logs_impact, error_sample_size_);
         initial_value =
-            Impact::merge(initial_value, capacity_impact, error_sample_size_);
+            mergeImpact(initial_value, capacity_impact, error_sample_size_);
         // Merges results as we get them.
         return folly::unorderedReduce(
                    std::move(futs),
                    initial_value,
                    [this](folly::Expected<Impact, Status> acc,
                           folly::Expected<Impact, Status> result) {
-                     return Impact::merge(
+                     return mergeImpact(
                          std::move(acc), result, error_sample_size_);
                    })
             .thenValue([start_time](folly::Expected<Impact, Status> result) {
@@ -456,9 +453,12 @@ SafetyChecker::performSafetyCheck(
                   std::chrono::duration_cast<std::chrono::seconds>(
                       std::chrono::steady_clock::now() - start_time);
               if (result.hasValue()) {
-                ld_info(
-                    "Sending %lu error samples", result->logs_affected.size());
-                result->total_duration = total_time;
+                size_t logs_affected_cnt = 0;
+                if (result->logs_affected_ref().has_value()) {
+                  logs_affected_cnt = result->logs_affected_ref()->size();
+                }
+                ld_info("Sending %lu error samples", logs_affected_cnt);
+                result->set_total_duration(total_time.count());
               }
               return result;
             });

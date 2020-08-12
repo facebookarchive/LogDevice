@@ -46,10 +46,6 @@ template <>
 thrift::Role toThrift(const configuration::NodeRole& role);
 
 template <>
-std::vector<thrift::OperationImpact>
-toThrift(const Impact::ImpactResult& impact);
-
-template <>
 thrift::ShardID toThrift(const ShardID& shard);
 
 template <>
@@ -65,16 +61,7 @@ template <>
 thrift::ServiceHealthStatus toThrift(const NodeHealthStatus& input);
 
 template <>
-thrift::ShardMetadata toThrift(const Impact::ShardMetadata& input);
-
-template <>
 thrift::ReplicationProperty toThrift(const ReplicationProperty& replication);
-
-template <>
-thrift::ImpactOnEpoch toThrift(const Impact::ImpactOnEpoch& epoch);
-
-template <>
-thrift::CheckImpactResponse toThrift(const Impact& impact);
 
 template <typename LDType, typename ThriftType>
 LDType toLogDevice(const ThriftType& input);

@@ -5,8 +5,10 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
+
 #include "logdevice/admin/safety/SafetyCheckerUtils.h"
 
+#include "logdevice/admin/Conv.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/FailureDomainNodeSet.h"
 
@@ -28,8 +30,8 @@ folly::Expected<Impact, Status> checkImpactOnLogs(
     const std::shared_ptr<const configuration::nodes::NodesConfiguration>&
         nodes_config,
     ClusterState* cluster_state) {
-  int impact_result_all = 0;
-  std::vector<Impact::ImpactOnEpoch> affected_logs_sample;
+  std::set<thrift::OperationImpact> impact_result_all;
+  std::vector<thrift::ImpactOnEpoch> affected_logs_sample;
   size_t logs_done = 0;
   bool internal_logs_affected = false;
 
@@ -52,9 +54,10 @@ folly::Expected<Impact, Status> checkImpactOnLogs(
       // this log-id. This is critical.
       return folly::makeUnexpected(result.error());
     }
-    const Impact::ImpactOnEpoch& epoch_impact = result.value();
-    if (epoch_impact.impact_result > Impact::ImpactResult::NONE) {
-      impact_result_all |= epoch_impact.impact_result;
+    const thrift::ImpactOnEpoch& epoch_impact = result.value();
+    if (!epoch_impact.impact_ref()->empty()) {
+      impact_result_all.insert(
+          epoch_impact.impact_ref()->begin(), epoch_impact.impact_ref()->end());
       if (internal_logs) {
         internal_logs_affected = true;
       }
@@ -71,14 +74,16 @@ folly::Expected<Impact, Status> checkImpactOnLogs(
     }
   }
 
-  return Impact(impact_result_all,
-                std::move(affected_logs_sample),
-                internal_logs_affected,
-                logs_done,
-                std::chrono::seconds(0));
+  Impact impact;
+  impact.set_impact({impact_result_all.begin(), impact_result_all.end()});
+  impact.set_internal_logs_affected(internal_logs_affected);
+  impact.set_logs_affected(std::move(affected_logs_sample));
+  impact.set_total_duration(0);
+  impact.set_total_logs_checked(logs_done);
+  return impact;
 }
 
-folly::Expected<Impact::ImpactOnEpoch, Status> checkImpactOnLog(
+folly::Expected<thrift::ImpactOnEpoch, Status> checkImpactOnLog(
     logid_t log_id,
     const std::shared_ptr<LogMetaDataFetcher::Results>& metadata_cache,
     const ShardAuthoritativeStatusMap& shard_status,
@@ -102,12 +107,11 @@ folly::Expected<Impact::ImpactOnEpoch, Status> checkImpactOnLog(
                "likely that this log has been recently added but never "
                "provisioned. Assuming it's safe!",
                log_id.val_);
-    return Impact::ImpactOnEpoch(log_id,
-                                 EPOCH_INVALID,
-                                 {},
-                                 {},
-                                 ReplicationProperty(),
-                                 Impact::ImpactResult::NONE);
+
+    thrift::ImpactOnEpoch result;
+    result.set_log_id(log_id.val_);
+    result.set_epoch(0);
+    return result;
   }
 
   // We require that the node to be fully started if we are checking a normal
@@ -158,16 +162,16 @@ folly::Expected<Impact::ImpactOnEpoch, Status> checkImpactOnLog(
       nodes_to_drain.insert(shard_id.node());
     }
 
-    int impact_result = 0;
+    std::vector<thrift::OperationImpact> impact;
     if (!safe_reads) {
-      impact_result |= Impact::ImpactResult::READ_AVAILABILITY_LOSS;
+      impact.push_back(thrift::OperationImpact::READ_AVAILABILITY_LOSS);
     }
     if (!safe_writes) {
-      impact_result |= Impact::ImpactResult::REBUILDING_STALL;
+      impact.push_back(thrift::OperationImpact::REBUILDING_STALL);
       // TODO #22911589 check do we lose write availablility
     }
 
-    Impact::StorageSetMetadata storage_set_metadata =
+    thrift::StorageSetMetadata storage_set_metadata =
         getStorageSetMetadata(epoch_metadata.shards,
                               shard_status,
                               nodes_config,
@@ -175,21 +179,22 @@ folly::Expected<Impact::ImpactOnEpoch, Status> checkImpactOnLog(
                               require_fully_started);
 
     // We don't scan more epochs, one failing epoch is enough for us.
-    return Impact::ImpactOnEpoch(log_id,
-                                 epoch_metadata.h.epoch,
-                                 epoch_metadata.shards,
-                                 std::move(storage_set_metadata),
-                                 epoch_metadata.replication,
-                                 impact_result);
+    thrift::ImpactOnEpoch result;
+    result.set_log_id(log_id.val_);
+    result.set_epoch(epoch_metadata.h.epoch.val_);
+    result.set_storage_set(toThrift<thrift::ShardID>(epoch_metadata.shards));
+    result.set_replication(
+        toThrift<thrift::ReplicationProperty>(epoch_metadata.replication));
+    result.set_impact(std::move(impact));
+    result.set_storage_set_metadata(std::move(storage_set_metadata));
+    return result;
   }
 
   // Everything is safe.
-  return Impact::ImpactOnEpoch(log_id,
-                               EPOCH_INVALID,
-                               {},
-                               {},
-                               ReplicationProperty(),
-                               Impact::ImpactResult::NONE);
+  thrift::ImpactOnEpoch result;
+  result.set_log_id(log_id.val_);
+  result.set_epoch(0);
+  return result;
 }
 
 Impact checkMetadataStorageSet(
@@ -206,11 +211,11 @@ Impact checkMetadataStorageSet(
   ReplicationProperty replication_property =
       nodes_config->getMetaDataLogsReplication()->getReplicationProperty();
 
-  std::vector<Impact::ImpactOnEpoch> impact_on_epochs;
+  std::vector<thrift::ImpactOnEpoch> impact_on_epochs;
 
-  int impact_result = Impact::ImpactResult::NONE;
-  int impact_result_all = 0;
-  Impact::StorageSetMetadata storage_set_metadata;
+  std::set<thrift::OperationImpact> impact_result_all;
+  std::set<thrift::OperationImpact> impact_result;
+  thrift::StorageSetMetadata storage_set_metadata;
   // We generate all possible storage sets for metadata logs and check until one
   // fails. This is for efficiency reasons. Even if some of these combinations
   // do not exist.
@@ -254,31 +259,36 @@ Impact checkMetadataStorageSet(
                                   /* require_fully_started = */ false);
 
     if (!safe_writes) {
-      impact_result |= Impact::ImpactResult::WRITE_AVAILABILITY_LOSS;
+      impact_result.insert(thrift::OperationImpact::WRITE_AVAILABILITY_LOSS);
     }
     if (!safe_reads) {
-      impact_result |= Impact::ImpactResult::READ_AVAILABILITY_LOSS;
+      impact_result.insert(thrift::OperationImpact::READ_AVAILABILITY_LOSS);
     }
 
-    if (impact_result > Impact::ImpactResult::NONE) {
-      impact_result_all |= impact_result;
+    if (!impact_result.empty()) {
+      impact_result_all.insert(impact_result.begin(), impact_result.end());
       internal_logs_affected = true;
       if (impact_on_epochs.size() < error_sample_size) {
-        impact_on_epochs.push_back(
-            Impact::ImpactOnEpoch(LOGID_INVALID,
-                                  EPOCH_INVALID,
-                                  std::move(storage_set),
-                                  std::move(storage_set_metadata),
-                                  replication_property,
-                                  impact_result));
+        thrift::ImpactOnEpoch cur;
+        cur.set_log_id(0);
+        cur.set_epoch(0);
+        cur.set_storage_set(toThrift<thrift::ShardID>(storage_set));
+        cur.set_replication(
+            toThrift<thrift::ReplicationProperty>(replication_property));
+        cur.set_impact({impact_result.begin(), impact_result.end()});
+        cur.set_storage_set_metadata(std::move(storage_set_metadata));
+        impact_on_epochs.push_back(std::move(cur));
       }
     }
   }
-  return Impact(impact_result_all,
-                std::move(impact_on_epochs),
-                internal_logs_affected,
-                /* total_logs_checked = */ 0,
-                std::chrono::seconds(0));
+
+  Impact impact;
+  impact.set_impact({impact_result_all.begin(), impact_result_all.end()});
+  impact.set_internal_logs_affected(internal_logs_affected);
+  impact.set_logs_affected(std::move(impact_on_epochs));
+  impact.set_total_duration(0);
+  impact.set_total_logs_checked(0);
+  return impact;
 }
 
 std::pair<bool, bool> checkReadWriteAvailablity(
@@ -454,6 +464,8 @@ Impact checkSequencingCapacity(
     ClusterState* cluster_state,
     bool require_fully_started,
     int max_unavailable_sequencing_capacity_pct) {
+  Impact impact;
+  impact.set_internal_logs_affected(false);
   const auto& seq_mem = nodes_config->getSequencerMembership();
   const auto& all_seqs = nodes_config->getSequencerNodes();
   double total_weight = 0;
@@ -492,9 +504,11 @@ Impact checkSequencingCapacity(
         total_weight,
         toString(dead_nodes).c_str(),
         toString(sequencers).c_str());
-    return Impact(Impact::ImpactResult::SEQUENCING_CAPACITY_LOSS);
+
+    impact.impact_ref()->push_back(
+        thrift::OperationImpact::SEQUENCING_CAPACITY_LOSS);
   }
-  return Impact(Impact::ImpactResult::NONE);
+  return impact;
 }
 
 Impact checkStorageCapacity(
@@ -505,6 +519,8 @@ Impact checkStorageCapacity(
     ClusterState* cluster_state,
     bool require_fully_started_nodes,
     int max_unavailable_storage_capacity_pct) {
+  Impact impact;
+  impact.set_internal_logs_affected(false);
   /**
    * For storage capacity checking, we don't care whether you are setting the
    * shard to read-only or disabled, in both case it's a capacity degradation.
@@ -577,9 +593,10 @@ Impact checkStorageCapacity(
             total_capacity,
             toString(unavailable_nodes).c_str(),
             toString(unavailable_shards).c_str());
-    return Impact(Impact::ImpactResult::STORAGE_CAPACITY_LOSS);
+    impact.impact_ref()->push_back(
+        thrift::OperationImpact::STORAGE_CAPACITY_LOSS);
   }
-  return Impact(Impact::ImpactResult::NONE);
+  return impact;
 }
 
 bool isAlive(ClusterState* cluster_state,
@@ -629,26 +646,26 @@ extendReplicationWithSafetyMargin(const SafetyMargin& safety_margin,
   return replication_new;
 }
 
-Impact::StorageSetMetadata getStorageSetMetadata(
+thrift::StorageSetMetadata getStorageSetMetadata(
     const StorageSet& storage_set,
     const ShardAuthoritativeStatusMap& shard_status,
     const std::shared_ptr<const nodes::NodesConfiguration>& nodes_config,
     ClusterState* cluster_state,
     bool require_fully_started) {
-  Impact::StorageSetMetadata out;
+  thrift::StorageSetMetadata out;
   for (const auto& shard : storage_set) {
     // If the node doesn't exist anymore in the nodes configuration. We use
     // these defaults.
-    StorageState storage_state;
+    thrift::ShardStorageState storage_state;
     folly::Optional<NodeLocation> location = folly::none;
 
     const auto membership = nodes_config->getStorageMembership();
     if (membership->canWriteToShard(shard)) {
-      storage_state = StorageState::READ_WRITE;
+      storage_state = thrift::ShardStorageState::READ_WRITE;
     } else if (membership->shouldReadFromShard(shard)) {
-      storage_state = StorageState::READ_ONLY;
+      storage_state = thrift::ShardStorageState::READ_ONLY;
     } else {
-      storage_state = StorageState::DISABLED;
+      storage_state = thrift::ShardStorageState::DISABLED;
     }
 
     const nodes::NodeServiceDiscovery* discovery =
@@ -659,13 +676,20 @@ Impact::StorageSetMetadata getStorageSetMetadata(
 
     bool is_mini_rebuilding =
         shard_status.shardIsTimeRangeRebuilding(shard.node(), shard.shard());
-    out.push_back(Impact::ShardMetadata{
-        .auth_status = shard_status.getShardStatus(shard),
-        .has_dirty_ranges = is_mini_rebuilding,
-        .is_alive = isAlive(cluster_state, shard.node(), require_fully_started),
-        .storage_state = storage_state,
-        .location = location});
+
+    thrift::ShardMetadata metadata;
+    metadata.set_data_health(toShardDataHealth(
+        shard_status.getShardStatus(shard), is_mini_rebuilding));
+    metadata.set_is_alive(
+        isAlive(cluster_state, shard.node(), require_fully_started));
+    metadata.set_storage_state(storage_state);
+    if (location) {
+      metadata.set_location(location->toString());
+    }
+    metadata.set_location_per_scope(toThrift<thrift::Location>(location));
+    out.push_back(std::move(metadata));
   }
   return out;
 }
+
 }}} // namespace facebook::logdevice::safety

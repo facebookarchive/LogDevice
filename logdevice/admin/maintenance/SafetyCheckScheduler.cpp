@@ -101,11 +101,11 @@ SafetyCheckScheduler::executePlan(
                   return folly::makeUnexpected(expected_impact.error());
                 }
 
-                if (expected_impact->result != 0) {
+                if (!expected_impact->impact_ref()->empty()) {
                   ld_info(
                       "Safety check didn't pass for maintenance %s, impact: %s",
                       group_id.c_str(),
-                      expected_impact->toString().c_str());
+                      impactToString(expected_impact.value()).c_str());
                 } else {
                   ld_info("Safety check passed for maintenance %s",
                           group_id.c_str());
@@ -129,7 +129,7 @@ void SafetyCheckScheduler::updateResult(ExecutionState& state) const {
   //  - Or it's not safe and previous we recorded that it's unsafe.
   //
   if (state.last_check) {
-    if (state.last_check->impact.result == Impact::ImpactResult::NONE) {
+    if (state.last_check->impact.impact_ref()->empty()) {
       // The operation was safe. Add shards and sequencers to the safe list.
       state.result.safe_shards.insert(
           state.last_check->shards.begin(), state.last_check->shards.end());

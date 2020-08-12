@@ -103,7 +103,8 @@ SafetyCheckSchedulerMock::buildExecutionPlan(
 TEST(SafetyCheckerSchedulerTest, TestMock) {
   SafetyCheckSchedulerMock mock;
   Impact impact;
-  impact.result |= Impact::ImpactResult::READ_AVAILABILITY_LOSS;
+  impact.impact_ref()->push_back(
+      thrift::OperationImpact::READ_AVAILABILITY_LOSS);
 
   SafetyCheckSchedulerMock::CannedCheckImpact canned = {
       .disabled_shards = {{ShardID(2, 0)}},
@@ -126,7 +127,7 @@ TEST(SafetyCheckerSchedulerTest, TestMock) {
                                    false);
   folly::Expected<Impact, Status> result = std::move(f).get();
   ASSERT_TRUE(result.hasValue());
-  ASSERT_EQ(impact.result, result->result);
+  ASSERT_EQ(*impact.impact_ref(), *result->impact_ref());
 
   Impact impact2;
   canned.impact = impact2;
@@ -530,10 +531,10 @@ TEST(SafetyCheckerSchedulerTest, Scheduling) {
   SafetyCheckScheduler::NodeIndexSet safe_sequencers_to_disable;
 
   Impact bad_impact;
-  bad_impact.result |= Impact::ImpactResult::READ_AVAILABILITY_LOSS;
+  bad_impact.impact_ref()->push_back(
+      thrift::OperationImpact::READ_AVAILABILITY_LOSS);
 
   Impact safe_impact;
-  safe_impact.result = Impact::ImpactResult::NONE;
 
   // G3 test. => SAFE
   mock.shard_impacts.push_back(SafetyCheckSchedulerMock::CannedCheckImpact{

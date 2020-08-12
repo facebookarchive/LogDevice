@@ -114,8 +114,7 @@ CheckImpactHandler::semifuture_checkImpact(
           throw ex;
         }
 
-        return std::make_unique<thrift::CheckImpactResponse>(
-            toThrift<thrift::CheckImpactResponse>(impact.value()));
+        return std::make_unique<thrift::CheckImpactResponse>(impact.value());
       });
 }
 }} // namespace facebook::logdevice

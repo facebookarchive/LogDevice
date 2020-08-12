@@ -134,8 +134,8 @@ class SafetyChecker {
       folly::Optional<std::vector<logid_t>> logids_to_check);
 
   bool appendImpactToSample(
-      Impact::ImpactOnEpoch impact,
-      std::vector<Impact::ImpactOnEpoch>& affected_logs_sample) const;
+      thrift::ImpactOnEpoch impact,
+      std::vector<thrift::ImpactOnEpoch>& affected_logs_sample) const;
 
   bool refresh_in_flight_{false};
   // The future that will execute the next timed refresh of metadata. This is

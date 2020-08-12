@@ -1392,8 +1392,7 @@ MaintenanceManager::augmentWithProgressInfo(
                 def.group_id_ref().value().c_str(),
                 error_name(result.error()));
           } else {
-            def.set_last_check_impact_result(
-                toThrift<thrift::CheckImpactResponse>(result.value()));
+            def.set_last_check_impact_result(result.value());
           }
           // Augment with the maintenance progress
           def.set_progress(getMaintenanceProgressInternal(def));

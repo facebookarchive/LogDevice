@@ -1424,7 +1424,9 @@ TEST_F(MaintenanceManagerTest, NodesConfigUpdateTestWithSafetyCheckFailures) {
   ASSERT_TRUE(safety_check_promise_.valid());
 
   // Say all maintenances are determined to be unsafe
-  Impact impact(Impact::ImpactResult::WRITE_AVAILABILITY_LOSS);
+  Impact impact;
+  impact.impact_ref()->push_back(
+      thrift::OperationImpact::WRITE_AVAILABILITY_LOSS);
   for (auto group :
        {"N1N2_MAYDISAPPEAR", "N2_DRAINED", "N9_DRAINED", "N18_DRAINED"}) {
     unsafe_groups_[group] = impact;

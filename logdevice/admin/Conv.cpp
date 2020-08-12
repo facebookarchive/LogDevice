@@ -32,27 +32,6 @@ thrift::Role toThrift(const NodeRole& role) {
 }
 
 template <>
-std::vector<thrift::OperationImpact> toThrift(const int& impact_result) {
-  std::vector<thrift::OperationImpact> output;
-  if (impact_result & Impact::ImpactResult::REBUILDING_STALL) {
-    output.push_back(thrift::OperationImpact::REBUILDING_STALL);
-  }
-  if (impact_result & Impact::ImpactResult::WRITE_AVAILABILITY_LOSS) {
-    output.push_back(thrift::OperationImpact::WRITE_AVAILABILITY_LOSS);
-  }
-  if (impact_result & Impact::ImpactResult::READ_AVAILABILITY_LOSS) {
-    output.push_back(thrift::OperationImpact::READ_AVAILABILITY_LOSS);
-  }
-  if (impact_result & Impact::ImpactResult::SEQUENCING_CAPACITY_LOSS) {
-    output.push_back(thrift::OperationImpact::SEQUENCING_CAPACITY_LOSS);
-  }
-  if (impact_result & Impact::ImpactResult::STORAGE_CAPACITY_LOSS) {
-    output.push_back(thrift::OperationImpact::STORAGE_CAPACITY_LOSS);
-  }
-  return output;
-}
-
-template <>
 configuration::nodes::NodeRole toLogDevice(const thrift::Role& role) {
   switch (role) {
     case thrift::Role::SEQUENCER:
@@ -215,38 +194,6 @@ thrift::ReplicationProperty toThrift(const ReplicationProperty& replication) {
   return output;
 }
 
-template <>
-thrift::ImpactOnEpoch toThrift(const Impact::ImpactOnEpoch& epoch) {
-  thrift::ImpactOnEpoch output;
-  output.set_epoch(static_cast<int64_t>(epoch.epoch.val_));
-  output.set_log_id(static_cast<int64_t>(epoch.log_id.val_));
-  output.set_storage_set(toThrift<thrift::ShardID>(epoch.storage_set));
-  output.set_replication(
-      toThrift<thrift::ReplicationProperty>(epoch.replication));
-  output.set_impact(
-      toThrift<std::vector<thrift::OperationImpact>>(epoch.impact_result));
-  output.set_storage_set_metadata(
-      toThrift<thrift::ShardMetadata>(epoch.storage_set_metadata));
-  return output;
-}
-
-template <>
-thrift::CheckImpactResponse toThrift(const Impact& impact) {
-  thrift::CheckImpactResponse response;
-  std::vector<thrift::ImpactOnEpoch> logs_affected;
-  for (const auto& epoch_info : impact.logs_affected) {
-    logs_affected.push_back(toThrift<thrift::ImpactOnEpoch>(epoch_info));
-  }
-
-  response.set_impact(
-      toThrift<std::vector<thrift::OperationImpact>>(impact.result));
-  response.set_internal_logs_affected(impact.internal_logs_affected);
-  response.set_logs_affected(std::move(logs_affected));
-  response.set_total_duration(impact.total_duration.count());
-  response.set_total_logs_checked(impact.total_logs_checked);
-  return response;
-}
-
 thrift::ShardDataHealth toShardDataHealth(AuthoritativeStatus auth_status,
                                           bool has_dirty_ranges) {
   switch (auth_status) {
@@ -278,22 +225,6 @@ thrift::Location toThrift(const folly::Optional<NodeLocation>& input) {
       thrift::LocationScope::name, input->getLabel(NodeLocationScope::name));
 #include "logdevice/include/node_location_scopes.inc"
   }
-  return output;
-}
-
-template <>
-thrift::ShardMetadata toThrift(const Impact::ShardMetadata& input) {
-  thrift::ShardMetadata output;
-  output.set_data_health(
-      toShardDataHealth(input.auth_status, input.has_dirty_ranges));
-  output.set_is_alive(input.is_alive);
-  output.set_storage_state(
-      toThrift<thrift::ShardStorageState>(input.storage_state));
-  if (input.location) {
-    output.set_location(input.location->toString());
-  }
-  output.set_location_per_scope(toThrift<thrift::Location>(input.location));
-
   return output;
 }
 

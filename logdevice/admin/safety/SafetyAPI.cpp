@@ -10,87 +10,82 @@
 
 #include <folly/String.h>
 
+#include "logdevice/admin/if/gen-cpp2/exceptions_types.h"
+#include "logdevice/admin/if/gen-cpp2/safety_types.h"
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/debug.h"
 
 namespace facebook { namespace logdevice {
 
-Impact::Impact(int result,
-               std::vector<ImpactOnEpoch> logs_affected,
-               bool internal_logs_affected,
-               size_t total_logs_checked,
-               std::chrono::seconds total_duration)
-    : result(result),
-      logs_affected(std::move(logs_affected)),
-      internal_logs_affected(internal_logs_affected),
-      total_logs_checked(total_logs_checked),
-      total_duration(total_duration) {}
+Impact mergeImpact(Impact i1, const Impact& i2, size_t error_sample_size) {
+  const auto& i1_impact = i1.get_impact();
+  const auto& i2_impact = i2.get_impact();
+  std::set<thrift::OperationImpact> merge_impact(
+      i1_impact.begin(), i1_impact.end());
+  merge_impact.insert(i2_impact.begin(), i2_impact.end());
+  i1.set_impact({merge_impact.begin(), merge_impact.end()});
 
-Impact::Impact() : result(ImpactResult::NONE), internal_logs_affected(false) {}
+  i1.set_total_logs_checked(i1.total_logs_checked_ref().value_or(0) +
+                            i2.total_logs_checked_ref().value_or(0));
 
-std::string Impact::toStringImpactResult(int result) {
-  std::string s;
-
-#define TO_STR(f)     \
-  if (result & f) {   \
-    if (!s.empty()) { \
-      s += ", ";      \
-    }                 \
-    s += #f;          \
+  if (!i2.logs_affected_ref().has_value()) {
+    return i1;
+  }
+  if (!i1.logs_affected_ref().has_value()) {
+    i1.logs_affected_ref() = {};
   }
 
-  TO_STR(WRITE_AVAILABILITY_LOSS)
-  TO_STR(READ_AVAILABILITY_LOSS)
-  TO_STR(REBUILDING_STALL)
-  TO_STR(SEQUENCING_CAPACITY_LOSS)
-  TO_STR(STORAGE_CAPACITY_LOSS)
-  TO_STR(INVALID)
-
-#undef TO_STR
-
-  if (s.empty()) {
-    return "NONE";
-  } else {
-    return s;
-  }
-}
-
-std::string Impact::toString() const {
-  return toStringImpactResult(result);
-}
-
-Impact Impact::merge(Impact i1, const Impact& i2, size_t error_sample_size) {
-  i1.result |= i2.result;
-  i1.total_logs_checked += i2.total_logs_checked;
+  std::vector<thrift::ImpactOnEpoch> logs_affected;
   if (error_sample_size >= 0) {
     // How many can we accept? merge_limit can be negative if we are already
     // beyond capacity.
-    size_t merge_limit = error_sample_size - i1.logs_affected.size();
+    size_t merge_limit = error_sample_size - i1.logs_affected_ref()->size();
     // Cannot copy more elements than the size of the source (impact)
-    merge_limit = std::min(merge_limit, i2.logs_affected.size());
-    std::copy_n(i2.logs_affected.begin(),
+    merge_limit = std::min(merge_limit, i2.logs_affected_ref()->size());
+
+    std::copy_n(i2.logs_affected_ref()->begin(),
                 merge_limit,
-                std::back_inserter(i1.logs_affected));
+                std::back_inserter(*i1.logs_affected_ref()));
   } else {
     // Copy everything
-    std::copy(i2.logs_affected.begin(),
-              i2.logs_affected.end(),
-              std::back_inserter(i1.logs_affected));
+    std::copy(i2.logs_affected_ref()->begin(),
+              i2.logs_affected_ref()->end(),
+              std::back_inserter(*i1.logs_affected_ref()));
   }
   return i1;
 }
 
 folly::Expected<Impact, Status>
-Impact::merge(folly::Expected<Impact, Status> i,
-              const folly::Expected<Impact, Status>& i2,
-              size_t error_sample_size) {
+mergeImpact(folly::Expected<Impact, Status> i,
+            const folly::Expected<Impact, Status>& i2,
+            size_t error_sample_size) {
   if (i.hasError()) {
     return i;
   }
   if (i2.hasError()) {
     return i2;
   }
-  return merge(std::move(i.value()), i2.value(), error_sample_size);
+  return mergeImpact(std::move(i.value()), i2.value(), error_sample_size);
+}
+
+std::string impactToString(const Impact& impact) {
+#define MAP_ENTRY(e) \
+  { thrift::OperationImpact::e, #e }
+  static const std::map<thrift::OperationImpact, std::string> to_str{
+      MAP_ENTRY(INVALID),
+      MAP_ENTRY(REBUILDING_STALL),
+      MAP_ENTRY(WRITE_AVAILABILITY_LOSS),
+      MAP_ENTRY(READ_AVAILABILITY_LOSS),
+      MAP_ENTRY(SEQUENCING_CAPACITY_LOSS),
+      MAP_ENTRY(STORAGE_CAPACITY_LOSS)};
+#undef MAP_ENTRY
+
+  std::vector<std::string> impact_str;
+  std::transform(impact.impact_ref()->begin(),
+                 impact.impact_ref()->end(),
+                 std::back_inserter(impact_str),
+                 [](const auto& entry) { return to_str.at(entry); });
+  return folly::join(",", impact_str);
 }
 
 int parseSafetyMargin(const std::string& descriptor, SafetyMargin& out) {
