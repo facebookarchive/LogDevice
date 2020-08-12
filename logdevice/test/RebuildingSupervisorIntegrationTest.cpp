@@ -177,7 +177,6 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   new_settings["self-initiated-rebuilding-grace-period"] = "1s";
   std::shared_ptr<ServerConfig> new_config = ServerConfig::fromDataTest(
       config->getClusterName(),
-      configuration::NodesConfig(config->getNodes()),
       config->getMetaDataLogsConfig(),
       ServerConfig::PrincipalsConfig(),
       ServerConfig::SecurityConfig(),

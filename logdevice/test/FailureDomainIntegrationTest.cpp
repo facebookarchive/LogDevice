@@ -35,7 +35,7 @@ static Configuration::Nodes createFailureDomainNodes() {
     // node 0 running sequencer
     if (i == 0) {
       node.addSequencerRole();
-      ld_check_eq(node.sequencer_attributes->getEffectiveWeight(), 1);
+      ld_check_eq(node.sequencer_attributes->weight, 1);
     }
 
     std::string domain_string;

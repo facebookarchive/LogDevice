@@ -77,46 +77,25 @@ bool storageStateFromString(const std::string&, StorageState* out);
 class SequencerNodeAttributes {
  public:
   SequencerNodeAttributes(bool enabled, double weight)
-      : weight_(weight), enabled_(enabled) {}
+      : weight(weight), enabled(enabled) {}
 
   SequencerNodeAttributes() {}
 
-  double getConfiguredWeight() const {
-    return weight_;
-  }
-
-  double getEffectiveWeight() const {
-    return enabled_ ? weight_ : 0;
-  }
-
-  bool enabled() {
-    return enabled_;
-  }
-
-  void setEnabled(bool enabled) {
-    enabled_ = enabled;
-  }
-
-  void setWeight(double weight) {
-    weight_ = weight;
-  }
-
   bool operator==(const SequencerNodeAttributes& rhs) const {
-    return weight_ == rhs.weight_ && enabled_ == rhs.enabled_;
+    return weight == rhs.weight && enabled == rhs.enabled;
   }
 
   bool operator!=(const SequencerNodeAttributes& rhs) const {
     return !(*this == rhs);
   }
 
- private:
   /**
    * A non-negative value indicating how many logs this node will run
    * sequencers for relative to other nodes in the cluster.  A value of
    * zero means sequencing is disabled on this node.
    * The weight is assumed to be zero, when enable=false.
    */
-  double weight_ = 1;
+  double weight = 1;
 
   /**
    * Determines if a sequencer is enabled or not. If the sequencer is not
@@ -124,7 +103,7 @@ class SequencerNodeAttributes {
    * to be able to enable/disable sequencers without memorizing its previous
    * weight.
    */
-  bool enabled_ = true;
+  bool enabled = true;
 };
 
 struct StorageNodeAttributes {
@@ -133,11 +112,6 @@ struct StorageNodeAttributes {
    * will receive relative to other shards in the cluster.
    */
   double capacity = 1;
-
-  /**
-   * See the definition of StorageState above
-   */
-  StorageState state = StorageState::READ_WRITE;
 
   /**
    * Number of storage shards on this node.
@@ -262,56 +236,11 @@ struct Node {
     roles.set(id);
   }
 
-  double getSequencerWeight() const {
-    if (hasRole(NodeRole::SEQUENCER)) {
-      return sequencer_attributes->getEffectiveWeight();
-    } else {
-      return 0;
-    }
-  }
-
-  bool isReadableStorageNode() const {
-    return hasRole(NodeRole::STORAGE) &&
-        storage_attributes->state != StorageState::DISABLED;
-  }
-  bool isWritableStorageNode() const {
-    return hasRole(NodeRole::STORAGE) &&
-        storage_attributes->state == StorageState::READ_WRITE;
-  }
-  double getWritableStorageCapacity() const {
-    if (!isWritableStorageNode()) {
-      return 0.0;
-    }
-    return storage_attributes->capacity;
-  }
-  StorageState getStorageState() const {
-    return !hasRole(NodeRole::STORAGE) ? StorageState::DISABLED
-                                       : storage_attributes->state;
-  }
-
-  shard_size_t getNumShards() const {
-    return !hasRole(NodeRole::STORAGE) ? 0 : storage_attributes->num_shards;
-  }
-  // Should only be used for backwards-compatible config serialization
-  int getLegacyWeight() const {
-    switch (getStorageState()) {
-      case StorageState::READ_WRITE:
-      case StorageState::READ_ONLY: {
-        double res = getWritableStorageCapacity();
-        return res == 0.0 ? 0 : std::max(1, int(std::lround(res)));
-      }
-      case StorageState::DISABLED:
-        return -1;
-    }
-    ld_check(false);
-    return -1;
-  }
-
   Node& addSequencerRole(bool enabled = true, double weight = 1.0) {
     setRole(NodeRole::SEQUENCER);
     sequencer_attributes = std::make_unique<SequencerNodeAttributes>();
-    sequencer_attributes->setEnabled(enabled);
-    sequencer_attributes->setWeight(weight);
+    sequencer_attributes->enabled = enabled;
+    sequencer_attributes->weight = weight;
 
     return *this;
   }

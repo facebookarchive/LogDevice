@@ -34,7 +34,6 @@
 #include "logdevice/common/SequencerLocator.h"
 #include "logdevice/common/StaticSequencerLocator.h"
 #include "logdevice/common/Worker.h"
-#include "logdevice/common/configuration/NodesConfigParser.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/nodeset_selection/NodeSetSelector.h"

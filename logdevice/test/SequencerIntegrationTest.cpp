@@ -788,16 +788,14 @@ TEST_F(SequencerIntegrationTest, SequencerReactivationRedirectedNotAlive) {
     auto& node = nodes[i];
     node.generation = 1;
     node.addStorageRole(/*num_shards*/ 2);
-    weights[i] = node.getSequencerWeight();
-    ASSERT_EQ(weights[i], 0);
+    weights[i] = 0;
   }
   // 2 sequencer-only nodes
   for (node_index_t i = 4; i < 6; ++i) {
     auto& node = nodes[i];
     node.generation = 1;
-    node.addSequencerRole();
-    weights[i] = node.getSequencerWeight();
-    ASSERT_EQ(weights[i], 1.0);
+    node.addSequencerRole(true, 1);
+    weights[i] = 1;
   }
 
   auto nodes_configuration =

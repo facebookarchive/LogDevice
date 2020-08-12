@@ -338,7 +338,7 @@ TEST(RandomNodeSetSelector, ImpreciseNodeSetSize) {
 
   auto config = std::make_shared<Configuration>(
       ServerConfig::fromDataTest(
-          "nodeset_selector_test", NodesConfig{}, std::move(metadata_config)),
+          "nodeset_selector_test", std::move(metadata_config)),
       std::move(logs_config),
       std::move(nodes));
 
@@ -779,7 +779,6 @@ TEST(WeightAwareNodeSetSelectorTest, InternalLogs) {
       std::set<NodeLocationScope>{NodeLocationScope::NODE});
   auto config = std::make_shared<Configuration>(
       ServerConfig::fromDataTest("nodeset_selector_test",
-                                 NodesConfig{},
                                  MetaDataLogsConfig(),
                                  PrincipalsConfig(),
                                  SecurityConfig(),
@@ -1115,7 +1114,6 @@ TEST(WeightAwareNodeSetSelectorTest, InternalLogsConfiguredTooSmall) {
       std::set<NodeLocationScope>{NodeLocationScope::NODE});
   auto config = std::make_shared<Configuration>(
       ServerConfig::fromDataTest("nodeset_selector_test",
-                                 NodesConfig{},
                                  MetaDataLogsConfig(),
                                  PrincipalsConfig(),
                                  SecurityConfig(),

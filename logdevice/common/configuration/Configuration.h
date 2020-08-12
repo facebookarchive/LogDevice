@@ -64,7 +64,6 @@ class Configuration {
   using Node = facebook::logdevice::configuration::Node;
   using NodeRole = facebook::logdevice::configuration::NodeRole;
   using Nodes = facebook::logdevice::configuration::Nodes;
-  using NodesConfig = facebook::logdevice::configuration::NodesConfig;
   using NodesConfiguration =
       facebook::logdevice::configuration::nodes::NodesConfiguration;
   using SecurityConfig = facebook::logdevice::configuration::SecurityConfig;

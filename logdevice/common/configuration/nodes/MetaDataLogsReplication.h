@@ -49,7 +49,6 @@ class MetaDataLogsReplication {
       membership::MembershipVersion::EMPTY_VERSION};
   ReplicationProperty replication_{};
 
-  friend class NodesConfigLegacyConverter;
   friend class NodesConfigurationThriftConverter;
 };
 

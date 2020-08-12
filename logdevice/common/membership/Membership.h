@@ -13,12 +13,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/membership/types.h"
 
-namespace facebook { namespace logdevice {
-namespace configuration { namespace nodes {
-class NodesConfigLegacyConverter;
-}} // namespace configuration::nodes
-
-namespace membership {
+namespace facebook { namespace logdevice { namespace membership {
 
 /**
  * Membership is the part of cluster nodes configuration that usually requires
@@ -104,9 +99,7 @@ class Membership {
   // while this flag is set.
   bool bootstrapping_{true};
 
-  friend class configuration::nodes::NodesConfigLegacyConverter;
   friend class MembershipThriftConverter;
 };
 
-} // namespace membership
-}} // namespace facebook::logdevice
+}}} // namespace facebook::logdevice::membership

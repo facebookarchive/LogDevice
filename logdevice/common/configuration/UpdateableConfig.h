@@ -30,8 +30,6 @@ class LocalLogsConfig;
  */
 class UpdateableConfig : public configuration::UpdateableConfigBase {
  public:
-  using NodesConfig = facebook::logdevice::configuration::NodesConfig;
-
   UpdateableConfig()
       : UpdateableConfig(std::make_shared<UpdateableServerConfig>(),
                          std::make_shared<UpdateableLogsConfig>(),

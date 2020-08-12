@@ -178,7 +178,6 @@ class PerRoleConfig {
   std::shared_ptr<const MembershipConfig> membership_{nullptr};
   std::shared_ptr<const AttributesConfig> attributes_{nullptr};
 
-  friend class NodesConfigLegacyConverter;
   friend class NodesConfigurationThriftConverter;
 };
 

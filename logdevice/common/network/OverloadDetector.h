@@ -10,7 +10,7 @@
 #include "folly/container/F14Map.h"
 #include "logdevice/common/Connection.h"
 #include "logdevice/common/Timer.h"
-#include "logdevice/common/configuration/NodesConfig.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 
 namespace facebook::logdevice {
 

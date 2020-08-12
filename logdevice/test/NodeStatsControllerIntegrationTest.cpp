@@ -317,7 +317,6 @@ class NodeStatsControllerIntegrationTest : public IntegrationTestBase {
 
     std::shared_ptr<ServerConfig> new_config = ServerConfig::fromDataTest(
         other->getClusterName(),
-        configuration::NodesConfig(other->getNodes()),
         other->getMetaDataLogsConfig(),
         ServerConfig::PrincipalsConfig(),
         ServerConfig::SecurityConfig(),

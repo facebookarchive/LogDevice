@@ -32,7 +32,6 @@
 #include "logdevice/common/commandline_util_chrono.h"
 #include "logdevice/common/configuration/ConfigParser.h"
 #include "logdevice/common/configuration/LogsConfigParser.h"
-#include "logdevice/common/configuration/NodesConfigParser.h"
 #include "logdevice/common/configuration/ParsingHelpers.h"
 #include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
@@ -81,7 +80,6 @@ ServerConfig::fromJson(const folly::dynamic& parsed) {
   std::string clusterName;
   config_version_t version;
   OptionalTimestamp clusterCreationTime;
-  NodesConfig nodesConfig;
   MetaDataLogsConfig metaDataLogsConfig;
   PrincipalsConfig principalsConfig;
   SecurityConfig securityConfig;
@@ -126,7 +124,6 @@ ServerConfig::fromJson(const folly::dynamic& parsed) {
       parseSecurityInfo(parsed, securityConfig) &&
       parseTrafficShaping(parsed, trafficShapingConfig) &&
       parseReadIOThrottling(parsed, readIOShapingConfig) &&
-      parseNodes(parsed, nodesConfig) &&
       parseMetaDataLog(parsed, securityConfig, metaDataLogsConfig) &&
       parseSettings(parsed, "server_settings", serverSettingsConfig) &&
       parseSettings(parsed, "client_settings", clientSettingsConfig) &&
@@ -147,7 +144,6 @@ ServerConfig::fromJson(const folly::dynamic& parsed) {
   }
 
   auto config = fromData(std::move(clusterName),
-                         std::move(nodesConfig),
                          std::move(metaDataLogsConfig),
                          std::move(principalsConfig),
                          std::move(securityConfig),
@@ -165,7 +161,6 @@ ServerConfig::fromJson(const folly::dynamic& parsed) {
 }
 
 ServerConfig::ServerConfig(std::string cluster_name,
-                           NodesConfig nodesConfig,
                            MetaDataLogsConfig metaDataLogsConfig,
                            PrincipalsConfig principalsConfig,
                            SecurityConfig securityConfig,
@@ -179,7 +174,6 @@ ServerConfig::ServerConfig(std::string cluster_name,
                            const std::string& ns_delimiter)
     : clusterName_(std::move(cluster_name)),
       clusterCreationTime_(std::move(clusterCreationTime)),
-      nodesConfig_(std::move(nodesConfig)),
       metaDataLogsConfig_(std::move(metaDataLogsConfig)),
       principalsConfig_(std::move(principalsConfig)),
       securityConfig_(std::move(securityConfig)),
@@ -191,35 +185,6 @@ ServerConfig::ServerConfig(std::string cluster_name,
       ns_delimiter_(ns_delimiter),
       customFields_(std::move(customFields)) {}
 
-const ServerConfig::Node* ServerConfig::getNode(node_index_t index) const {
-  auto it = nodesConfig_.getNodes().find(index);
-  if (it == nodesConfig_.getNodes().end()) {
-    err = E::NOTFOUND;
-    return nullptr;
-  }
-
-  return &it->second;
-}
-
-const ServerConfig::Node* ServerConfig::getNode(const NodeID& id) const {
-  if (!id.isNodeID()) { // only possible if there was memory corruption
-    ld_error("invalid node ID passed: (%d, %d)", id.index(), id.generation());
-    err = E::INVALID_PARAM;
-    return nullptr;
-  }
-
-  const Node* node = getNode(id.index());
-  if (node == nullptr ||
-      (id.generation() != 0 && node->generation != id.generation())) {
-    // Generations don't match, it's not the right server
-    err = E::NOTFOUND;
-    return nullptr;
-  }
-
-  // Found it!
-  return node;
-}
-
 std::shared_ptr<const Principal>
 ServerConfig::getPrincipalByName(const std::string* name) const {
   return principalsConfig_.getPrincipalByName(name);
@@ -227,7 +192,6 @@ ServerConfig::getPrincipalByName(const std::string* name) const {
 
 std::unique_ptr<ServerConfig>
 ServerConfig::fromData(std::string cluster_name,
-                       NodesConfig nodes,
                        MetaDataLogsConfig metadata_logs,
                        PrincipalsConfig principalsConfig,
                        SecurityConfig securityConfig,
@@ -241,7 +205,6 @@ ServerConfig::fromData(std::string cluster_name,
                        const std::string& ns_delimiter) {
   return std::unique_ptr<ServerConfig>(
       new ServerConfig(std::move(cluster_name),
-                       std::move(nodes),
                        std::move(metadata_logs),
                        std::move(principalsConfig),
                        std::move(securityConfig),
@@ -257,7 +220,6 @@ ServerConfig::fromData(std::string cluster_name,
 
 std::unique_ptr<ServerConfig>
 ServerConfig::fromDataTest(std::string cluster_name,
-                           NodesConfig nodes,
                            MetaDataLogsConfig metadata_logs,
                            PrincipalsConfig principalsConfig,
                            SecurityConfig securityConfig,
@@ -271,7 +233,6 @@ ServerConfig::fromDataTest(std::string cluster_name,
                            const std::string& ns_delimiter) {
   auto config = std::unique_ptr<ServerConfig>(
       new ServerConfig(std::move(cluster_name),
-                       std::move(nodes),
                        std::move(metadata_logs),
                        std::move(principalsConfig),
                        std::move(securityConfig),
@@ -288,40 +249,7 @@ ServerConfig::fromDataTest(std::string cluster_name,
 
 std::unique_ptr<ServerConfig> ServerConfig::copy() const {
   std::unique_ptr<ServerConfig> config = fromData(clusterName_,
-                                                  nodesConfig_,
                                                   metaDataLogsConfig_,
-                                                  principalsConfig_,
-                                                  securityConfig_,
-                                                  trafficShapingConfig_,
-                                                  readIOShapingConfig_,
-                                                  serverSettingsConfig_,
-                                                  clientSettingsConfig_,
-                                                  internalLogs_,
-                                                  getClusterCreationTime(),
-                                                  getCustomFields(),
-                                                  ns_delimiter_);
-  config->setVersion(version_);
-  config->setMainConfigMetadata(main_config_metadata_);
-  return config;
-}
-
-std::shared_ptr<ServerConfig> ServerConfig::withNodes(NodesConfig nodes) const {
-  auto metaDataLogsConfig = getMetaDataLogsConfig();
-  std::vector<node_index_t> metadata_nodes;
-  auto& nodes_map = nodes.getNodes();
-  // make sure the metadata logs nodeset is consistent with the nodes config
-  for (auto n : metaDataLogsConfig.metadata_nodes) {
-    if (nodes_map.find(n) != nodes_map.end()) {
-      metadata_nodes.push_back(n);
-    }
-  }
-  if (metaDataLogsConfig.metadata_nodes != metadata_nodes) {
-    metaDataLogsConfig.metadata_nodes = metadata_nodes;
-  }
-
-  std::shared_ptr<ServerConfig> config = fromData(clusterName_,
-                                                  std::move(nodes),
-                                                  metaDataLogsConfig,
                                                   principalsConfig_,
                                                   securityConfig_,
                                                   trafficShapingConfig_,
@@ -339,10 +267,7 @@ std::shared_ptr<ServerConfig> ServerConfig::withNodes(NodesConfig nodes) const {
 
 std::shared_ptr<ServerConfig> ServerConfig::withMetaDataLogsConfig(
     MetaDataLogsConfig metaDataLogsConfig) const {
-  auto new_nodes = folly::copy(nodesConfig_);
-
   std::shared_ptr<ServerConfig> config = fromData(clusterName_,
-                                                  std::move(new_nodes),
                                                   std::move(metaDataLogsConfig),
                                                   principalsConfig_,
                                                   securityConfig_,
@@ -362,7 +287,6 @@ std::shared_ptr<ServerConfig> ServerConfig::withMetaDataLogsConfig(
 std::shared_ptr<ServerConfig>
 ServerConfig::withVersion(config_version_t version) const {
   std::shared_ptr<ServerConfig> config = fromData(clusterName_,
-                                                  nodesConfig_,
                                                   metaDataLogsConfig_,
                                                   principalsConfig_,
                                                   securityConfig_,
@@ -382,7 +306,6 @@ ServerConfig::withVersion(config_version_t version) const {
 std::shared_ptr<ServerConfig>
 ServerConfig::withServerSettings(SettingsConfig server_settings) const {
   std::shared_ptr<ServerConfig> config = fromData(clusterName_,
-                                                  nodesConfig_,
                                                   metaDataLogsConfig_,
                                                   principalsConfig_,
                                                   securityConfig_,
@@ -402,7 +325,6 @@ ServerConfig::withServerSettings(SettingsConfig server_settings) const {
 std::shared_ptr<ServerConfig>
 ServerConfig::withClientSettings(SettingsConfig client_settings) const {
   std::shared_ptr<ServerConfig> config = fromData(clusterName_,
-                                                  nodesConfig_,
                                                   metaDataLogsConfig_,
                                                   principalsConfig_,
                                                   securityConfig_,
@@ -422,7 +344,6 @@ ServerConfig::withClientSettings(SettingsConfig client_settings) const {
 std::shared_ptr<ServerConfig> ServerConfig::createEmpty() {
   return fromData(
       std::string(),
-      NodesConfig(),
       MetaDataLogsConfig(),
       PrincipalsConfig(),
       SecurityConfig(),
@@ -515,8 +436,7 @@ folly::dynamic ServerConfig::toJson(const LogsConfig* with_logs,
   }
 
   folly::dynamic json_all = folly::dynamic::object("cluster", clusterName_)(
-      "version", version_.val())("nodes", nodesConfig_.toJson())(
-      "internal_logs", internalLogs_.toDynamic())(
+      "version", version_.val())("internal_logs", internalLogs_.toDynamic())(
       "principals", principalsConfig_.toFollyDynamic())(
       "read_throttling", readIOShapingConfig_.toFollyDynamic())(
       "traffic_shaping", trafficShapingConfig_.toFollyDynamic())(

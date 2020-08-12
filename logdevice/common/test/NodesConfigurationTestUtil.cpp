@@ -202,8 +202,8 @@ initialAddShardsUpdate(configuration::Nodes nodes,
       update.sequencer_config_update->membership_update->addNode(
           nid,
           {SequencerMembershipTransition::ADD_NODE,
-           node.sequencer_attributes->enabled(),
-           node.sequencer_attributes->getConfiguredWeight()});
+           node.sequencer_attributes->enabled,
+           node.sequencer_attributes->weight});
 
       update.sequencer_config_update->attributes_update->addNode(
           nid,
@@ -334,7 +334,7 @@ addNewNodesUpdate(const configuration::nodes::NodesConfiguration& existing,
           nid,
           {SequencerMembershipTransition::ADD_NODE,
            true,
-           node.sequencer_attributes->getConfiguredWeight()});
+           node.sequencer_attributes->weight});
 
       update.sequencer_config_update->attributes_update->addNode(
           nid,

@@ -787,11 +787,6 @@ TEST_F(SafetyAPIIntegrationTest, Capacity) {
       capacity = 1.5;
     }
     nodes[i].addStorageRole(num_shards, capacity);
-    // N0 is READ_ONLY.
-    if (i == 0) {
-      nodes[i].storage_attributes->state =
-          configuration::StorageState::READ_ONLY;
-    }
   }
 
   auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(

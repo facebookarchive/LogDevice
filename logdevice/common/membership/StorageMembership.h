@@ -358,7 +358,6 @@ class StorageMembership : public Membership {
     return ConstMapKeyIterator<MapType>(node_states_.cend());
   }
 
-  friend class configuration::nodes::NodesConfigLegacyConverter;
   friend class configuration::nodes::ShardStateTracker;
   friend class MembershipThriftConverter;
 };

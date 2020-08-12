@@ -52,39 +52,6 @@ int overwriteConfigFile(const char* path, const std::string& contents);
  */
 int overwriteConfig(const char* path, const ServerConfig*, const LogsConfig*);
 
-inline void writeSimpleConfig(const char* path, int server_generation) {
-  std::string contents = "{\n"
-                         "  \"cluster\": \"SimpleConfig\",\n"
-                         "  \"nodes\": [ {\n"
-                         "    \"node_id\": 0,\n"
-                         "    \"host\": \"127.0.0.1:4444\",\n"
-                         "    \"gossip_address\": 4445,\n"
-                         "    \"roles\": [\n"
-                         "      \"sequencer\",\n"
-                         "      \"storage\"\n"
-                         "    ],\n"
-                         "    \"sequencer\": true,\n"
-                         "    \"weight\": 1,\n"
-                         "    \"num_shards\": 2,\n"
-                         "    \"generation\": " +
-      std::to_string(server_generation) +
-      "\n"
-      "  } ],\n"
-      "  \"logs\": [],\n"
-      "  \"metadata_logs\": {\n"
-      "     \"nodeset\": [0],\n"
-      "     \"replication_factor\": 1\n"
-      "  },\n"
-      "  \"server_settings\": {\n"
-      "     \"enable-logsconfig-manager\": \"false\"\n"
-      "  },\n"
-      "  \"client_settings\": {\n"
-      "     \"enable-logsconfig-manager\": \"false\"\n"
-      "  }\n"
-      "}\n";
-  overwriteConfigFile(path, contents);
-}
-
 std::shared_ptr<const NodesConfiguration>
 createSimpleNodesConfig(size_t nnodes,
                         shard_size_t num_shards = 2,

@@ -12,7 +12,6 @@
 #include "logdevice/common/ThriftCodec.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/ServerConfig.h"
-#include "logdevice/common/configuration/nodes/NodesConfigLegacyConverter.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationAPI.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
@@ -188,24 +187,7 @@ static void provision_empty_nodes_configuration(std::string config_json) {
 }
 
 static void provision_initial_nodes_configuration(std::string config_json) {
-  // 1. Parse the passed config json
-  auto config = Configuration::fromJson(config_json, nullptr);
-  if (config == nullptr) {
-    auto exception = folly::sformat(
-        "Failed to parse config json: {}", errorStrings()[err].name);
-    throw_python_exception(parseException, object(exception.c_str()));
-  }
-  err = Status::OK;
-
-  // 2. Convert the ServerConfig into a NodesConfiguration
-  const auto& server_config = config->serverConfig();
-  auto nc = NodesConfigLegacyConverter::fromLegacyNodesConfig(
-      server_config->getNodesConfig(),
-      server_config->getMetaDataLogsConfig(),
-      server_config->getVersion());
-
-  // 3. Do the actual write
-  do_provision_write(*config, *nc);
+  throw std::runtime_error("Not implemented");
 }
 
 static bool nodes_configuration_exists(std::string config_json) {

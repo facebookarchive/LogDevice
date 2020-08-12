@@ -102,8 +102,7 @@ class APPEND_MessageTest : public ::testing::Test {
     ml_config.sequencers_provision_epoch_store = false;
     ml_config.sequencers_write_metadata_logs = false;
     config_ = std::make_shared<Configuration>(
-        ServerConfig::fromDataTest(
-            __FILE__, configuration::NodesConfig{}, std::move(ml_config)),
+        ServerConfig::fromDataTest(__FILE__, std::move(ml_config)),
         std::move(logs_config),
         createSimpleNodesConfig(1));
 

@@ -299,7 +299,6 @@ class NodesConfiguration {
   // of clients is very high.
   folly::Optional<std::string> serialized_config_;
 
-  friend class NodesConfigLegacyConverter;
   friend class NodesConfigurationThriftConverter;
 };
 

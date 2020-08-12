@@ -258,7 +258,6 @@ class SequencerMembership : public Membership {
   bool eraseNodeState(node_index_t node);
 
   friend class MembershipThriftConverter;
-  friend class configuration::nodes::NodesConfigLegacyConverter;
 };
 
 }}} // namespace facebook::logdevice::membership

@@ -25,7 +25,6 @@
 #include "logdevice/common/configuration/LogsConfig.h"
 #include "logdevice/common/configuration/MetaDataLogsConfig.h"
 #include "logdevice/common/configuration/Node.h"
-#include "logdevice/common/configuration/NodesConfig.h"
 #include "logdevice/common/configuration/PrincipalsConfig.h"
 #include "logdevice/common/configuration/SecurityConfig.h"
 #include "logdevice/common/configuration/SequencersConfig.h"
@@ -54,7 +53,6 @@ class ServerConfig {
       facebook::logdevice::configuration::MetaDataLogsConfig;
   using Node = facebook::logdevice::configuration::Node;
   using Nodes = facebook::logdevice::configuration::Nodes;
-  using NodesConfig = facebook::logdevice::configuration::NodesConfig;
   using NodesConfiguration = configuration::nodes::NodesConfiguration;
   using PrincipalsConfig = facebook::logdevice::configuration::PrincipalsConfig;
   using SecurityConfig = facebook::logdevice::configuration::SecurityConfig;
@@ -145,33 +143,6 @@ class ServerConfig {
   }
 
   /**
-   * Gets all nodes.
-   */
-  const Nodes& getNodes() const {
-    return nodesConfig_.getNodes();
-  }
-
-  /**
-   * Looks up a node by index.
-   *
-   * @return On success, returns a pointer to a Node object contained in
-   *         this config.  On failure, returns nullptr and sets err to:
-   *           NOTFOUND       no node with given index appears in config
-   */
-  const Node* getNode(node_index_t index) const;
-
-  /**
-   * Looks up a node by NodeID. If id.generation() == 0, ignores generation in
-   * config, i.e. equivalent to getNode(id.index()).
-   *
-   * @return On success, returns a pointer to a Node object contained in
-   *         this config.  On failure, returns nullptr and sets err to:
-   *           INVALID_PARAM  node ID was invalid
-   *           NOTFOUND       no node with given ID appears in config
-   */
-  const Node* getNode(const NodeID& id) const;
-
-  /**
    * @return if unauthenticated connections are allowed
    */
   bool allowUnauthenticated() const {
@@ -248,23 +219,14 @@ class ServerConfig {
     return metaDataLogsConfig_;
   }
 
-  const NodesConfig& getNodesConfig() const {
-    return nodesConfig_;
-  }
-
   /**
-   * Creates a ServerConfig object from existing cluster name,
-   * NodesConfig, LogsConfig, SecurityConfig instances.
-   *
-   * Note that it regenerates the new NodesConfiguration format from the
-   * existing NodesConfig and MetaDataLogsConfig. returns nullptr if the
-   * conversion failed.
+   * Creates a ServerConfig object from existing cluster name, LogsConfig,
+   * SecurityConfig instances.
    *
    * Public for testing.
    */
   static std::unique_ptr<ServerConfig> fromDataTest(
       std::string cluster_name,
-      NodesConfig nodes = NodesConfig{},
       MetaDataLogsConfig metadata_logs = MetaDataLogsConfig(),
       PrincipalsConfig = PrincipalsConfig(),
       SecurityConfig securityConfig = SecurityConfig(),
@@ -284,12 +246,6 @@ class ServerConfig {
    * Returns a duplicate of the configuration.
    */
   std::unique_ptr<ServerConfig> copy() const;
-
-  /**
-   * Returns a clone of the ServerConfig object with the nodes section
-   * replaced by the parameter.
-   */
-  std::shared_ptr<ServerConfig> withNodes(NodesConfig) const;
 
   /**
    * Returns a clone of the ServerConfig object with the MetadataLogsConfig
@@ -421,7 +377,6 @@ class ServerConfig {
   // and move facilities.
   //
   ServerConfig(std::string cluster_name,
-               NodesConfig nodesConfig,
                MetaDataLogsConfig metaDataLogsConfig,
                PrincipalsConfig principalConfig,
                SecurityConfig securityConfig,
@@ -439,11 +394,10 @@ class ServerConfig {
   ServerConfig& operator=(ServerConfig&&) = delete;
 
   // Creates a ServerConfig object from existing cluster name,
-  // NodesConfig, LogsConfig, SecurityConfig and an optional ZookeeperConfig
+  // LogsConfig, SecurityConfig and an optional ZookeeperConfig
   // instances.
   static std::unique_ptr<ServerConfig> fromData(
       std::string cluster_name,
-      NodesConfig nodes,
       MetaDataLogsConfig metadata_logs = MetaDataLogsConfig(),
       PrincipalsConfig = PrincipalsConfig(),
       SecurityConfig securityConfig = SecurityConfig(),
@@ -462,7 +416,6 @@ class ServerConfig {
   std::string clusterName_;
   OptionalTimestamp clusterCreationTime_;
 
-  NodesConfig nodesConfig_;
   MetaDataLogsConfig metaDataLogsConfig_;
   PrincipalsConfig principalsConfig_;
   SecurityConfig securityConfig_;

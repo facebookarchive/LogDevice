@@ -62,190 +62,11 @@ TEST(ConfigurationTest, SimpleValid) {
       Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf")));
   ASSERT_NE(config, nullptr);
 
-  const auto& nodes = config->serverConfig()->getNodes();
   ASSERT_EQ(
       true,
       (bool)std::dynamic_pointer_cast<LocalLogsConfig>(config->logsConfig()));
   ASSERT_TRUE(config->logsConfig()->isLocal());
   auto logs_config = config->localLogsConfig();
-
-  ASSERT_EQ(5, nodes.size());
-
-  char buf[256];
-
-  {
-    const Configuration::Node& node = nodes.at(0);
-    EXPECT_EQ(AF_INET, node.address.family());
-
-    ASSERT_EQ("server-0", node.name);
-    struct sockaddr_storage ss;
-    int len = node.address.toStructSockaddr(&ss);
-    ASSERT_NE(len, -1);
-    auto aptr = reinterpret_cast<const sockaddr_in*>(&ss);
-    const char* result =
-        inet_ntop(aptr->sin_family, &aptr->sin_addr, buf, sizeof buf);
-    EXPECT_NE(result, nullptr);
-    EXPECT_STREQ("127.0.0.1", buf);
-    int expected_port = htons(4444);
-    EXPECT_EQ(expected_port, aptr->sin_port);
-
-    EXPECT_TRUE(node.ssl_address);
-    EXPECT_EQ(AF_INET, node.ssl_address->family());
-
-    len = node.ssl_address->toStructSockaddr(&ss);
-    ASSERT_NE(len, -1);
-    aptr = reinterpret_cast<const sockaddr_in*>(&ss);
-    result = inet_ntop(aptr->sin_family, &aptr->sin_addr, buf, sizeof buf);
-    EXPECT_NE(result, nullptr);
-    EXPECT_STREQ("127.0.0.1", buf);
-    expected_port = htons(4446);
-    EXPECT_EQ(expected_port, aptr->sin_port);
-
-    ASSERT_TRUE(node.admin_address.has_value());
-    EXPECT_EQ("127.0.0.1:6440", node.admin_address->toString());
-
-    EXPECT_EQ(configuration::StorageState::READ_WRITE, node.getStorageState());
-    EXPECT_EQ(1, node.storage_attributes->capacity);
-    EXPECT_EQ(1, node.getWritableStorageCapacity());
-
-    EXPECT_EQ(3, node.generation);
-
-    EXPECT_TRUE(node.location.has_value());
-    const NodeLocation& location = node.location.value();
-    EXPECT_EQ("ash", location.getLabel(NodeLocationScope::REGION));
-    EXPECT_EQ("ash2", location.getLabel(NodeLocationScope::DATA_CENTER));
-    EXPECT_EQ("08", location.getLabel(NodeLocationScope::CLUSTER));
-    EXPECT_EQ("k", location.getLabel(NodeLocationScope::ROW));
-    EXPECT_EQ("z", location.getLabel(NodeLocationScope::RACK));
-    EXPECT_EQ("ash.ash2.08.k.z", node.locationStr());
-  }
-
-  {
-    const Configuration::Node& node = nodes.at(1);
-    EXPECT_EQ(AF_INET6, node.address.family());
-
-    ASSERT_EQ("server-1", node.name);
-    struct sockaddr_storage ss;
-    int len = node.address.toStructSockaddr(&ss);
-    ASSERT_NE(len, -1);
-    auto aptr = reinterpret_cast<const sockaddr_in6*>(&ss);
-    const char* result =
-        inet_ntop(aptr->sin6_family, &aptr->sin6_addr, buf, sizeof buf);
-    EXPECT_NE(result, nullptr);
-    EXPECT_STREQ("::1", buf);
-    int expected_port = htons(6666);
-    EXPECT_EQ(expected_port, aptr->sin6_port);
-
-    EXPECT_TRUE(node.ssl_address);
-    EXPECT_EQ(AF_INET6, node.ssl_address->family());
-
-    len = node.ssl_address->toStructSockaddr(&ss);
-    ASSERT_NE(len, -1);
-    aptr = reinterpret_cast<const sockaddr_in6*>(&ss);
-    result = inet_ntop(aptr->sin6_family, &aptr->sin6_addr, buf, sizeof buf);
-    EXPECT_NE(result, nullptr);
-    EXPECT_STREQ("::1", buf);
-    expected_port = htons(6670);
-    EXPECT_EQ(expected_port, aptr->sin6_port);
-
-    ASSERT_TRUE(node.admin_address.has_value());
-    EXPECT_EQ("[::1]:6440", node.admin_address->toString());
-
-    EXPECT_EQ(configuration::StorageState::READ_WRITE,
-              node.storage_attributes->state);
-    EXPECT_EQ(4, node.storage_attributes->capacity);
-    EXPECT_EQ(4, node.getWritableStorageCapacity());
-
-    EXPECT_EQ(6, node.generation);
-    EXPECT_FALSE(node.location.has_value());
-
-    EXPECT_FALSE(node.hasRole(NodeRole::SEQUENCER));
-    EXPECT_TRUE(node.hasRole(NodeRole::STORAGE));
-  }
-
-  {
-    const Configuration::Node& node = nodes.at(5);
-    EXPECT_EQ(AF_INET6, node.address.family());
-
-    ASSERT_EQ("server-5", node.name);
-    struct sockaddr_storage ss;
-    int len = node.address.toStructSockaddr(&ss);
-    ASSERT_NE(len, -1);
-    auto aptr = reinterpret_cast<const sockaddr_in6*>(&ss);
-    const char* result =
-        inet_ntop(aptr->sin6_family, &aptr->sin6_addr, buf, sizeof buf);
-    EXPECT_NE(result, nullptr);
-    EXPECT_STREQ("::1", buf);
-    int expected_port = htons(6669);
-    EXPECT_EQ(expected_port, aptr->sin6_port);
-
-    EXPECT_TRUE(node.ssl_address);
-    EXPECT_EQ(AF_INET6, node.ssl_address->family());
-
-    len = node.ssl_address->toStructSockaddr(&ss);
-    ASSERT_NE(len, -1);
-    aptr = reinterpret_cast<const sockaddr_in6*>(&ss);
-    result = inet_ntop(aptr->sin6_family, &aptr->sin6_addr, buf, sizeof buf);
-    EXPECT_NE(result, nullptr);
-    EXPECT_STREQ("::1", buf);
-    expected_port = htons(6673);
-    EXPECT_EQ(expected_port, aptr->sin6_port);
-
-    EXPECT_FALSE(node.admin_address.has_value());
-
-    EXPECT_EQ(configuration::StorageState::READ_WRITE,
-              node.storage_attributes->state);
-    EXPECT_EQ(2, node.storage_attributes->capacity);
-    EXPECT_EQ(2, node.getWritableStorageCapacity());
-
-    EXPECT_EQ(2, node.generation);
-
-    ASSERT_TRUE(node.location.has_value());
-    EXPECT_EQ("ash.ash2.07.a.b", node.locationStr());
-
-    EXPECT_TRUE(node.hasRole(NodeRole::SEQUENCER));
-    EXPECT_TRUE(node.hasRole(NodeRole::STORAGE));
-  }
-
-  {
-    const Configuration::Node& node = nodes.at(42);
-    EXPECT_EQ(AF_INET6, node.address.family());
-
-    ASSERT_EQ("server-42", node.name);
-    struct sockaddr_storage ss;
-    int len = node.address.toStructSockaddr(&ss);
-    ASSERT_NE(len, -1);
-    auto aptr = reinterpret_cast<const sockaddr_in6*>(&ss);
-    const char* result =
-        inet_ntop(aptr->sin6_family, &aptr->sin6_addr, buf, sizeof buf);
-    EXPECT_NE(result, nullptr);
-    EXPECT_STREQ("::1", buf);
-    int expected_port = htons(6668);
-    EXPECT_EQ(expected_port, aptr->sin6_port);
-
-    EXPECT_TRUE(node.ssl_address);
-    EXPECT_EQ(AF_INET6, node.ssl_address->family());
-
-    len = node.ssl_address->toStructSockaddr(&ss);
-    ASSERT_NE(len, -1);
-    aptr = reinterpret_cast<const sockaddr_in6*>(&ss);
-    result = inet_ntop(aptr->sin6_family, &aptr->sin6_addr, buf, sizeof buf);
-    EXPECT_NE(result, nullptr);
-    EXPECT_STREQ("::1", buf);
-    expected_port = htons(6672);
-    EXPECT_EQ(expected_port, aptr->sin6_port);
-
-    EXPECT_FALSE(node.admin_address.has_value());
-
-    EXPECT_EQ(configuration::StorageState::READ_WRITE,
-              node.storage_attributes->state);
-    EXPECT_EQ(4, node.storage_attributes->capacity);
-    EXPECT_EQ(4, node.getWritableStorageCapacity());
-    EXPECT_EQ(5, node.generation);
-
-    ASSERT_TRUE(node.location.has_value());
-    EXPECT_EQ("ash.ash2.07.a.b", node.locationStr());
-  }
 
   EXPECT_EQ(nullptr, config->getLogGroupByIDShared(logid_t(7)));
   EXPECT_FALSE(config->logsConfig()->logExists(logid_t(7)));
@@ -440,63 +261,6 @@ TEST(ConfigurationTest, NoNodesNoMetadata) {
   config->toString();
 }
 
-/**
- * Exercises getNode().
- */
-TEST(ConfigurationTest, LookupNodeByID) {
-  std::shared_ptr<Configuration> config(
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf")));
-  ASSERT_NE(config, nullptr);
-
-  using facebook::logdevice::E;
-  using facebook::logdevice::err;
-
-  const Configuration::Node* node;
-
-  // Search for the first node (index=0).  Lookup should succeed with the
-  // right generation.
-  node = config->serverConfig()->getNode(NodeID(0, 3));
-  EXPECT_NE(node, nullptr);
-  EXPECT_EQ(
-      configuration::StorageState::READ_WRITE, node->storage_attributes->state);
-  EXPECT_EQ(1, node->storage_attributes->capacity);
-  EXPECT_EQ(1, node->getWritableStorageCapacity());
-  EXPECT_EQ(nullptr, config->serverConfig()->getNode(NodeID(0, 2)));
-  EXPECT_EQ(E::NOTFOUND, err);
-  EXPECT_EQ(nullptr, config->serverConfig()->getNode(NodeID(0, 4)));
-  EXPECT_EQ(E::NOTFOUND, err);
-
-  // Same for the second node
-  node = config->serverConfig()->getNode(NodeID(1, 6));
-  EXPECT_NE(node, nullptr);
-  EXPECT_EQ(
-      configuration::StorageState::READ_WRITE, node->storage_attributes->state);
-  EXPECT_EQ(4, node->storage_attributes->capacity);
-  EXPECT_EQ(4, node->getWritableStorageCapacity());
-  EXPECT_EQ(nullptr, config->serverConfig()->getNode(NodeID(1, 5)));
-  EXPECT_EQ(E::NOTFOUND, err);
-  EXPECT_EQ(nullptr, config->serverConfig()->getNode(NodeID(1, 7)));
-  EXPECT_EQ(E::NOTFOUND, err);
-
-  node = config->serverConfig()->getNode(NodeID(5, 2));
-  EXPECT_NE(node, nullptr);
-  EXPECT_EQ(
-      configuration::StorageState::READ_WRITE, node->storage_attributes->state);
-  EXPECT_EQ(2, node->storage_attributes->capacity);
-  EXPECT_EQ(2, node->getWritableStorageCapacity());
-  EXPECT_EQ(nullptr, config->serverConfig()->getNode(NodeID(5, 1)));
-  EXPECT_EQ(E::NOTFOUND, err);
-  EXPECT_EQ(nullptr, config->serverConfig()->getNode(NodeID(5, 100)));
-  EXPECT_EQ(E::NOTFOUND, err);
-
-  node = config->serverConfig()->getNode(42);
-  EXPECT_NE(node, nullptr);
-  EXPECT_EQ(
-      configuration::StorageState::READ_WRITE, node->storage_attributes->state);
-  EXPECT_EQ(4, node->storage_attributes->capacity);
-  EXPECT_EQ(4, node->getWritableStorageCapacity());
-}
-
 namespace facebook { namespace logdevice { namespace configuration {
 namespace parser {
 extern std::pair<std::string, std::string> parseIpPort(const std::string&);
@@ -534,40 +298,6 @@ TEST(ConfigurationTest, ParseIpPort) {
   EXPECT_EQ(strpair(), parseIpPort("123.123.0.0]:12345")); // no open bracket
   EXPECT_EQ(strpair(), parseIpPort("[123::abc:123"));      // no closing bracket
   EXPECT_EQ(strpair(), parseIpPort("[123::abc]:"));        // no port
-}
-
-TEST(ConfigurationTest, Sockaddr) {
-  std::shared_ptr<Configuration> config(
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf")));
-  ASSERT_NE(nullptr, config);
-
-  const auto& nodes = config->serverConfig()->getNodes();
-
-  ASSERT_TRUE(nodes.at(0).address.valid());
-  ASSERT_TRUE(nodes.at(1).address.valid());
-
-  EXPECT_EQ(4444, nodes.at(0).address.port());
-  EXPECT_EQ(6666, nodes.at(1).address.port());
-
-  EXPECT_EQ("127.0.0.1:4444", nodes.at(0).address.toString());
-  EXPECT_EQ("[::1]:6666", nodes.at(1).address.toString());
-}
-
-TEST(ConfigurationTest, SockaddrFromString) {
-  std::shared_ptr<Configuration> config(
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("sample_valid.conf")));
-  ASSERT_NE(nullptr, config);
-
-  const auto& nodes = config->serverConfig()->getNodes();
-  auto check_address = [](const facebook::logdevice::Sockaddr& a) {
-    auto r = facebook::logdevice::Sockaddr::fromString(a.toString());
-    EXPECT_TRUE(r.has_value());
-    EXPECT_EQ(a, r);
-  };
-
-  for (const auto& kv : nodes) {
-    check_address(kv.second.address);
-  }
 }
 
 TEST(ConfigurationTest, SockaddrDefaultConstructor) {
@@ -625,24 +355,6 @@ TEST(ConfigurationTest, DuplicateRangeNames) {
   std::shared_ptr<Configuration> config(
       Configuration::fromJsonFile(TEST_CONFIG_FILE("dupname.conf")));
   ASSERT_EQ(nullptr, config->logsConfig());
-  EXPECT_EQ(err, E::INVALID_CONFIG);
-}
-
-TEST(ConfigurationTest, DuplicateHost) {
-  using namespace facebook::logdevice;
-
-  std::shared_ptr<Configuration> config(
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("duphost.conf")));
-  ASSERT_EQ(nullptr, config);
-  EXPECT_EQ(err, E::INVALID_CONFIG);
-}
-
-TEST(ConfigurationTest, DuplicateName) {
-  using namespace facebook::logdevice;
-
-  std::shared_ptr<Configuration> config(
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("dup_server_name.conf")));
-  ASSERT_EQ(nullptr, config);
   EXPECT_EQ(err, E::INVALID_CONFIG);
 }
 
@@ -924,25 +636,6 @@ TEST(ConfigurationTest, LogsConfigSerialization) {
 }
 
 /**
- * Reads a config that has both ssl_host and ssl_port set for a node - should
- * fail.
- */
-TEST(ConfigurationTest, NodeSSLDoubleConfigFail) {
-  std::shared_ptr<Configuration> config(
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("ssl_double_fail.conf")));
-  ASSERT_EQ(nullptr, config);
-}
-
-/**
- * Config with ssl set only for some of the hosts. Should fail.
- */
-TEST(ConfigurationTest, PartialSSLNodes) {
-  std::shared_ptr<Configuration> config(
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("partial_ssl_nodes.conf")));
-  ASSERT_EQ(nullptr, config);
-}
-
-/**
  * Tests that parsing a valid config with security_info and permissions set
  */
 TEST(ConfigurationTest, SecurityAndPermissionInfo) {
@@ -1180,7 +873,7 @@ TEST(ConfigurationTest, InvalidUseOfPermissionDefault) {
 TEST(ConfigurationTest, InvalidUseOfPermissionLog) {
   std::shared_ptr<Configuration> config(Configuration::fromJsonFile(
       TEST_CONFIG_FILE("invalid_use_of_permission2.conf")));
-  ASSERT_EQ(nullptr, config);
+  ASSERT_EQ(nullptr, config->logsConfig());
 }
 
 /**
@@ -1191,24 +884,6 @@ TEST(ConfigurationTest, InvalidActionInPermissions) {
   std::shared_ptr<Configuration> config(Configuration::fromJsonFile(
       TEST_CONFIG_FILE("config_permission_invalid_action.conf")));
   ASSERT_EQ(nullptr, config->logsConfig());
-}
-
-/**
- * Node has no node_id.
- */
-TEST(ConfigurationTest, NoID) {
-  std::shared_ptr<Configuration> config(
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("noid.conf")));
-  ASSERT_EQ(nullptr, config);
-}
-
-/**
- * Two nodes have the same node_id.
- */
-TEST(ConfigurationTest, DupID) {
-  std::shared_ptr<Configuration> config(
-      Configuration::fromJsonFile(TEST_CONFIG_FILE("dupid.conf")));
-  ASSERT_EQ(nullptr, config);
 }
 
 /**
@@ -1462,94 +1137,4 @@ TEST(ConfigurationTest, SequencerAffinity) {
       TEST_CONFIG_FILE("invalid_sequencer_affinity.conf"));
   EXPECT_EQ(config->logsConfig(), nullptr);
   EXPECT_EQ(err, E::INVALID_CONFIG);
-}
-
-// Tests various combinations of storage_capacity, storage and weight attributes
-TEST(ConfigurationTest, StorageCapacityVsWeight) {
-  using facebook::logdevice::configuration::StorageState;
-
-  // Configs with storage_capacity or weight specified for writable nodes
-  std::string path(TEST_CONFIG_FILE("storage_capacity_success1.conf"));
-  ld_info("Loading %s, expecting it to succeed", path.c_str());
-  auto config = Configuration::fromJsonFile(path.c_str());
-  ASSERT_NE(config, nullptr);
-
-  auto verify_node = [&](node_index_t node_id,
-                         StorageState state,
-                         double storage_capacity,
-                         int weight,
-                         bool exclude_from_nodesets) {
-    ld_info("Verifying node %d", node_id);
-    auto const node = config->serverConfig()->getNode(node_id);
-    EXPECT_NE(nullptr, node);
-    if (node->storage_attributes != nullptr) {
-      EXPECT_EQ(state, node->storage_attributes->state);
-      EXPECT_EQ(storage_capacity, node->storage_attributes->capacity);
-      EXPECT_EQ(exclude_from_nodesets,
-                node->storage_attributes->exclude_from_nodesets);
-    } else {
-      EXPECT_EQ(state, configuration::StorageState::DISABLED);
-      EXPECT_EQ(storage_capacity, 0);
-    }
-
-    double expected_capacity = storage_capacity;
-    if (state != StorageState::READ_WRITE) {
-      expected_capacity = 0;
-    }
-    EXPECT_EQ(expected_capacity, node->getWritableStorageCapacity());
-    EXPECT_EQ(weight, node->getLegacyWeight());
-  };
-
-  verify_node(1, StorageState::READ_WRITE, 1, 1, true);
-  verify_node(2, StorageState::READ_ONLY, 1, 0, false);
-  verify_node(3, StorageState::DISABLED, 1, -1, false);
-  verify_node(4, StorageState::READ_WRITE, 0.2, 1, false);
-  verify_node(5, StorageState::READ_ONLY, 0, 0, true);
-  verify_node(6, StorageState::READ_ONLY, 1.2, 0, false);
-  verify_node(7, StorageState::DISABLED, 5.7, -1, true);
-  verify_node(8, StorageState::READ_WRITE, 1.8, 2, false);
-  verify_node(9, StorageState::READ_ONLY, 0, 0, false);
-  verify_node(10, StorageState::READ_ONLY, 1, 0, false);
-  verify_node(11, StorageState::DISABLED, 1, -1, false);
-  verify_node(12, StorageState::READ_WRITE, 2, 2, false);
-  verify_node(13, StorageState::READ_ONLY, 1, 0, false);
-  verify_node(14, StorageState::DISABLED, 1, -1, false);
-  verify_node(18, StorageState::READ_WRITE, 2, 2, false);
-  verify_node(19, StorageState::READ_ONLY, 2, 0, false);
-  verify_node(20, StorageState::READ_ONLY, 0, 0, false);
-  verify_node(21, StorageState::DISABLED, 0, -1, false);
-
-  // Configs with storage_capacity/weight not specified for writable nodes
-  path = TEST_CONFIG_FILE("storage_capacity_success2.conf");
-  ld_info("Loading %s, expecting it to succeed", path.c_str());
-  config = Configuration::fromJsonFile(path.c_str());
-  ASSERT_NE(config, nullptr);
-
-  verify_node(0, StorageState::DISABLED, 0, -1, false);
-  verify_node(2, StorageState::READ_ONLY, 1, 0, false);
-  verify_node(3, StorageState::DISABLED, 1, -1, false);
-  verify_node(5, StorageState::READ_ONLY, 1, 0, true);
-  verify_node(13, StorageState::READ_ONLY, 1, 0, false);
-  verify_node(14, StorageState::DISABLED, 1, -1, false);
-  verify_node(15, StorageState::READ_WRITE, 1, 1, false);
-  verify_node(16, StorageState::READ_ONLY, 1, 0, false);
-  verify_node(17, StorageState::DISABLED, 1, -1, false);
-
-  std::vector<std::string> failing_configs = {
-      // weight: -1 and storage_state: read-write
-      TEST_CONFIG_FILE("storage_capacity_fail2.conf"),
-      // weight: 0 and storage_state: read-write
-      TEST_CONFIG_FILE("storage_capacity_fail3.conf"),
-      // weight: 1 and storage_state: none
-      TEST_CONFIG_FILE("storage_capacity_fail4.conf"),
-      // weight: 1 and storage_state: read-only
-      TEST_CONFIG_FILE("storage_capacity_fail5.conf"),
-      // weight: 1 and storage_capacity: 1.6
-      TEST_CONFIG_FILE("storage_capacity_fail6.conf"),
-  };
-  for (auto& config_path : failing_configs) {
-    ld_info("Loading %s, expecting it to fail", config_path.c_str());
-    config = Configuration::fromJsonFile(config_path.c_str());
-    ASSERT_EQ(config, nullptr);
-  }
 }

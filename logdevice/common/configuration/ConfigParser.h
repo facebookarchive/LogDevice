@@ -11,7 +11,6 @@
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/configuration/LogsConfigParser.h"
 #include "logdevice/common/configuration/MetaDataLogsConfig.h"
-#include "logdevice/common/configuration/NodesConfigParser.h"
 #include "logdevice/common/configuration/ParsingHelpers.h"
 #include "logdevice/common/configuration/TrafficShapingConfig.h"
 #include "logdevice/common/configuration/ZookeeperConfig.h"

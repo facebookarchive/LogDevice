@@ -24,6 +24,39 @@
 
 using namespace facebook::logdevice;
 
+inline void writeSimpleConfig(const char* path, const std::string& name) {
+  std::string contents = "{\n"
+                         "  \"cluster\": \"" +
+      name +
+      "\",\n"
+      "  \"nodes\": [ {\n"
+      "    \"node_id\": 0,\n"
+      "    \"host\": \"127.0.0.1:4444\",\n"
+      "    \"gossip_address\": 4445,\n"
+      "    \"roles\": [\n"
+      "      \"sequencer\",\n"
+      "      \"storage\"\n"
+      "    ],\n"
+      "    \"sequencer\": true,\n"
+      "    \"weight\": 1,\n"
+      "    \"num_shards\": 2,\n"
+      "    \"generation\": 1\n"
+      "  } ],\n"
+      "  \"logs\": [],\n"
+      "  \"metadata_logs\": {\n"
+      "     \"nodeset\": [0],\n"
+      "     \"replication_factor\": 1\n"
+      "  },\n"
+      "  \"server_settings\": {\n"
+      "     \"enable-logsconfig-manager\": \"false\"\n"
+      "  },\n"
+      "  \"client_settings\": {\n"
+      "     \"enable-logsconfig-manager\": \"false\"\n"
+      "  }\n"
+      "}\n";
+  overwriteConfigFile(path, contents);
+}
+
 // NOTE: file reading assumes the test is being run from the top-level fbcode
 // dir
 
@@ -106,8 +139,8 @@ TEST_F(FileConfigSourceTest, Simple) {
     unlink(configPath);
   };
 
-  // Write the initial config with generation 1.
-  writeSimpleConfig(configPath, 1);
+  // Write the initial config with name cluster1.
+  writeSimpleConfig(configPath, "cluster1");
 
   // Create the auto-updating config.
   std::shared_ptr<UpdateableConfig> config;
@@ -129,8 +162,8 @@ TEST_F(FileConfigSourceTest, Simple) {
     std::this_thread::sleep_for(CONFIG_UPDATE_INTERVAL);
   }
 
-  // Write the new config with generation 2.
-  writeSimpleConfig(configPath, 2);
+  // Write the new config with name cluster2.
+  writeSimpleConfig(configPath, "cluster2");
   reader_thread_waiting_.store(false);
 
   readerThread.join();
@@ -146,8 +179,8 @@ TEST_F(FileConfigSourceTest, MultipleConfigs) {
     unlink(configPath);
   };
 
-  // Write the initial config with generation 1.
-  writeSimpleConfig(configPath, 1);
+  // Write the initial config with name cluster1.
+  writeSimpleConfig(configPath, "cluster1");
   std::string configPathStr = configPath;
 
   // Create the auto-updating configs.
@@ -158,20 +191,20 @@ TEST_F(FileConfigSourceTest, MultipleConfigs) {
   ASSERT_NE(nullptr, client1_config);
   ASSERT_NE(nullptr, client2_config);
 
-  writeSimpleConfig(configPath, 3);
+  writeSimpleConfig(configPath, "cluster3");
 
   wait_for_config_update(thread1);
   EXPECT_EQ(
-      3, client1_config->get()->serverConfig()->getNodes().at(0).generation);
+      "cluster3", client1_config->get()->serverConfig()->getClusterName());
   wait_for_config_update(thread2);
   EXPECT_EQ(
-      3, client2_config->get()->serverConfig()->getNodes().at(0).generation);
+      "cluster3", client2_config->get()->serverConfig()->getClusterName());
 }
 
 static void readerThreadImpl(std::shared_ptr<UpdateableConfig> config,
                              FileConfigSourceThread* thread) {
   std::shared_ptr<Configuration> c1 = config->get();
-  EXPECT_EQ(1, c1->serverConfig()->getNodes().at(0).generation);
+  EXPECT_EQ("cluster1", c1->serverConfig()->getClusterName());
 
   // Try again immediately, expect exactly the same config
   std::shared_ptr<Configuration> c2 = config->get();
@@ -189,7 +222,7 @@ static void readerThreadImpl(std::shared_ptr<UpdateableConfig> config,
 
   // Verify that the config was updated
   std::shared_ptr<Configuration> c3 = config->get();
-  EXPECT_EQ(2, c3->serverConfig()->getNodes().at(0).generation);
+  EXPECT_EQ("cluster2", c3->serverConfig()->getClusterName());
 }
 
 TEST_F(FileConfigSourceTest, SubscribeToUpdates) {
@@ -202,8 +235,8 @@ TEST_F(FileConfigSourceTest, SubscribeToUpdates) {
     unlink(configPath);
   };
 
-  // Write the initial config with generation 1.
-  writeSimpleConfig(configPath, 1);
+  // Write the initial config with name cluster1.
+  writeSimpleConfig(configPath, "cluster1");
 
   // Create the auto-updating config.
   std::shared_ptr<UpdateableConfig> config;
@@ -222,7 +255,7 @@ TEST_F(FileConfigSourceTest, SubscribeToUpdates) {
   wait_for_config_update(thread);
   ASSERT_EQ(0, callback_count); // no calls when config hasn't changed
 
-  writeSimpleConfig(configPath, 2);
+  writeSimpleConfig(configPath, "cluster2");
   wait_for_config_update(thread);
   // Because of how writeSimpleConfig() overwrites the timestamps, the config
   // may be updated 1 or 2 times.  Since the Aug 2016 config refactoring, each
@@ -236,7 +269,7 @@ TEST_F(FileConfigSourceTest, SubscribeToUpdates) {
   handle.unsubscribe();
   ld_info("Unsubscribed from updates");
 
-  writeSimpleConfig(configPath, 3);
+  writeSimpleConfig(configPath, "cluster3");
   wait_for_config_update(thread);
   ASSERT_EQ(prev_count, callback_count); // unsubscribed, should be unchanged
 }

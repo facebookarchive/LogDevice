@@ -2211,9 +2211,6 @@ TEST_P(RebuildingTest, SkipEverything) {
     nodes[i].addSequencerRole();
     nodes[i].addStorageRole(/*num_shards*/ 1);
     nodes[i].generation = 1;
-    nodes[i].storage_attributes->state = i == 2
-        ? configuration::StorageState::READ_ONLY
-        : configuration::StorageState::READ_WRITE;
   }
 
   auto nodes_configuration =

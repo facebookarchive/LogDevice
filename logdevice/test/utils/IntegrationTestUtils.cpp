@@ -715,7 +715,6 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
 
   auto config = std::make_unique<Configuration>(
       ServerConfig::fromDataTest(cluster_name_,
-                                 ServerConfig::NodesConfig{},
                                  std::move(meta_config),
                                  ServerConfig::PrincipalsConfig(),
                                  ServerConfig::SecurityConfig(),
