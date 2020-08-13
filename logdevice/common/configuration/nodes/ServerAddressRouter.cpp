@@ -11,6 +11,22 @@
 namespace facebook { namespace logdevice { namespace configuration {
 namespace nodes {
 
+namespace {
+
+static const Sockaddr kNonExistentAddress = Sockaddr("/nonexistent");
+
+// Checks whether node with given index belongs to another partition. This is
+// intended for error injection mechahism allowing us to simulate network
+// partitions w/o creating them on network layer.
+bool isPartitioned(node_index_t idx,
+                   const std::vector<node_index_t>& same_partition_nodes) {
+  return !same_partition_nodes.empty() &&
+      std::find(same_partition_nodes.begin(),
+                same_partition_nodes.end(),
+                idx) == same_partition_nodes.end();
+}
+} // namespace
+
 const Sockaddr& ServerAddressRouter::getAddress(
     node_index_t idx,
     const NodeServiceDiscovery& node_svc,
@@ -21,16 +37,10 @@ const Sockaddr& ServerAddressRouter::getAddress(
     bool use_dedicated_gossip_port,
     const std::vector<node_index_t>& same_partition_nodes) const {
   {
-    // An error injection mechanism to simulate isolation. If the node we're
-    // trying to reach is not in our partition. We're going to return an invalid
-    // address to simulate it being unreachable.
-    if (!same_partition_nodes.empty()) {
-      if (std::find(same_partition_nodes.begin(),
-                    same_partition_nodes.end(),
-                    idx) == same_partition_nodes.end()) {
-        static const Sockaddr non_existent_address{"/nonexistent"};
-        return non_existent_address;
-      }
+    //  If the node we're trying to reach is not in our partition then we're
+    //  going to return an invalid address to simulate it being unreachable.
+    if (isPartitioned(idx, same_partition_nodes)) {
+      return kNonExistentAddress;
     }
   }
 
@@ -84,6 +94,26 @@ ServerAddressRouter::getAddress(node_index_t idx,
                     settings.use_dedicated_server_to_server_address,
                     settings.send_to_gossip_port,
                     settings.test_same_partition_nodes);
+}
+
+folly::Optional<Sockaddr> ServerAddressRouter::getThriftAddress(
+    node_index_t idx,
+    const NodeServiceDiscovery& node_svc,
+    bool is_server,
+    const std::vector<node_index_t>& same_partition_nodes) const {
+  if (isPartitioned(idx, same_partition_nodes)) {
+    return kNonExistentAddress;
+  }
+  return is_server ? node_svc.server_thrift_api_address
+                   : node_svc.client_thrift_api_address;
+}
+
+folly::Optional<Sockaddr>
+ServerAddressRouter::getThriftAddress(node_index_t idx,
+                                      const NodeServiceDiscovery& node_svc,
+                                      const Settings& settings) const {
+  return getThriftAddress(
+      idx, node_svc, settings.server, settings.test_same_partition_nodes);
 }
 
 }}}} // namespace facebook::logdevice::configuration::nodes

@@ -49,11 +49,31 @@ class ServerAddressRouter {
              bool use_dedicated_gossip_port,
              const std::vector<node_index_t>& same_partition_nodes) const;
 
+  /**
+   * Returns the corresponding Thrift API address for given server node.
+   *
+   * @param idx             The idx of the node we're trying to get the address
+   *                        for.
+   * @param node_svc        The service discovery info of the node we're trying
+   *                        to get the address for.
+   * @param is_server       Whether the caller is a server.
+   */
+  folly::Optional<Sockaddr>
+  getThriftAddress(node_index_t idx,
+                   const NodeServiceDiscovery& node_svc,
+                   bool is_server,
+                   const std::vector<node_index_t>& same_partition_nodes) const;
+
   const Sockaddr& getAddress(node_index_t idx,
                              const NodeServiceDiscovery& node_svc,
                              SocketType socket_type,
                              ConnectionType connection_type,
                              const Settings& settings) const;
+
+  folly::Optional<Sockaddr>
+  getThriftAddress(node_index_t idx,
+                   const NodeServiceDiscovery& node_svc,
+                   const Settings& settings) const;
 };
 
 }}}} // namespace facebook::logdevice::configuration::nodes

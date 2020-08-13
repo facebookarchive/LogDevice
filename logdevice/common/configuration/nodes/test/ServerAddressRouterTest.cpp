@@ -35,6 +35,7 @@ const Sockaddr kTestGossipAddress =
     Sockaddr{kTestAddress.toString(), kTestGossipPort};
 const Sockaddr kTestServerToServerAddress =
     Sockaddr{kTestAddress.toString(), kTestServerToServerPort};
+const Sockaddr kNonExistentAddress = Sockaddr("/nonexistent");
 
 class ServerAddressRouterTest : public ::testing::Test {};
 
@@ -303,6 +304,7 @@ TEST(ServerAddressRouterTest, sameParitionNodes) {
       /* use_dedicated_server_to_server_address */ false,
       /* use_dedicated_gossip_port */ false,
       /* same_parition_nodes */ {1, 2, 3});
+  EXPECT_EQ(actual, kNonExistentAddress);
 
   // Test with this error injection disabled.
   actual = ServerAddressRouter().getAddress(
@@ -316,6 +318,45 @@ TEST(ServerAddressRouterTest, sameParitionNodes) {
       /* same_parition_nodes */ {});
 
   EXPECT_EQ(actual, kTestDefaultAddress);
+}
+
+// Checks ServerAddressRouter respects is_server flag
+TEST(ServerAddressRouterTest, thriftDifferentAddresses) {
+  NodeServiceDiscovery nodeServiceDiscovery;
+  nodeServiceDiscovery.server_thrift_api_address = kTestServerToServerAddress;
+  nodeServiceDiscovery.client_thrift_api_address = kTestDefaultAddress;
+  auto router = ServerAddressRouter();
+
+  auto actual = router.getThriftAddress(0,
+                                        nodeServiceDiscovery,
+                                        /* is_server */ false,
+                                        /* same_parition_nodes */ {});
+  EXPECT_EQ(actual.value(), kTestDefaultAddress);
+
+  actual = router.getThriftAddress(0,
+                                   nodeServiceDiscovery,
+                                   /* is_server */ true,
+                                   /* same_parition_nodes */ {});
+  EXPECT_EQ(actual.value(), kTestServerToServerAddress);
+}
+
+// Checks ServerAddressRouter respects partition error injection
+TEST(ServerAddressRouterTest, thriftPartion) {
+  NodeServiceDiscovery nodeServiceDiscovery;
+  nodeServiceDiscovery.server_thrift_api_address = kTestServerToServerAddress;
+  auto router = ServerAddressRouter();
+
+  auto actual = router.getThriftAddress(1,
+                                        nodeServiceDiscovery,
+                                        /* is_server */ true,
+                                        /* same_parition_nodes */ {1, 2, 3});
+  EXPECT_EQ(actual.value(), kTestServerToServerAddress);
+
+  actual = router.getThriftAddress(4,
+                                   nodeServiceDiscovery,
+                                   /* is_server */ true,
+                                   /* same_parition_nodes */ {1, 2, 3});
+  EXPECT_EQ(actual, kNonExistentAddress);
 }
 
 } // namespace
