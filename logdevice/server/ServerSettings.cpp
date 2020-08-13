@@ -8,6 +8,7 @@
 #include "logdevice/server/ServerSettings.h"
 
 #include <regex>
+#include <utility>
 
 #include <boost/program_options.hpp>
 #include <folly/String.h>
@@ -18,6 +19,8 @@
 using namespace facebook::logdevice::setting_validators;
 
 namespace facebook { namespace logdevice {
+
+using NodeServiceDiscovery = configuration::nodes::NodeServiceDiscovery;
 
 // maximum allowed number of storage threads to run
 #define STORAGE_THREADS_MAX 10000
@@ -99,6 +102,48 @@ static configuration::nodes::RoleSet parse_roles(const std::string& value) {
   return roles;
 }
 
+NodeServiceDiscovery::ClientNetworkPriority
+parse_network_priority(const std::string& value) {
+  if (value == "high") {
+    return NodeServiceDiscovery::ClientNetworkPriority::HIGH;
+  } else if (value == "medium") {
+    return NodeServiceDiscovery::ClientNetworkPriority::MEDIUM;
+  } else if (value == "low") {
+    return NodeServiceDiscovery::ClientNetworkPriority::LOW;
+  } else {
+    throw boost::program_options::error(
+        folly::sformat("Invalid network priority: {}", value));
+  }
+  folly::assume_unreachable();
+}
+
+template <typename T, typename F>
+decltype(auto) parse_values_per_network_priority(const std::string& value,
+                                                 F func) {
+  std::map<NodeServiceDiscovery::ClientNetworkPriority, T> result;
+
+  if (value.empty()) {
+    return result;
+  }
+
+  std::vector<std::string> mapping_strs;
+  folly::split(",", value, mapping_strs);
+
+  for (const auto& mapping_str : mapping_strs) {
+    std::vector<std::string> kv_str;
+    folly::split(":", mapping_str, kv_str);
+
+    if (kv_str.size() != 2) {
+      throw boost::program_options::error(folly::sformat(
+          "Invalid network priority definition: {}", mapping_str));
+    }
+
+    auto priority = parse_network_priority(kv_str[0]);
+    result[priority] = func(kv_str[1]);
+  }
+  return result;
+}
+
 static NodeLocation parse_location(const std::string& value) {
   auto loc = NodeLocation{};
   if (value.empty()) {
@@ -116,6 +161,25 @@ static NodeLocation parse_location(const std::string& value) {
 }
 
 } // namespace
+
+std::map<NodeServiceDiscovery::ClientNetworkPriority, int>
+ServerSettings::parse_ports_per_net_priority(const std::string& value) {
+  return parse_values_per_network_priority<int>(
+      value, [](const std::string& v) {
+        int port = std::stoi(v);
+        validate_port(port);
+        return port;
+      });
+}
+
+std::map<NodeServiceDiscovery::ClientNetworkPriority, std::string>
+ServerSettings::parse_unix_sockets_per_net_priority(const std::string& value) {
+  return parse_values_per_network_priority<std::string>(
+      value, [](const std::string& v) {
+        validate_unix_socket(v);
+        return v;
+      });
+}
 
 void ServerSettings::defineSettings(SettingEasyInit& init) {
   using namespace SettingFlag;
@@ -666,6 +730,30 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
        "commands that are only enabled for testing purposes.",
        SERVER | CLI_ONLY | REQUIRES_RESTART,
        SettingsCategory::Execution);
-}
 
+  init("unix-addresses-per-network-priority",
+       &unix_addresses_per_network_priority,
+       "",
+       ServerSettings::parse_unix_sockets_per_net_priority,
+       "[Only used when node self registration is enabled] Unix socket "
+       "addresses ports for each network priority. Format is: "
+       "\"<priorityA>:<path-to-socket>,<priorityB>:<path-to-socket>,...\" "
+       "where <priorityX> is "
+       "one of \"low\", \"medium\" and \"high\". Example: "
+       "\"low:/tmp/socket_A,medium:/tmp/socket_B\"",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::NodeRegistration);
+
+  init("ports-per-network-priority",
+       &ports_per_network_priority,
+       "",
+       ServerSettings::parse_ports_per_net_priority,
+       "[Only used when node self registration is enabled] TCP ports for each "
+       "network priority. Format is: "
+       "\"<priorityA>:<portA>,<priorityB>:<portB>,...\" where <priorityX> is "
+       "one of "
+       "\"low\", \"medium\" and \"high\". Example: \"low:7440,medium:5440\"",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::NodeRegistration);
+}
 }} // namespace facebook::logdevice

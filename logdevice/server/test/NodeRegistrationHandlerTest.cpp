@@ -14,11 +14,29 @@
 #include "logdevice/common/test/InMemNodesConfigurationStore.h"
 #include "logdevice/common/test/MockNodesConfigurationStore.h"
 
-namespace facebook { namespace logdevice {
-
 using namespace facebook::logdevice::configuration::nodes;
 using namespace facebook::logdevice::membership;
 using testing::_;
+
+namespace facebook::logdevice {
+namespace {
+std::map<NodeServiceDiscovery::ClientNetworkPriority, std::string>
+genUnixAddressesPerNetworkPriority(std::string prefix) {
+  return {{NodeServiceDiscovery::ClientNetworkPriority::MEDIUM,
+           folly::sformat("{}/address", prefix)},
+          {NodeServiceDiscovery::ClientNetworkPriority::LOW,
+           folly::sformat("{}/low-priority-address", prefix)}};
+}
+
+template <typename M>
+decltype(auto) addressesPerNetworkPriorityToString(const M& map) {
+  std::map<NodeServiceDiscovery::ClientNetworkPriority, std::string> result;
+  for (const auto& [priority, sock_addr] : map) {
+    result[priority] = sock_addr.toString();
+  }
+  return result;
+}
+} // namespace
 
 class NodeRegistrationHandlerTest : public ::testing::Test {
  public:
@@ -36,15 +54,18 @@ class NodeRegistrationHandlerTest : public ::testing::Test {
     ServerSettings settings = create_default_settings<ServerSettings>();
 
     settings.name = name;
-    settings.unix_socket = folly::format("/{}/address", name).str();
-    settings.ssl_unix_socket = folly::format("/{}/ssl", name).str();
-    settings.gossip_unix_socket = folly::format("/{}/gossip", name).str();
+    settings.unix_socket = folly::sformat("/{}/address", name);
+    settings.ssl_unix_socket = folly::sformat("/{}/ssl", name);
+    settings.gossip_unix_socket = folly::sformat("/{}/gossip", name);
     settings.server_to_server_unix_socket =
-        folly::format("/{}/server-to-server", name).str();
+        folly::sformat("/{}/server-to-server", name);
     settings.server_thrift_api_unix_socket =
-        folly::format("/{}/server-thrift-api", name).str();
+        folly::sformat("/{}/server-thrift-api", name);
     settings.client_thrift_api_unix_socket =
-        folly::format("/{}/client-thrift-api", name).str();
+        folly::sformat("/{}/client-thrift-api", name);
+    settings.unix_addresses_per_network_priority =
+        genUnixAddressesPerNetworkPriority(
+            /*prefix=*/folly::sformat("/{}", name));
     settings.roles = 3 /* sequencer + storage */;
     settings.sequencer_weight = 12;
     settings.storage_capacity = 13;
@@ -107,6 +128,8 @@ TEST_F(NodeRegistrationHandlerTest, testAddNode) {
       "/node1/server-thrift-api", svd->server_thrift_api_address->toString());
   EXPECT_EQ(
       "/node1/client-thrift-api", svd->client_thrift_api_address->toString());
+  EXPECT_EQ(genUnixAddressesPerNetworkPriority("/node1"),
+            addressesPerNetworkPriorityToString(svd->addresses_per_priority));
   EXPECT_EQ(RoleSet(3), svd->roles);
   EXPECT_EQ("aa.bb.cc.dd.ee", svd->location->toString());
 
@@ -141,6 +164,8 @@ TEST_F(NodeRegistrationHandlerTest, testUpdate) {
   settings.server_to_server_unix_socket = "/new/s2s";
   settings.server_thrift_api_unix_socket = "/new/sta";
   settings.client_thrift_api_unix_socket = "/new/cta";
+  settings.unix_addresses_per_network_priority =
+      genUnixAddressesPerNetworkPriority("/new");
   settings.sequencer_weight = 22;
   settings.storage_capacity = 23;
   settings.admin_enabled = false;
@@ -163,6 +188,8 @@ TEST_F(NodeRegistrationHandlerTest, testUpdate) {
   EXPECT_EQ("/new/s2s", svd->server_to_server_address->toString());
   EXPECT_EQ("/new/sta", svd->server_thrift_api_address->toString());
   EXPECT_EQ("/new/cta", svd->client_thrift_api_address->toString());
+  EXPECT_EQ(genUnixAddressesPerNetworkPriority("/new"),
+            addressesPerNetworkPriorityToString(svd->addresses_per_priority));
   EXPECT_FALSE(svd->admin_address.has_value());
   EXPECT_EQ(RoleSet(3), svd->roles);
   EXPECT_EQ("aa.bb.cc.dd.ee", svd->location->toString());
@@ -278,4 +305,4 @@ TEST_F(NodeRegistrationHandlerTest, testRetryOnVersionMismatch) {
   ASSERT_EQ(MembershipVersion::Type(2), updateable_nc->get()->getVersion());
 }
 
-}} // namespace facebook::logdevice
+} // namespace facebook::logdevice

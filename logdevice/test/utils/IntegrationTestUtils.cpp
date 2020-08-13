@@ -1437,6 +1437,8 @@ ParamMap Cluster::commandArgsForNode(const Node& node) const {
       : std::make_pair("--client-thrift-api-port",
                        ParamValue{std::to_string(client_thrift.port())});
 
+  // TODO: T71290188 add ports per network priority here too
+
   // clang-format off
 
   // Construct the default parameters.

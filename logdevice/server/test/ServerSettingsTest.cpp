@@ -54,3 +54,44 @@ TEST(ServerSettingsTest, parseTags_validation_emptyPair) {
 TEST(ServerSettingsTest, parseTags_validation_arbitraryContent) {
   ASSERT_THROW(ServerSettings::parse_tags("I like turtles."), std::exception);
 }
+
+TEST(ServerSettingsTest, parseValuesPerNetPriority) {
+  using ClientNetworkPriority =
+      ServerSettings::NodeServiceDiscovery::ClientNetworkPriority;
+  using PortMapT = std::map<ClientNetworkPriority, int>;
+  using UnixSocketMapT = std::map<ClientNetworkPriority, std::string>;
+
+  auto MEDIUM = ClientNetworkPriority::MEDIUM;
+  auto HIGH = ClientNetworkPriority::HIGH;
+
+  auto parse_unix_sockets = ServerSettings::parse_unix_sockets_per_net_priority;
+  auto parse_ports = ServerSettings::parse_ports_per_net_priority;
+
+  // empty values
+  ASSERT_EQ((PortMapT{}), parse_ports(""));
+  ASSERT_EQ((UnixSocketMapT{}), parse_unix_sockets(""));
+
+  // single valid value
+  ASSERT_EQ((PortMapT{{MEDIUM, 666}}), parse_ports("medium:666"));
+  ASSERT_EQ(
+      (UnixSocketMapT{{MEDIUM, "/666"}}), parse_unix_sockets("medium:/666"));
+
+  // parse two values
+  ASSERT_EQ((PortMapT{{MEDIUM, 666}, {HIGH, 420}}),
+            parse_ports("medium:666,high:420"));
+  ASSERT_EQ((UnixSocketMapT{{MEDIUM, "/666"}, {HIGH, "/420"}}),
+            parse_unix_sockets("medium:/666,high:/420"));
+
+  // invalid values
+  ASSERT_THROW(parse_ports("medium:/420"), std::exception);
+  ASSERT_THROW(parse_ports("medium:0"), std::exception);
+  ASSERT_THROW(parse_ports("medium:-1"), std::exception);
+  ASSERT_THROW(parse_ports("medium:65536"), std::exception);
+  ASSERT_THROW(parse_unix_sockets("medium:whereAmI"), std::exception);
+
+  // invalid priority name
+  ASSERT_THROW(parse_ports("medium:1,high:2,whenItsReady:3"), std::exception);
+  ASSERT_THROW(parse_unix_sockets("medium:/valid/path,high:/another/valid/"
+                                  "path,whenItsReady:/hat/trick"),
+               std::exception);
+}

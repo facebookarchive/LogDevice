@@ -17,7 +17,9 @@
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/ZookeeperConfigSource.h"
 #include "logdevice/common/configuration/nodes/NodeRole.h"
+#include "logdevice/common/configuration/nodes/ServiceDiscoveryConfig.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/if/gen-cpp2/common_types.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/util.h"
@@ -30,6 +32,7 @@
 namespace facebook { namespace logdevice {
 
 struct ServerSettings : public SettingsBundle {
+  using NodeServiceDiscovery = configuration::nodes::NodeServiceDiscovery;
   using NodesConfigTagMapT = std::unordered_map<std::string, std::string>;
 
   /**
@@ -40,6 +43,12 @@ struct ServerSettings : public SettingsBundle {
    * "key:value". Example: key_1:value_1,key_2:,key_3:value_3
    */
   static NodesConfigTagMapT parse_tags(const std::string& tags_string);
+
+  static std::map<NodeServiceDiscovery::ClientNetworkPriority, int>
+  parse_ports_per_net_priority(const std::string& value);
+
+  static std::map<NodeServiceDiscovery::ClientNetworkPriority, std::string>
+  parse_unix_sockets_per_net_priority(const std::string& value);
 
   struct TaskQueueParams {
     int nthreads = 0;
@@ -128,6 +137,11 @@ struct ServerSettings : public SettingsBundle {
   std::string tls_ticket_seeds_path;
 
   bool enable_dscp_reflection;
+
+  std::map<NodeServiceDiscovery::ClientNetworkPriority, std::string>
+      unix_addresses_per_network_priority;
+  std::map<NodeServiceDiscovery::ClientNetworkPriority, int>
+      ports_per_network_priority;
 
  private:
   // Only UpdateableSettings can create this bundle to ensure defaults are

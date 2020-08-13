@@ -14,9 +14,9 @@
 #include "logdevice/common/RetryHandler.h"
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 
-namespace facebook { namespace logdevice {
-
 using namespace facebook::logdevice::configuration::nodes;
+
+namespace facebook { namespace logdevice {
 
 namespace {
 constexpr size_t kMaxNumRetries = 10;
@@ -155,6 +155,23 @@ NodeRegistrationHandler::updateBuilderFromSettings(node_index_t my_idx) const {
   } else if (server_settings_.client_thrift_api_port > 0) {
     update_builder.setClientThriftApiAddress(Sockaddr(
         server_settings_.address, server_settings_.client_thrift_api_port));
+  }
+
+  // Ports per network priority is an optional feature. An empty map represents
+  // that setting is not set.
+  if (!server_settings_.unix_addresses_per_network_priority.empty()) {
+    for (const auto& [priority, socket_path] :
+         server_settings_.unix_addresses_per_network_priority) {
+      update_builder.setAddressForNetworkPriority(
+          priority, Sockaddr{socket_path});
+    }
+  } else if (!server_settings_.ports_per_network_priority.empty()) {
+    for (const auto& [priority, port] :
+         server_settings_.ports_per_network_priority) {
+      update_builder.setAddressForNetworkPriority(
+          priority,
+          Sockaddr{server_settings_.address, static_cast<in_port_t>(port)});
+    }
   }
 
   if (!server_settings_.location.isEmpty()) {
