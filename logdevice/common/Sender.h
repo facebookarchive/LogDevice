@@ -63,6 +63,8 @@ class SocketProxy;
 class StatsHolder;
 struct Settings;
 class IConnectionFactory;
+class Worker;
+class Processor;
 
 /**
  * @file a Sender sends Messages to Addresses by mapping an Address to a
@@ -348,7 +350,9 @@ class Sender : public SenderBase {
    *                     time this Sender was created
    */
 
-  Sender(std::shared_ptr<const Settings> settings,
+  Sender(Worker* worker,
+         Processor* processor,
+         std::shared_ptr<const Settings> settings,
          struct event_base* base,
          const configuration::ShapingConfig& tsc,
          ClientIdxAllocator* client_id_allocator,
@@ -834,6 +838,9 @@ class Sender : public SenderBase {
   void forAllClientConnections(std::function<void(Connection&)> fn);
 
  private:
+  // Worker owning this Sender
+  Worker* worker_;
+  Processor* processor_;
   std::shared_ptr<const Settings> settings_;
 
   std::unique_ptr<IConnectionFactory> connection_factory_;

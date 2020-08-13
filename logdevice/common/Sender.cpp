@@ -54,8 +54,12 @@ namespace {
 // Connection  closes.
 class DisconnectedClientCallback : public SocketCallback {
  public:
+  explicit DisconnectedClientCallback(Sender* sender) : sender_(sender) {}
   // calls noteDisconnectedClient() of the current thread's Sender
   void operator()(Status st, const Address& name) override;
+
+ private:
+  Sender* sender_;
 };
 
 } // namespace
@@ -134,7 +138,9 @@ void SenderBase::MessageCompletion::send() {
   Worker::unpackRunContext(prev_context);
 }
 
-Sender::Sender(std::shared_ptr<const Settings> settings,
+Sender::Sender(Worker* worker,
+               Processor* processor,
+               std::shared_ptr<const Settings> settings,
                struct event_base* base,
                const configuration::ShapingConfig& tsc,
                ClientIdxAllocator* client_id_allocator,
@@ -144,7 +150,9 @@ Sender::Sender(std::shared_ptr<const Settings> settings,
                folly::Optional<NodeLocation> my_location,
                std::unique_ptr<IConnectionFactory> connection_factory,
                StatsHolder* stats)
-    : settings_(settings),
+    : worker_(worker),
+      processor_(processor),
+      settings_(settings),
       connection_factory_(std::move(connection_factory)),
       impl_(new SenderImpl(client_id_allocator)),
       is_gossip_sender_(is_gossip_sender),
@@ -189,9 +197,8 @@ int Sender::addClient(int fd,
   eraseDisconnectedClients();
   impl_->ensureCleanupTimerActive(*this);
 
-  auto w = Worker::onThisThread();
-  ClientID client_name(
-      impl_->client_id_allocator_->issueClientIdx(w->worker_type_, w->idx_));
+  ClientID client_name(impl_->client_id_allocator_->issueClientIdx(
+      worker_->worker_type_, worker_->idx_));
 
   try {
     // Until we have better information (e.g. in a future update to the
@@ -211,8 +218,7 @@ int Sender::addClient(int fd,
         type,
         conntype,
         flow_group,
-        std::make_unique<SocketDependencies>(
-            Worker::onThisThread()->processor_, this),
+        std::make_unique<SocketDependencies>(processor_, this),
         connection_kind);
 
     auto res = impl_->client_conns_.emplace(client_name, std::move(conn));
@@ -227,7 +233,7 @@ int Sender::addClient(int fd,
       return -1;
     }
 
-    auto* cb = new DisconnectedClientCallback();
+    auto* cb = new DisconnectedClientCallback(this);
     // self-managed, destroyed by own operator()
 
     int rv = res.first->second->pushOnCloseCallback(*cb);
@@ -697,7 +703,7 @@ void Sender::shutdownSockets(folly::Executor* executor) {
 bool Sender::isClosed() const {
   // Go over all Connections at shutdown to find pending work. This could help
   // in figuring which Connections are slow in draining buffers.
-  bool go_over_all_sockets = !Worker::onThisThread()->isAcceptingWork();
+  bool go_over_all_sockets = !worker_->isAcceptingWork();
 
   int num_open_server_sockets = 0;
   Connection* max_pending_work_server = nullptr;
@@ -855,7 +861,7 @@ bool Sender::useSSLWith(NodeID nid,
   cross_boundary = configuration::nodes::getNodeSSL(
       *nodes_, my_location_, nid.index(), diff_level);
 
-  auto server_config = Worker::onThisThread()->getServerConfig();
+  auto server_config = worker_->getServerConfig();
   // Determine whether we need to use an SSL Connection for authentication.
   bool authentication =
       (server_config->getAuthenticationType() == AuthenticationType::SSL);
@@ -904,7 +910,7 @@ Connection* Sender::initServerConnection(NodeID nid, SocketType sock_type) {
       // Scheduling this Connection to be closed and moving it out of
       // server_conns_ to initialize an SSL connection in its place.
       STAT_INCR(Worker::stats(), server_connection_close_backlog);
-      Worker::onThisThread()->add([s = std::move(it->second)] {
+      worker_->add([s = std::move(it->second)] {
         if (s->good()) {
           s->close(E::SSLREQUIRED);
         }
@@ -959,8 +965,7 @@ Connection* Sender::initServerConnection(NodeID nid, SocketType sock_type) {
           sock_type,
           use_ssl ? ConnectionType::SSL : ConnectionType::PLAIN,
           flow_group,
-          std::make_unique<SocketDependencies>(
-              Worker::onThisThread()->processor_, this));
+          std::make_unique<SocketDependencies>(processor_, this));
 
       auto res = impl_->server_conns_.emplace(nid.index(), std::move(conn));
       it = res.first;
@@ -1127,8 +1132,7 @@ int Sender::setPrincipal(const Address& addr, PrincipalIdentity principal) {
       ld_check(pos->second->principal_->type == "");
 
       // See if this principal requires specialized traffic tagging.
-      Worker* w = Worker::onThisThread();
-      auto scfg = w->getServerConfig();
+      auto scfg = worker_->getServerConfig();
       for (auto identity : principal.identities) {
         auto principal_settings = scfg->getPrincipalByName(&identity.second);
         if (principal_settings != nullptr &&
@@ -1253,11 +1257,13 @@ Sender::extractPeerIdentity(const Address& addr) {
       Sender::ExtractPeerIdentityResult::SUCCESS, std::move(identity).value());
 }
 
+/* static */
 Sockaddr Sender::thisThreadSockaddr(const Address& addr) {
   Worker* w = Worker::onThisThread();
   return w->sender().getSockaddr(addr);
 }
 
+/* static */
 Sockaddr Sender::sockaddrOrInvalid(const Address& addr) {
   Worker* w = Worker::onThisThread(false);
   if (!w) {
@@ -1286,6 +1292,7 @@ void Sender::setPeerNodeID(const Address& addr, NodeID node_id) {
   }
 }
 
+/* static */
 std::string Sender::describeConnection(const Address& addr) {
   if (!ThreadID::isWorker()) {
     return addr.toString();
@@ -1331,7 +1338,7 @@ std::string Sender::describeConnection(const Address& addr) {
 
 int Sender::noteDisconnectedClient(ClientID client_name) {
   ld_check(client_name.valid());
-  if (Worker::onThisThread()->shuttingDown()) {
+  if (worker_->shuttingDown()) {
     // This instance might already be (partially) destroyed.
     return 0;
   }
@@ -1359,7 +1366,7 @@ void DisconnectedClientCallback::operator()(Status st, const Address& name) {
 
   ld_check(!active());
 
-  Worker::onThisThread()->sender().noteDisconnectedClient(name.id_.client_);
+  sender_->noteDisconnectedClient(name.id_.client_);
 
   delete this;
 }
@@ -1448,16 +1455,15 @@ void Sender::queueMessageCompletion(std::unique_ptr<Message> msg,
   auto mc = std::make_unique<MessageCompletion>(std::move(msg), to, s, t);
   completed_messages_.push_back(*mc.release());
   if (!delivering_completed_messages_.exchange(true)) {
-    auto exec = Worker::onThisThread();
     auto deferred_execution = [this] {
       delivering_completed_messages_.store(false);
       deliverCompletedMessages();
     };
-    if (exec->getNumPriorities() > 1) {
-      exec->addWithPriority(
+    if (worker_->getNumPriorities() > 1) {
+      worker_->addWithPriority(
           std::move(deferred_execution), folly::Executor::HI_PRI);
     } else {
-      exec->add(std::move(deferred_execution));
+      worker_->add(std::move(deferred_execution));
     }
   }
 }

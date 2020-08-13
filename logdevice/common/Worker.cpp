@@ -115,7 +115,9 @@ class WorkerImpl {
   WorkerImpl(Worker* w,
              const std::shared_ptr<UpdateableConfig>& config,
              StatsHolder* stats)
-      : sender_(w->immutable_settings_,
+      : sender_(w,
+                w->processor_,
+                w->immutable_settings_,
                 w->getEventBase(),
                 config->get()->serverConfig()->getTrafficShapingConfig(),
                 &w->processor_->clientIdxAllocator(),
