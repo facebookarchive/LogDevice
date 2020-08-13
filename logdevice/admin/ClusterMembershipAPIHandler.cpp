@@ -27,10 +27,10 @@
 #include "logdevice/common/membership/StorageStateTransitions.h"
 #include "logdevice/common/types_internal.h"
 
-namespace facebook { namespace logdevice {
-
 using namespace facebook::logdevice::configuration::nodes;
 using namespace facebook::logdevice::admin::cluster_membership;
+
+namespace facebook { namespace logdevice {
 
 namespace {
 /**

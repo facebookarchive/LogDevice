@@ -10,10 +10,10 @@
 
 #include "logdevice/admin/AdminAPIUtils.h"
 
+using namespace facebook::logdevice::configuration::nodes;
+
 namespace facebook { namespace logdevice { namespace admin {
 namespace cluster_membership {
-
-using namespace facebook::logdevice::configuration::nodes;
 
 namespace {
 Sockaddr convert_thrift_address(const logdevice::thrift::SocketAddress& addr) {
@@ -82,6 +82,13 @@ nodeUpdateBuilderFromNodeConfig(const logdevice::thrift::NodeConfig& cfg) {
       update_builder.setClientThriftApiAddress(convert_thrift_address(
           other_addresses.client_thrift_api_ref().value()));
     }
+    if (other_addresses.addresses_per_priority_ref().has_value()) {
+      for (auto& [priority, address] :
+           other_addresses.addresses_per_priority_ref().value()) {
+        update_builder.setAddressForNetworkPriority(
+            priority, convert_thrift_address(address));
+      }
+    }
   }
 
   if (cfg.location_ref().has_value()) {
@@ -111,7 +118,7 @@ nodeUpdateBuilderFromNodeConfig(const logdevice::thrift::NodeConfig& cfg) {
   }
 
   for (const auto& tag : cfg.tags) {
-    update_builder.addTag(tag.first, tag.second);
+    update_builder.setTag(tag.first, tag.second);
   }
 
   if (auto validation_result = update_builder.validate();

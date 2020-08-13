@@ -8,10 +8,11 @@
 
 #include "logdevice/admin/maintenance/MaintenanceManagerTracer.h"
 
+using namespace facebook::logdevice::configuration::nodes;
+
 namespace facebook { namespace logdevice { namespace maintenance {
 
 namespace {
-using namespace logdevice::configuration::nodes;
 
 constexpr auto kMaintenanceManagerSampleSource = "maintenance_manager";
 constexpr auto kMaintenanceAPISampleSource = "maintenance_api";

@@ -251,6 +251,19 @@ void fillNodeConfig(
         client_thrift_api_address, node_sd->client_thrift_api_address.value());
     other_addresses.set_client_thrift_api(std::move(client_thrift_api_address));
   }
+  { // addresses per network priority
+    using ClientNetworkPriority =
+        configuration::nodes::NodeServiceDiscovery::ClientNetworkPriority;
+    std::map<ClientNetworkPriority, thrift::SocketAddress>
+        addresses_per_priority;
+    for (auto& [priority, address] : node_sd->addresses_per_priority) {
+      thrift::SocketAddress converted_address;
+      fillSocketAddress(converted_address, address);
+      addresses_per_priority[priority] = std::move(converted_address);
+    }
+    other_addresses.set_addresses_per_priority(
+        std::move(addresses_per_priority));
+  }
   out.set_other_addresses(std::move(other_addresses));
 }
 

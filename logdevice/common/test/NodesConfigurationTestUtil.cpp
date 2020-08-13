@@ -12,17 +12,17 @@
 
 #include "logdevice/common/configuration/nodes/NodesConfigurationCodec.h"
 
-namespace facebook {
-  namespace logdevice {
-    namespace NodesConfigurationTestUtil {
-
-using namespace configuration::nodes;
-using namespace membership;
+using namespace facebook::logdevice::configuration::nodes;
+using namespace facebook::logdevice::membership;
 using RoleSet = NodeServiceDiscovery::RoleSet;
 using TagMap = NodeServiceDiscovery::TagMap;
 
-using Node = configuration::Node;
-using Nodes = configuration::Nodes;
+using Node = facebook::logdevice::configuration::Node;
+using Nodes = facebook::logdevice::configuration::Nodes;
+
+namespace facebook {
+  namespace logdevice {
+    namespace NodesConfigurationTestUtil {
 
 constexpr RoleSet kSeqRole{1};
 constexpr RoleSet kStorageRole{2};
@@ -43,6 +43,9 @@ NodeServiceDiscovery genDiscovery(node_index_t n, const Node& node) {
       node.server_to_server_address,
       node.server_thrift_api_address,
       node.client_thrift_api_address,
+      /*addresses_per_priority*/
+      {{NodeServiceDiscovery::ClientNetworkPriority::MEDIUM,
+        Sockaddr(addr, 4440)}},
       node.location,
       node.roles,
       node.tags};

@@ -14,8 +14,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/types_internal.h"
 
-namespace facebook { namespace logdevice { namespace configuration {
-namespace nodes {
+namespace facebook::logdevice::configuration::nodes {
 
 namespace {
 template <typename F>
@@ -32,10 +31,34 @@ bool isFieldValid(const F& field, folly::StringPiece name) {
 }
 
 template <typename F>
+bool isMapFieldValid(const F& field, folly::StringPiece name) {
+  for (const auto& [k, v] : field) {
+    if (!isFieldValid(v, name)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+template <typename F>
 bool isOptionalFieldValid(const F& field, folly::StringPiece name) {
   return !field.hasValue() || isFieldValid(field.value(), name);
 }
 
+std::string networkPriorityToString(
+    const NodeServiceDiscovery::ClientNetworkPriority& priority) {
+  using ClientNetworkPriority = NodeServiceDiscovery::ClientNetworkPriority;
+  switch (priority) {
+    case ClientNetworkPriority::HIGH:
+      return "H";
+    case ClientNetworkPriority::MEDIUM:
+      return "M";
+    case ClientNetworkPriority::LOW:
+      return "L";
+  }
+  ld_check(false);
+  folly::assume_unreachable();
+}
 } // namespace
 
 const Sockaddr& NodeServiceDiscovery::getGossipAddress() const {
@@ -54,7 +77,8 @@ bool NodeServiceDiscovery::isValid() const {
       !isOptionalFieldValid(
           server_thrift_api_address, "server_thrift_api_address") ||
       !isOptionalFieldValid(
-          client_thrift_api_address, "client_thrift_api_address")) {
+          client_thrift_api_address, "client_thrift_api_address") ||
+      !isMapFieldValid(addresses_per_priority, "addresses_per_priority")) {
     return false;
   }
 
@@ -119,8 +143,16 @@ bool NodeServiceDiscovery::isValidForReset(
 }
 
 std::string NodeServiceDiscovery::toString() const {
+  std::vector<std::string> addresses_strs;
+  for (const auto& [priority, sock_addr] : addresses_per_priority) {
+    addresses_strs.push_back(folly::sformat(
+        "{}:{}", networkPriorityToString(priority), sock_addr.toString()));
+  }
+
   return folly::sformat(
-      "[{} => A:{},G:{},S:{},AA:{},S2SA:{},STA:{},CTA:{},L:{},R:{},V:{},T:{}]",
+      "[{} => "
+      "A:{},G:{},S:{},AA:{},S2SA:{},STA:{},CTA:{},APNP:{{{}}},L:{},R:{},V:{},T:"
+      "{}]",
       name,
       default_client_data_address.toString(),
       gossip_address.has_value() ? gossip_address->toString() : "",
@@ -135,6 +167,7 @@ std::string NodeServiceDiscovery::toString() const {
       client_thrift_api_address.has_value()
           ? client_thrift_api_address->toString()
           : "",
+      folly::join(",", addresses_strs),
       location.has_value() ? location->toString() : "",
       logdevice::toString(roles),
       version,
@@ -202,4 +235,4 @@ bool ServiceDiscoveryConfig::attributeSpecificValidate() const {
       validateNameUniqueness(node_states_);
 }
 
-}}}} // namespace facebook::logdevice::configuration::nodes
+} // namespace facebook::logdevice::configuration::nodes

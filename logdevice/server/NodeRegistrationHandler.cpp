@@ -175,7 +175,7 @@ NodeRegistrationHandler::updateBuilderFromSettings(node_index_t my_idx) const {
   }
 
   for (const auto& kvp : server_settings_.tags) {
-    update_builder.addTag(kvp.first, kvp.second);
+    update_builder.setTag(kvp.first, kvp.second);
   }
 
   return update_builder;

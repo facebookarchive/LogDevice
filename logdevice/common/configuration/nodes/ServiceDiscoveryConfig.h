@@ -8,6 +8,7 @@
 #pragma once
 
 #include <folly/Optional.h>
+#include <folly/container/F14Map.h>
 
 #include "logdevice/common/ShardID.h"
 #include "logdevice/common/Sockaddr.h"
@@ -15,11 +16,14 @@
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/configuration/nodes/NodeAttributesConfig.h"
 #include "logdevice/common/configuration/nodes/NodeRole.h"
+#include "logdevice/common/configuration/nodes/gen-cpp2/NodesConfiguration_types.h"
+#include "logdevice/common/toString.h"
 
-namespace facebook { namespace logdevice { namespace configuration {
-namespace nodes {
+namespace facebook::logdevice::configuration::nodes {
 
 struct NodeServiceDiscovery {
+  using ClientNetworkPriority =
+      facebook::logdevice::thrift::ClientNetworkPriority;
   using RoleSet = configuration::nodes::RoleSet;
   using TagMap = std::unordered_map<std::string, std::string>;
 
@@ -87,6 +91,11 @@ struct NodeServiceDiscovery {
   folly::Optional<Sockaddr> client_thrift_api_address;
 
   /**
+   * A mapping from network priority to IP (v4 or v6) address w/ port number.
+   */
+  folly::F14FastMap<ClientNetworkPriority, Sockaddr> addresses_per_priority;
+
+  /**
    * Location information of the node.
    */
   folly::Optional<NodeLocation> location{};
@@ -125,6 +134,7 @@ struct NodeServiceDiscovery {
         server_to_server_address == rhs.server_to_server_address &&
         server_thrift_api_address == rhs.server_thrift_api_address &&
         client_thrift_api_address == rhs.client_thrift_api_address &&
+        addresses_per_priority == rhs.addresses_per_priority &&
         location == rhs.location && roles == rhs.roles && tags == rhs.tags &&
         name == rhs.name && version == rhs.version;
   }
@@ -144,4 +154,4 @@ struct NodeServiceDiscovery {
 
 using ServiceDiscoveryConfig = NodeAttributesConfig<NodeServiceDiscovery>;
 
-}}}} // namespace facebook::logdevice::configuration::nodes
+} // namespace facebook::logdevice::configuration::nodes

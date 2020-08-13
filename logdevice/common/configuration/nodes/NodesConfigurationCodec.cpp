@@ -39,6 +39,7 @@ thrift::NodeServiceDiscovery NodesConfigurationThriftConverter::toThrift(
     disc.set_server_to_server_address(
         discovery.server_to_server_address.value().toString());
   }
+
   if (discovery.server_thrift_api_address.has_value()) {
     disc.set_server_thrift_api_address(
         discovery.server_thrift_api_address.value().toString());
@@ -47,6 +48,14 @@ thrift::NodeServiceDiscovery NodesConfigurationThriftConverter::toThrift(
     disc.set_client_thrift_api_address(
         discovery.client_thrift_api_address.value().toString());
   }
+
+  std::map<NodeServiceDiscovery::ClientNetworkPriority, std::string>
+      addresses_per_priority;
+  for (const auto& [priority, sock_addr] : discovery.addresses_per_priority) {
+    addresses_per_priority[priority] = sock_addr.toString();
+  }
+  disc.set_addresses_per_priority(addresses_per_priority);
+
   if (discovery.location.has_value()) {
     disc.set_location(discovery.location.value().toString());
   }
@@ -132,6 +141,18 @@ int NodesConfigurationThriftConverter::fromThrift(
       return -1;
     }
     result.client_thrift_api_address = sock.value();
+  }
+
+  if (obj.addresses_per_priority_ref().has_value()) {
+    for (const auto& [priority, address] :
+         obj.addresses_per_priority_ref().value()) {
+      auto sock = Sockaddr::fromString(address);
+      if (!sock.has_value()) {
+        ld_error("malformed socket addr field addresses_per_priority.");
+        return -1;
+      }
+      result.addresses_per_priority[priority] = sock.value();
+    }
   }
 
   if (obj.location_ref().has_value()) {

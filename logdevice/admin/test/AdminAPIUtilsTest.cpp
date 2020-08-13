@@ -8,12 +8,14 @@
 
 #include "logdevice/admin/AdminAPIUtils.h"
 
+#include <folly/container/F14Map.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/admin/Conv.h"
 
-using namespace facebook::logdevice;
 using namespace facebook::logdevice::configuration::nodes;
+
+namespace facebook::logdevice {
 
 namespace {
 
@@ -42,6 +44,11 @@ const Sockaddr kTestServerThriftApiSocketAddress =
     Sockaddr{kTestAddress, kTestServerThriftApiPort};
 const Sockaddr kTestClientThriftApiSocketAddress =
     Sockaddr{kTestAddress, kTestClientThriftApiPort};
+const folly::F14FastMap<NodeServiceDiscovery::ClientNetworkPriority, Sockaddr>
+    kTestAddressesPerNetworkPriority{
+        {NodeServiceDiscovery::ClientNetworkPriority::MEDIUM,
+         Sockaddr{kTestAddress, kTestDataPort}}};
+
 const Sockaddr kTestSslSocketAddress = Sockaddr{kTestAddress, kTestSslPort};
 const Sockaddr kTestAdminSocketAddress = Sockaddr{kTestAddress, kTestAdminPort};
 const uint64_t kTestNodeVersion = 3147;
@@ -165,6 +172,9 @@ TEST(AdminAPIUtilsTest, EmptyIDMatchesAnything) {
 }
 
 TEST(AdminAPIUtilsTest, FillNodeConfigPopulatesAllFields) {
+  using ClientNetworkPriority =
+      configuration::nodes::NodeServiceDiscovery::ClientNetworkPriority;
+
   // Build an input NodesConfiguration instance
   RoleSet roleSet;
   roleSet.set(static_cast<uint8_t>(NodeRole::STORAGE));
@@ -182,6 +192,7 @@ TEST(AdminAPIUtilsTest, FillNodeConfigPopulatesAllFields) {
                                             kTestServerToServerSocketAddress,
                                             kTestServerThriftApiSocketAddress,
                                             kTestClientThriftApiSocketAddress,
+                                            kTestAddressesPerNetworkPriority,
                                             kTestNodeLocation,
                                             std::move(roleSet),
                                             tagMap};
@@ -216,11 +227,19 @@ TEST(AdminAPIUtilsTest, FillNodeConfigPopulatesAllFields) {
       toThrift(kTestServerThriftApiSocketAddress));
   otherAddresses.set_client_thrift_api(
       toThrift(kTestClientThriftApiSocketAddress));
+
+  std::map<ClientNetworkPriority, thrift::SocketAddress> addresses_per_priority;
+  for (auto& [priority, address] : kTestAddressesPerNetworkPriority) {
+    addresses_per_priority[priority] = toThrift(address);
+  }
+  otherAddresses.set_addresses_per_priority(std::move(addresses_per_priority));
+
   expected.set_other_addresses(std::move(otherAddresses));
 
   expected.set_location(kTestDomainString);
   expected.set_location_per_scope(
       toThrift<thrift::Location>(folly::make_optional(kTestNodeLocation)));
+
   expected.roles.emplace(thrift::Role::STORAGE);
   expected.roles.emplace(thrift::Role::SEQUENCER);
   expected.tags.insert(tagMap.begin(), tagMap.end());
@@ -231,3 +250,5 @@ TEST(AdminAPIUtilsTest, FillNodeConfigPopulatesAllFields) {
 
   EXPECT_EQ(expected, actual);
 }
+
+} // namespace facebook::logdevice

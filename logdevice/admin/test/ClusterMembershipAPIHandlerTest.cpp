@@ -27,6 +27,8 @@ using namespace ::testing;
 using namespace apache::thrift;
 using namespace facebook::logdevice;
 
+using ClientNetworkPriority = thrift::ClientNetworkPriority;
+
 constexpr node_index_t maintenance_leader{0};
 
 class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
@@ -100,6 +102,9 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
             make_address(125 + idx, 6000 + idx));
         other_addresses.set_client_thrift_api(
             make_address(150 + idx, 7000 + idx));
+        other_addresses.set_addresses_per_priority(
+            {{ClientNetworkPriority::LOW, make_address(0 + idx, 8000 + idx)},
+             {ClientNetworkPriority::HIGH, make_address(0 + idx, 9000 + idx)}});
         cfg.set_other_addresses(other_addresses);
       }
 

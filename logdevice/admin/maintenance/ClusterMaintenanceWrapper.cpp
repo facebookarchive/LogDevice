@@ -10,7 +10,7 @@
 #include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/common/debug.h"
 
-using facebook::logdevice::configuration::nodes::NodesConfiguration;
+using namespace facebook::logdevice::configuration::nodes;
 
 namespace facebook { namespace logdevice { namespace maintenance {
 

@@ -44,7 +44,10 @@ class NodeUpdateBuilder {
   NodeUpdateBuilder& setNumShards(shard_size_t);
   NodeUpdateBuilder& setStorageCapacity(double);
   NodeUpdateBuilder& setSequencerWeight(double);
-  NodeUpdateBuilder& addTag(std::string key, std::string value);
+  NodeUpdateBuilder&
+      setAddressForNetworkPriority(NodeServiceDiscovery::ClientNetworkPriority,
+                                   Sockaddr);
+  NodeUpdateBuilder& setTag(std::string key, std::string value);
 
   /**
    * Validates the correctness of the update by checking:
@@ -90,6 +93,8 @@ class NodeUpdateBuilder {
   folly::Optional<NodeLocation> location_;
   configuration::nodes::RoleSet roles_;
   folly::Optional<std::string> name_;
+  folly::F14FastMap<NodeServiceDiscovery::ClientNetworkPriority, Sockaddr>
+      addresses_per_priority_;
 
   // Storage Attributes
   folly::Optional<shard_size_t> num_shards_;

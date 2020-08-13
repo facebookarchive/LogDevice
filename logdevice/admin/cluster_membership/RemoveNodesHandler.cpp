@@ -13,10 +13,10 @@
 #include "logdevice/common/membership/StorageStateTransitions.h"
 #include "logdevice/common/types_internal.h"
 
+using namespace facebook::logdevice::configuration::nodes;
+
 namespace facebook { namespace logdevice { namespace admin {
 namespace cluster_membership {
-
-using namespace facebook::logdevice::configuration::nodes;
 
 folly::Expected<RemoveNodesHandler::Result,
                 thrift::ClusterMembershipOperationFailed>

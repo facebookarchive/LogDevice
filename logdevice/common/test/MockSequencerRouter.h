@@ -51,6 +51,7 @@ class MockClusterState : public ClusterState {
                                /*internal_address=*/folly::none,
                                /*server_thrift_api=*/folly::none,
                                /*client_thrift_api=*/folly::none,
+                               /*addresses_per_priority=*/{},
                                /*location=*/folly::none,
                                kBothRoles});
       NodeUpdate nup{

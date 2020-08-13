@@ -67,6 +67,13 @@ NodeUpdateBuilder& NodeUpdateBuilder::setName(std::string name) {
   return *this;
 }
 
+NodeUpdateBuilder& NodeUpdateBuilder::setAddressForNetworkPriority(
+    NodeServiceDiscovery::ClientNetworkPriority priority,
+    Sockaddr sock_addr) {
+  addresses_per_priority_[priority] = std::move(sock_addr);
+  return *this;
+}
+
 NodeUpdateBuilder& NodeUpdateBuilder::isSequencerNode() {
   roles_[static_cast<size_t>(NodeRole::SEQUENCER)] = true;
   return *this;
@@ -92,7 +99,7 @@ NodeUpdateBuilder& NodeUpdateBuilder::setSequencerWeight(double weight) {
   return *this;
 }
 
-NodeUpdateBuilder& NodeUpdateBuilder::addTag(std::string key,
+NodeUpdateBuilder& NodeUpdateBuilder::setTag(std::string key,
                                              std::string value) {
   tags_[std::move(key)] = std::move(value);
   return *this;
@@ -151,6 +158,7 @@ NodeUpdateBuilder::buildNodeServiceDiscovery() {
   sd->server_to_server_address = std::move(server_to_server_address_);
   sd->server_thrift_api_address = std::move(server_thrift_api_address_);
   sd->client_thrift_api_address = std::move(client_thrift_api_address_);
+  sd->addresses_per_priority = std::move(addresses_per_priority_);
   sd->location = std::move(location_);
   sd->roles = roles_;
   sd->tags = std::move(tags_);
