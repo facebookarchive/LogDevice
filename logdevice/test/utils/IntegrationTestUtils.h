@@ -1268,6 +1268,21 @@ class Cluster {
   void partition(std::vector<std::set<int>> partitions);
 
   /**
+   * Requires maintenance manager to be enabled.
+   * This will create an internal maintenance to drain a shard. The created
+   * maintenance will be applied via writing directly to the internal
+   * maintenance log. This might change in the future so the caller should not
+   * rely on this implementation detail.
+   *
+   * @return true if the operation succeeded. On
+   *              `false` the value of `err` is set accordingly.
+   */
+  bool applyInternalMaintenance(Client& client,
+                                node_index_t maintenance_leader,
+                                node_index_t node_id,
+                                uint32_t shard_idx,
+                                const std::string& reason);
+  /**
    * Gracefully shut down the given nodes. Faster than calling shutdown() on
    * them one by one.
    * @return 0 if all processes returned zero exit status, -1 otherwise.

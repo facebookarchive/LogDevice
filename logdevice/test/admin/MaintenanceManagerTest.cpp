@@ -12,6 +12,7 @@
 #include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 #include "logdevice/common/ThriftCodec.h"
 #include "logdevice/lib/ClientImpl.h"
+#include "logdevice/test/utils/AdminAPITestUtils.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
@@ -86,44 +87,6 @@ static lsn_t write_test_records(std::shared_ptr<Client> client,
   return first_lsn;
 }
 
-static lsn_t writeToMaintenanceLog(Client& client,
-                                   maintenance::MaintenanceDelta& delta) {
-  logid_t maintenance_log_id =
-      configuration::InternalLogs::MAINTENANCE_LOG_DELTAS;
-
-  // Retry for at most 30s to avoid test failures due to transient failures
-  // writing to the maintenance log.
-  std::chrono::steady_clock::time_point deadline =
-      std::chrono::steady_clock::now() + std::chrono::seconds{30};
-
-  std::string serializedData =
-      ThriftCodec::serialize<apache::thrift::BinarySerializer>(delta);
-
-  lsn_t lsn = LSN_INVALID;
-  auto clientImpl = dynamic_cast<ClientImpl*>(&client);
-  clientImpl->allowWriteInternalLog();
-  auto rv = wait_until("writes to the maintenance log succeed",
-                       [&]() {
-                         lsn = clientImpl->appendSync(
-                             maintenance_log_id, serializedData);
-                         return lsn != LSN_INVALID;
-                       },
-                       deadline);
-
-  if (rv != 0) {
-    ld_check(lsn == LSN_INVALID);
-    ld_error("Could not write delta in maintenance log(%lu): %s(%s)",
-             maintenance_log_id.val_,
-             error_name(err),
-             error_description(err));
-    return false;
-  }
-
-  ld_info(
-      "Wrote maintenance log delta with lsn %s", lsn_to_string(lsn).c_str());
-  return lsn;
-}
-
 TEST_P(MaintenanceManagerTest, BasicDrain) {
   init();
   cluster_->start({0, 1, 2, 3, 4});
@@ -165,7 +128,7 @@ TEST_P(MaintenanceManagerTest, BasicDrain) {
 
   auto maintenanceDelta = std::make_unique<MaintenanceDelta>();
   maintenanceDelta->set_apply_maintenances({def, def2});
-  writeToMaintenanceLog(*client, *maintenanceDelta);
+  write_to_maintenance_log(*client, *maintenanceDelta);
 
   wait_until("ShardOperationalState is DRAINED", [&]() {
     auto state = cluster_->getNode(2).sendCommand("info shardopstate 3 0");
@@ -186,7 +149,7 @@ TEST_P(MaintenanceManagerTest, BasicDrain) {
   req.set_reason("Integration Test");
 
   maintenanceDelta->set_remove_maintenances(std::move(req));
-  writeToMaintenanceLog(*client, *maintenanceDelta);
+  write_to_maintenance_log(*client, *maintenanceDelta);
 
   wait_until("ShardOperationalState is MAY_DISAPPEAR", [&]() {
     auto state = cluster_->getNode(2).sendCommand("info shardopstate 3 0");
@@ -205,7 +168,7 @@ TEST_P(MaintenanceManagerTest, BasicDrain) {
   req.set_reason("Integration Test");
 
   maintenanceDelta->set_remove_maintenances(std::move(req));
-  writeToMaintenanceLog(*client, *maintenanceDelta);
+  write_to_maintenance_log(*client, *maintenanceDelta);
 
   wait_until("ShardOperationalState is ENABLED", [&]() {
     auto state = cluster_->getNode(2).sendCommand("info shardopstate 3 0");
@@ -259,7 +222,7 @@ TEST_P(MaintenanceManagerTest, BasicPassiveDrain) {
 
   auto maintenanceDelta = std::make_unique<MaintenanceDelta>();
   maintenanceDelta->set_apply_maintenances({def});
-  writeToMaintenanceLog(*client, *maintenanceDelta);
+  write_to_maintenance_log(*client, *maintenanceDelta);
 
   wait_until("ShardOperationalState is PASSIVE_DRAINING", [&]() {
     auto state = cluster_->getNode(2).sendCommand("info shardopstate 0 0");
@@ -280,7 +243,7 @@ TEST_P(MaintenanceManagerTest, BasicPassiveDrain) {
   req.set_reason("Integration Test");
 
   maintenanceDelta->set_remove_maintenances(std::move(req));
-  writeToMaintenanceLog(*client, *maintenanceDelta);
+  write_to_maintenance_log(*client, *maintenanceDelta);
 
   wait_until("ShardOperationalState is ENABLED", [&]() {
     auto state = cluster_->getNode(2).sendCommand("info shardopstate 0 0");
@@ -352,7 +315,7 @@ TEST_P(MaintenanceManagerTest, Snapshotting) {
 
   auto maintenanceDelta = std::make_unique<MaintenanceDelta>();
   maintenanceDelta->set_apply_maintenances({def});
-  writeToMaintenanceLog(*client, *maintenanceDelta);
+  write_to_maintenance_log(*client, *maintenanceDelta);
 
   wait_until("N3's ShardOperationalState is DRAINED", [&]() {
     auto state = cluster_->getNode(2).sendCommand("info shardopstate 3 0");
@@ -379,7 +342,7 @@ TEST_P(MaintenanceManagerTest, Snapshotting) {
 
   maintenanceDelta = std::make_unique<MaintenanceDelta>();
   maintenanceDelta->set_apply_maintenances({def2});
-  writeToMaintenanceLog(*client, *maintenanceDelta);
+  write_to_maintenance_log(*client, *maintenanceDelta);
 
   wait_until("N2's ShardOperationalState is MAY_DISAPPEAR", [&]() {
     auto state = cluster_->getNode(2).sendCommand("info shardopstate 2 0");
@@ -406,7 +369,7 @@ TEST_P(MaintenanceManagerTest, Snapshotting) {
   req.set_reason("Integration Test");
 
   maintenanceDelta->set_remove_maintenances(std::move(req));
-  writeToMaintenanceLog(*client, *maintenanceDelta);
+  write_to_maintenance_log(*client, *maintenanceDelta);
 
   wait_until("N2's ShardOperationalState is ENABLED", [&]() {
     auto state = cluster_->getNode(2).sendCommand("info shardopstate 2 0");
@@ -425,7 +388,7 @@ TEST_P(MaintenanceManagerTest, Snapshotting) {
   req2.set_user("Test");
   req2.set_reason("Integration Test");
   maintenanceDelta->set_remove_maintenances(std::move(req2));
-  writeToMaintenanceLog(*client, *maintenanceDelta);
+  write_to_maintenance_log(*client, *maintenanceDelta);
 
   wait_until("N3's ShardOperationalState is ENABLED", [&]() {
     auto state = cluster_->getNode(2).sendCommand("info shardopstate 3 0");
@@ -539,7 +502,7 @@ TEST_P(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
   def.set_created_on(SystemTimestamp::now().toMilliseconds().count());
   auto maintenanceDelta = std::make_unique<MaintenanceDelta>();
   maintenanceDelta->set_apply_maintenances({def});
-  writeToMaintenanceLog(*client, *maintenanceDelta);
+  write_to_maintenance_log(*client, *maintenanceDelta);
 
   // Wait until maintenance completes
   wait_until("ShardOperationalState is DRAINED", [&]() {

@@ -12,7 +12,9 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/admin/if/gen-cpp2/AdminAPI.h"
+#include "logdevice/admin/maintenance/types.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/include/Client.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
 namespace facebook { namespace logdevice {
@@ -24,4 +26,12 @@ namespace facebook { namespace logdevice {
 void retry_until_ready(int32_t attempts,
                        std::chrono::seconds delay,
                        folly::Function<void()> operation);
+/**
+ * Writes a maintenance delta to the internal maintenance log, note that this
+ * requires both the ClusterMaintenanceState machine and maintenance manager
+ * components to be running in order for the delta to be consumed and acted
+ * upon. This returns an LSN_INVALID if it failed.
+ */
+lsn_t write_to_maintenance_log(Client& client,
+                               maintenance::MaintenanceDelta& delta);
 }} // namespace facebook::logdevice

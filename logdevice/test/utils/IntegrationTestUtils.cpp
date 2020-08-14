@@ -28,6 +28,7 @@
 #include <thrift/lib/cpp2/async/HeaderClientChannel.h>
 
 #include "logdevice/admin/if/gen-cpp2/AdminAPI.h"
+#include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 #include "logdevice/common/CheckSealRequest.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
 #include "logdevice/common/FileConfigSource.h"
@@ -62,6 +63,7 @@
 #include "logdevice/server/locallogstore/RocksDBLogStoreBase.h"
 #include "logdevice/server/locallogstore/ShardedRocksDBLocalLogStore.h"
 #include "logdevice/server/locallogstore/test/StoreUtil.h"
+#include "logdevice/test/utils/AdminAPITestUtils.h"
 #include "logdevice/test/utils/ServerInfo.h"
 #include "logdevice/test/utils/port_selection.h"
 
@@ -1523,6 +1525,18 @@ void Cluster::partition(std::vector<std::set<int>> partitions) {
   updateNodesConfiguration(*getConfig()
                                 ->getNodesConfiguration()
                                 ->withIncrementedVersionAndTimestamp());
+}
+bool Cluster::applyInternalMaintenance(Client& client,
+                                       node_index_t maintenance_leader,
+                                       node_index_t node_id,
+                                       uint32_t shard_idx,
+                                       const std::string& reason) {
+  maintenance::MaintenanceDelta delta;
+  delta.set_apply_maintenances({maintenance::MaintenanceLogWriter::
+                                    buildMaintenanceDefinitionForRebuilding(
+                                        ShardID(node_id, shard_idx), reason)});
+  // write_to_maintenance_log will set err if it returns LSN_INVALID
+  return write_to_maintenance_log(client, delta) != LSN_INVALID;
 }
 
 std::unique_ptr<Cluster>
