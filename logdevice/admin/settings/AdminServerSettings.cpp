@@ -220,6 +220,16 @@ void AdminServerSettings::defineSettings(SettingEasyInit& init) {
      SERVER,
      SettingsCategory::AdminAPI)
 
+    ("use-force-restore-rebuilding-flag",
+     &use_force_restore_rebuilding_flag,
+     "false",
+     nullptr,
+     "Allows maintenance manager to set the FORCE_RESTORE rebuilding flag."
+     "This is a transitional setting that will be removed after all servers"
+     "have support for this setting.",
+     SERVER,
+     SettingsCategory::AdminAPI)
+
     ("safety-check-metadata-update-period",
      &safety_check_metadata_update_period,
      "10min",

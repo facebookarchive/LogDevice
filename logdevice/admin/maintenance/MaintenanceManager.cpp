@@ -1753,13 +1753,15 @@ MaintenanceManager::runShardWorkflows() {
     // only for shards in the config
     ld_check(shard_state.has_value());
     shards.push_back(shard_id);
-    futures.push_back(wf->run(shard_state.value(),
-                              exclude_from_nodeset,
-                              getShardDataHealthInternal(shard_id),
-                              getCurrentRebuildingMode(shard_id),
-                              isShardDraining(shard_id),
-                              isRebuildingNonAuthoritative(shard_id),
-                              gossip_state));
+    futures.push_back(
+        wf->run(shard_state.value(),
+                exclude_from_nodeset,
+                getShardDataHealthInternal(shard_id),
+                getCurrentRebuildingMode(shard_id),
+                isShardDraining(shard_id),
+                isRebuildingNonAuthoritative(shard_id),
+                gossip_state,
+                deps_->settings()->use_force_restore_rebuilding_flag));
   }
   return std::make_pair(std::move(shards), std::move(futures));
 }

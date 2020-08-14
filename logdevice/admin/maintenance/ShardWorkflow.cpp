@@ -22,7 +22,8 @@ ShardWorkflow::run(const membership::ShardState& shard_state,
                    RebuildingMode rebuilding_mode,
                    bool is_draining,
                    bool is_non_authoritative,
-                   ClusterStateNodeState node_gossip_state) {
+                   ClusterStateNodeState node_gossip_state,
+                   bool use_force_restore_flag) {
   ld_spew(
       "%s",
       folly::format(
@@ -56,6 +57,7 @@ ShardWorkflow::run(const membership::ShardState& shard_state,
   current_rebuilding_mode_ = rebuilding_mode;
   current_is_draining_ = is_draining;
   current_rebuilding_is_non_authoritative_ = is_non_authoritative;
+  use_force_restore_flag_ = use_force_restore_flag;
   event_.reset();
   if (shard_state.manual_override) {
     updateStatus(MaintenanceStatus::BLOCKED_BY_ADMIN_OVERRIDE);
@@ -97,7 +99,14 @@ ShardWorkflow::run(const membership::ShardState& shard_state,
         [mpromise, status = status_](Status st,
                                      lsn_t /*unused*/,
                                      const std::string& /*unused*/) mutable {
-          auto result = st == E::OK ? status : MaintenanceStatus::RETRY;
+          // Currently the EventLog will return E::ALREADY if requesting a drain
+          // on a shard that we have requested a drain for before and on other
+          // scenarios where it just wants to acknowledge that the operation
+          // does not need to be applied again. If the operation has ALREADY
+          // been applied to the event log, we should not fail, just move on.
+          auto result = (st == E::OK || st == E::ALREADY)
+              ? status
+              : MaintenanceStatus::RETRY;
           mpromise->setValue(result);
         });
     return std::move(promise_future.second);
@@ -370,6 +379,12 @@ void ShardWorkflow::createRebuildEventIfRequired(bool force) {
   }
   if (restore_mode_rebuilding_) {
     if (current_rebuilding_mode_ != RebuildingMode::RESTORE || force) {
+      // Gated behind a setting since it requires an updated server that
+      // respects the FORCE_RESTORE flag.
+      if (use_force_restore_flag_) {
+        flag |= SHARD_NEEDS_REBUILD_Header::DRAIN;
+        flag |= SHARD_NEEDS_REBUILD_Header::FORCE_RESTORE;
+      }
       event_ = std::make_unique<SHARD_NEEDS_REBUILD_Event>(
           SHARD_NEEDS_REBUILD_Header{shard_.node(),
                                      (uint32_t)shard_.shard(),

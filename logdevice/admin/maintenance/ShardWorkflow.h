@@ -59,6 +59,9 @@ class ShardWorkflow {
    * @param is_draining           Is drain flag set in event log
    * @param is_non_authoritative  Is current rebuilding non authoritative.
    * @param node_gossip_state The gossip state of the node for this shard
+   * @param use_force_restore_flag A flag indicating whether maintenance manager
+   *                               should use the FORCE_RESTORE eventlog flag or
+   *                               not when triggering rebuilding for a shard.
    *
    * @return folly::SemiFuture<MaintenanceStatus> A SemiFuture out of
    *      MaintenanceStatus. Promise is fulfiled immediately if there
@@ -73,7 +76,8 @@ class ShardWorkflow {
       RebuildingMode rebuilding_mode,
       bool is_draining,
       bool is_non_authoritative,
-      ClusterStateNodeState node_gossip_state);
+      ClusterStateNodeState node_gossip_state,
+      bool use_force_restore_flag);
 
   // Returns the ShardID for this workflow
   ShardID getShardID() const;
@@ -173,6 +177,9 @@ class ShardWorkflow {
   // True if current rebuilding is non authoritative
   // Gets updated every time `run` is called
   bool current_rebuilding_is_non_authoritative_;
+  // A feature gating that was added temporarily to allow a migration of admin
+  // server to use a new eventlog FORCE_RESTORE flag
+  bool use_force_restore_flag_{false};
   // The last known gossip state for the node.
   ClusterStateNodeState gossip_state_;
   // The last RebuildingMode as informed by the MM for this

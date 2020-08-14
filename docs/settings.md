@@ -28,6 +28,7 @@ sidebar_label: Settings
 | safety-check-metadata-update-period | The period between automatic metadata updates for safety checker internal cache | 10min | server&nbsp;only |
 | safety-margin-low-pri-scopes | This is the extra safety margin that will be accounted for when evaluatingmaintenances with LOW priority. The value represents how many extra failure domains that the system can still lose in addition to the impact of the requested maintenance before losing availability | 1 | server&nbsp;only |
 | safety-margin-medium-pri-scopes | This is the extra safety margin that will be accounted for when evaluatingmaintenances with MEDIUM priority. The value represents how many extra failure domains that the system can still lose in addition to the impact of the requested maintenance before losing availability | 0 | server&nbsp;only |
+| use-force-restore-rebuilding-flag | Allows maintenance manager to set the FORCE\_RESTORE rebuilding flag.This is a transitional setting that will be removed after all servershave support for this setting. | false | server&nbsp;only |
 
 ## Batching and compression
 |   Name    |   Description   |  Default  |   Notes   |

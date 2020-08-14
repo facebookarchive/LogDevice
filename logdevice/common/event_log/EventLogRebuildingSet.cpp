@@ -189,9 +189,15 @@ int EventLogRebuildingSet::onShardNeedsRebuild(
     }
   }
 
+  // DEPRECATED. Will be removed.
   RebuildingMode requestedMode = flags & SHARD_NEEDS_REBUILD_Header::RELOCATE
       ? RebuildingMode::RELOCATE
       : RebuildingMode::RESTORE;
+
+  // FORCE_RESTORE will override the RELOCATE flag (hence the FORCE_ wording)
+  if (flags & SHARD_NEEDS_REBUILD_Header::FORCE_RESTORE) {
+    requestedMode = RebuildingMode::RESTORE;
+  }
 
   // Remove the existing node entry if it was already in the rebuilding set.
   // Before that, gather the information that is sticky about that node entry,
@@ -296,7 +302,9 @@ int EventLogRebuildingSet::onShardNeedsRebuild(
   node_info.drain = drain;
   node_info.mode = requestedMode;
   if (flags & SHARD_NEEDS_REBUILD_Header::DRAIN) {
-    if (flags & SHARD_NEEDS_REBUILD_Header::RELOCATE) {
+    if (flags & SHARD_NEEDS_REBUILD_Header::FORCE_RESTORE) {
+      currentMode = RebuildingMode::RESTORE;
+    } else if (flags & SHARD_NEEDS_REBUILD_Header::RELOCATE) {
       RATELIMIT_INFO(std::chrono::seconds(1),
                      1,
                      "Rebuilding mode is set "
@@ -305,6 +313,7 @@ int EventLogRebuildingSet::onShardNeedsRebuild(
     }
     // When drain flag is set, preserve the existing mode
     // if one exists. Otherwise, set mode to RELOCATE.
+    // if FORCE_RESTORE is set, we always use it.
     node_info.mode = currentMode.has_value() ? currentMode.value()
                                              : RebuildingMode::RELOCATE;
     node_info.drain = true;

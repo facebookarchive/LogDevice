@@ -52,6 +52,9 @@ struct AdminServerSettings : public SettingsBundle {
   bool read_metadata_from_sequencers;
   bool enable_safety_check_periodic_metadata_update;
   std::chrono::milliseconds safety_check_metadata_update_period;
+  // A transitional setting that will be used in the rollout of the
+  // FORCE_RESTORE flag in rebuilding.
+  bool use_force_restore_rebuilding_flag;
 
   // If true, start maintenance manager
   bool enable_maintenance_manager;

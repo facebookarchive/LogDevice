@@ -1315,9 +1315,9 @@ TEST_P(RebuildingTest, NodeDrainCanceled) {
   // Stop N3 so that rebuilding stalls.
   cluster->getNode(3).shutdown();
 
-  // Start draining N5
-  auto flags =
-      SHARD_NEEDS_REBUILD_Header::RELOCATE | SHARD_NEEDS_REBUILD_Header::DRAIN;
+  // Start draining in RESTORE mode N5
+  auto flags = SHARD_NEEDS_REBUILD_Header::FORCE_RESTORE |
+      SHARD_NEEDS_REBUILD_Header::DRAIN;
   ASSERT_NE(
       LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 0, flags));
   ASSERT_NE(
@@ -1371,9 +1371,9 @@ TEST_P(RebuildingTest, NodeDiesAfterDrain) {
   cluster->waitForRecovery();
   auto client = cluster->createClient();
 
-  // Start draining N5
-  auto flags =
-      SHARD_NEEDS_REBUILD_Header::RELOCATE | SHARD_NEEDS_REBUILD_Header::DRAIN;
+  // Start draining N5 in RESTORE mode.
+  auto flags = SHARD_NEEDS_REBUILD_Header::FORCE_RESTORE |
+      SHARD_NEEDS_REBUILD_Header::DRAIN;
   ASSERT_NE(
       LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 0, flags));
   ASSERT_NE(
