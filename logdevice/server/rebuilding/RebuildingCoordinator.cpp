@@ -930,12 +930,31 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
         // 2/. The data is intact. Restart the drain in RELOCATE mode.
         // Write RemoveMaintenance request if ClusterMaintenanceStateMachine
         // is enabled
-        ld_info("The data on my shard %u is intact, restart rebuilding for "
-                "this shard to continue the drain in RELOCATE mode.",
-                shard_idx);
-        auto f = SHARD_NEEDS_REBUILD_Header::RELOCATE |
-            SHARD_NEEDS_REBUILD_Header::CONDITIONAL_ON_VERSION;
-        restartForMyShard(shard_idx, f, nullptr, rsi->version);
+        auto const* shard = set.getNodeInfo(myNodeId_, shard_idx);
+        // If the shard is already EMPTY (we finished draining, there is no
+        // point on restarting rebuilding and going back to FULLY_AUTHORITATIVE.
+        // Only restart rebuilding if needed)
+        //
+        // TODO: Consider moving this check into restartForMyShard() after
+        // validating that this will not affect correctness in all the cases.
+        // Without this check, the shard will restart rebuilding in RELOCATE
+        // mode even if it's storage state is NONE and has already finished
+        // rebuilding before. The auth_status will transition into
+        // FULLY_AUTHORITATIVE and rebuilding will start all over again.
+        if (shard->auth_status != AuthoritativeStatus::AUTHORITATIVE_EMPTY) {
+          ld_info("The data on my shard %u is intact, restart rebuilding for "
+                  "this shard to continue the drain in RELOCATE mode.",
+                  shard_idx);
+          auto f = SHARD_NEEDS_REBUILD_Header::RELOCATE |
+              SHARD_NEEDS_REBUILD_Header::CONDITIONAL_ON_VERSION;
+          restartForMyShard(shard_idx, f, nullptr, rsi->version);
+        } else {
+          // We are EMPTY and in RESTORE mode. Nothing to be done here.
+          ld_info("The data on my shard %u is intact, but data has already "
+                  "rebuilt, will remain as EMPTY until the shard drain is "
+                  "cancelled.",
+                  shard_idx);
+        }
       }
     } else if (is_restore && shouldMarkMyShardUnrecoverable(shard_idx)) {
       // 3/ We should mark the data unrecoverable.
