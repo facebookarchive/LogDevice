@@ -65,11 +65,14 @@ int BufferedWriteDecoderImpl::decodeOne(std::unique_ptr<DataRecord>&& record,
 int BufferedWriteDecoderImpl::decodeOne(
     std::unique_ptr<DataRecord>&& record,
     std::vector<PayloadGroup>& payload_groups_out) {
+  // TODO this can be switched to using IOBuf, taken from the record (after
+  // casting to DataRecordOwnsPayload) and allow buffer sharing to avoid copying
+  // buffer
   Slice slice(record->payload);
   return decodeOne(slice,
                    payload_groups_out,
                    std::move(record),
-                   /* allow_buffer_sharing */ true);
+                   /* allow_buffer_sharing */ false);
 };
 
 int BufferedWriteDecoderImpl::decodeOne(const DataRecord& record,

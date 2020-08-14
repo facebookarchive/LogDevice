@@ -43,6 +43,7 @@ class BufferedWriteDecoder {
    * This method is meant to be used with data records returned by the Reader
    * API.
    *
+   * Payload overload:
    * Original payloads are appended to `payloads_out' and they point into
    * memory owned by this decoder after the call has returned.  It is only
    * safe to use the returned Payload instances as long as this decoder still
@@ -50,7 +51,10 @@ class BufferedWriteDecoder {
    * assumes ownership of the payloads, which is why `records' is taken by
    * reference.)
    *
-   * If is fine to use the same decoder instance to decode multiple batches of
+   * PayloadGroup overload:
+   * IOBufs in returned PayloadGroups are managed and can outlive the decoder.
+   *
+   * It is fine to use the same decoder instance to decode multiple batches of
    * records read from LogDevice. However, the decoder pins memory so it should
    * typically be short-lived (its lifetime is tied to the Payload instances in
    * payloads_out as explained above).

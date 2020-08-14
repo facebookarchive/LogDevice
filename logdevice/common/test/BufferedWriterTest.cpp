@@ -236,8 +236,8 @@ class TestAppendSink : public BufferedWriterAppendSink {
 
       for (PayloadGroup& payload_group : payload_groups) {
         for (auto& [key, iobuf] : payload_group) {
-          // detach iobufs from decoder if needed
-          iobuf.makeManaged();
+          // decoder must return managed IOBufs only
+          CHECK(iobuf.isManaged());
         }
         rv.emplace_back(std::move(payload_group));
       }
