@@ -153,8 +153,9 @@ class&#160;</td><td class="memItemRight" valign="bottom"><b>BufferedWriteDecoder
       </table>
 </div><div class="memdoc">
 <p>This method is meant to be used with data records returned by the <a class="el" href="classfacebook_1_1logdevice_1_1_reader.html">Reader</a> API.</p>
-<p>Original payloads are appended to `payloads_out' and they point into memory owned by this decoder after the call has returned. It is only safe to use the returned Payload instances as long as this decoder still exists. (For any successfully decoded DataRecord instances, this class assumes ownership of the payloads, which is why `records' is taken by reference.)</p>
-<p>If is fine to use the same decoder instance to decode multiple batches of records read from LogDevice. However, the decoder pins memory so it should typically be short-lived (its lifetime is tied to the Payload instances in payloads_out as explained above).</p>
+<p>Payload overload: Original payloads are appended to `payloads_out' and they point into memory owned by this decoder after the call has returned. It is only safe to use the returned Payload instances as long as this decoder still exists. (For any successfully decoded DataRecord instances, this class assumes ownership of the payloads, which is why `records' is taken by reference.)</p>
+<p>PayloadGroup overload: IOBufs in returned PayloadGroups are managed and can outlive the decoder.</p>
+<p>It is fine to use the same decoder instance to decode multiple batches of records read from LogDevice. However, the decoder pins memory so it should typically be short-lived (its lifetime is tied to the Payload instances in payloads_out as explained above).</p>
 <dl class="section return"><dt>Returns</dt><dd>On success, returns 0. If some DataRecord's failed to decode, return -1, leaving malformed records in `records'. </dd></dl>
 
 </div>
