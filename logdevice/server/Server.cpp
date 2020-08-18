@@ -672,7 +672,7 @@ bool Server::initListeners() {
     connection_listener_loop_ = std::make_unique<folly::EventBaseThread>(
         true,
         nullptr,
-        ConnectionListener::connectionKindNames()[ConnectionKind::DATA]);
+        ConnectionListener::connectionKindToThreadName(ConnectionKind::DATA));
 
     connection_listener_ = initListener<ConnectionListener>(
         server_settings_->port,
@@ -761,7 +761,8 @@ bool Server::initListeners() {
         gossip_listener_loop_ = std::make_unique<folly::EventBaseThread>(
             true,
             nullptr,
-            ConnectionListener::connectionKindNames()[ConnectionKind::GOSSIP]);
+            ConnectionListener::connectionKindToThreadName(
+                ConnectionKind::GOSSIP));
 
         gossip_listener_ = initListener<ConnectionListener>(
             gossip_port,
@@ -797,8 +798,8 @@ bool Server::initListeners() {
           std::make_unique<folly::EventBaseThread>(
               /* autostart */ true,
               /* eventBaseManager */ nullptr,
-              ConnectionListener::connectionKindNames()
-                  [ConnectionKind::SERVER_TO_SERVER]);
+              ConnectionListener::connectionKindToThreadName(
+                  ConnectionKind::SERVER_TO_SERVER));
       server_to_server_listener_ = initListener<ConnectionListener>(
           server_to_server_port,
           server_to_server_socket,

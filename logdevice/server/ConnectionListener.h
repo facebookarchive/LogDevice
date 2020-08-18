@@ -37,8 +37,7 @@ class ConnectionListener : public Listener {
     std::atomic_int last_client_idx_{0};
   };
 
-  static const SimpleEnumMap<ConnectionKind, std::string>&
-  connectionKindNames();
+  static const char* connectionKindToThreadName(ConnectionKind);
 
   // EventLoop on which ConnectionListener is running
   KeepAlive loop_;

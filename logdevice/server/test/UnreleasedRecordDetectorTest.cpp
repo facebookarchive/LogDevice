@@ -250,7 +250,7 @@ void UnreleasedRecordDetectorTest::SetUp() {
   connection_listener_loop_ = std::make_unique<folly::EventBaseThread>(
       true,
       nullptr,
-      ConnectionListener::connectionKindNames()[ConnectionKind::DATA]);
+      ConnectionListener::connectionKindToThreadName(ConnectionKind::DATA));
   connection_listener_ = std::make_unique<ConnectionListener>(
       Listener::InterfaceDef(std::move(socketPath), false),
       folly::getKeepAliveToken(connection_listener_loop_->getEventBase()),

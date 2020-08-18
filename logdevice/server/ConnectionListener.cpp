@@ -39,15 +39,22 @@ ConnectionListener::ConnectionListener(
   ld_check(shared_state);
 }
 
-const SimpleEnumMap<ConnectionKind, std::string>&
-ConnectionListener::connectionKindNames() {
+const char*
+ConnectionListener::connectionKindToThreadName(ConnectionKind connection_kind) {
   // Note that thread names are limited to 16 characters. Use them wisely.
-  static SimpleEnumMap<ConnectionKind, std::string> listener_names(
-      {{ConnectionKind::DATA, "ld:conn-listen"},
-       {ConnectionKind::DATA_SSL, "ld:sconn-listen"},
-       {ConnectionKind::GOSSIP, "ld:gossip"},
-       {ConnectionKind::SERVER_TO_SERVER, "ld:s2s-listen"}});
-  return listener_names;
+  switch (connection_kind) {
+    case ConnectionKind::DATA:
+      return "ld:conn-listen";
+    case ConnectionKind::DATA_SSL:
+      return "ld:sconn-listen";
+    case ConnectionKind::GOSSIP:
+      return "ld:gossip";
+    case ConnectionKind::SERVER_TO_SERVER:
+      return "ld:s2s-listen";
+    case ConnectionKind::MAX:
+      ld_check(false);
+      return "ld:conn-max";
+  }
 }
 
 ConnectionType
@@ -85,7 +92,7 @@ void ConnectionListener::ReadEventHandler::handlerReady(
           1,
           "Error passing accepted connection to %s thread. "
           "postRequest() reported %s.",
-          connectionKindNames()[connection_listener_->connection_kind_].c_str(),
+          connectionKindToThreadName(connection_listener_->connection_kind_),
           error_description(err));
       folly::netops::close(sock_);
       // ~NewConnectionRequest() will also destroy the token, thus releasing the
