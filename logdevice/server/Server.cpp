@@ -8,6 +8,7 @@
 #include "logdevice/server/Server.h"
 
 #include <folly/io/async/EventBaseThread.h>
+#include <thrift/lib/cpp/util/EnumUtils.h>
 
 #include "logdevice/admin/AdminAPIHandler.h"
 #include "logdevice/admin/maintenance/ClusterMaintenanceStateMachine.h"
@@ -69,11 +70,10 @@
 #include "logdevice/server/thrift/api/LogDeviceAPIThriftHandler.h"
 #include "logdevice/server/util.h"
 
+using namespace facebook::logdevice::configuration::nodes;
 using facebook::logdevice::configuration::LocalLogsConfig;
 
 namespace facebook { namespace logdevice {
-
-using namespace facebook::logdevice::configuration::nodes;
 
 static StatsHolder* errorStats = nullptr;
 
@@ -691,6 +691,16 @@ bool Server::initListeners() {
         nodes_configuration->getNodeServiceDiscovery(node_id.index());
     ld_check(node_svc);
 
+    // Validate certificates if needed
+    if (node_svc->ssl_address.has_value() ||
+        params_->getProcessorSettings().get()->ssl_on_gossip_port) {
+      if (!validateSSLCertificatesExist(
+              params_->getProcessorSettings().get())) {
+        // validateSSLCertificatesExist() should output the error
+        return false;
+      }
+    }
+
     // Gets UNIX socket or port number from a SocketAddress
     auto getSocketOrPort = [](const folly::SocketAddress& addr,
                               std::string& socket_out,
@@ -719,11 +729,6 @@ bool Server::initListeners() {
                  node_id.toString().c_str());
         return false;
       } else {
-        if (!validateSSLCertificatesExist(
-                params_->getProcessorSettings().get())) {
-          // validateSSLCertificatesExist() should output the error
-          return false;
-        }
         ssl_connection_listener_ = initListener<ConnectionListener>(
             ssl_port,
             ssl_unix_socket,
@@ -753,12 +758,6 @@ bool Server::initListeners() {
                 " since gossip-enabled is not set.");
       } else {
         ld_info("Initializing a gossip listener.");
-        if (params_->getProcessorSettings().get()->ssl_on_gossip_port &&
-            !validateSSLCertificatesExist(
-                params_->getProcessorSettings().get())) {
-          // validateSSLCertificatesExist() should output the error
-          return false;
-        }
         gossip_listener_loop_ = std::make_unique<folly::EventBaseThread>(
             true,
             nullptr,
@@ -812,6 +811,39 @@ bool Server::initListeners() {
           server_settings_->enable_dscp_reflection);
     }
 
+    for (const auto& [priority, socket_addr] :
+         node_svc->addresses_per_priority) {
+      std::string socket_str;
+      int port = -1;
+      if (!getSocketOrPort(socket_addr.getSocketAddress(), socket_str, port)) {
+        ld_error("Node(%s): Cannot parse port/address for network priority %s",
+                 node_id.toString().c_str(),
+                 apache::thrift::util::enumNameSafe(priority).c_str());
+        return false;
+      }
+
+      if (priority == ServerSettings::ClientNetworkPriority::MEDIUM) {
+        // MEDIUM priority should go to the default listener.
+        ld_check(port == server_settings_->port ||
+                 socket_str == server_settings_->unix_socket);
+        continue;
+      }
+
+      auto listener = initListener<ConnectionListener>(
+          port,
+          socket_str,
+          /* ssl */ true,
+          folly::getKeepAliveToken(connection_listener_loop_->getEventBase()),
+          conn_shared_state,
+          ConnectionKind::DATA_SSL,
+          conn_budget_backlog_,
+          server_settings_->enable_dscp_reflection);
+
+      listeners_per_network_priority_.emplace(
+          std::piecewise_construct,
+          std::forward_as_tuple(priority),
+          std::forward_as_tuple(std::move(listener)));
+    };
   } catch (const ConstructorFailed&) {
     // failed to initialize listeners
     return false;
@@ -1687,6 +1719,12 @@ bool Server::startListening() {
     return false;
   }
 
+  for (auto& [_, listener] : listeners_per_network_priority_) {
+    if (!startConnectionListener(listener)) {
+      return false;
+    }
+  }
+
   return true;
 }
 
@@ -1704,6 +1742,7 @@ void Server::gracefulShutdown() {
                   s2s_thrift_api_handle_,
                   c2s_thrift_api_handle_,
                   connection_listener_,
+                  listeners_per_network_priority_,
                   gossip_listener_,
                   ssl_connection_listener_,
                   server_to_server_listener_,

@@ -31,10 +31,13 @@ const TagMap kTestTags{{"key1", "value1"}, {"key_2", ""}};
 
 NodeServiceDiscovery genDiscovery(node_index_t n, const Node& node) {
   std::string addr = folly::sformat("127.0.0.{}", n);
+  auto default_client_data_address =
+      node.address.valid() ? node.address : Sockaddr(addr, 4440);
+
   return NodeServiceDiscovery{
       node.name,
       /*version*/ 0,
-      node.address.valid() ? node.address : Sockaddr(addr, 4440),
+      default_client_data_address,
       node.gossip_address.valid()
           ? folly::Optional<Sockaddr>(node.gossip_address)
           : folly::none,
@@ -45,7 +48,7 @@ NodeServiceDiscovery genDiscovery(node_index_t n, const Node& node) {
       node.client_thrift_api_address,
       /*addresses_per_priority*/
       {{NodeServiceDiscovery::ClientNetworkPriority::MEDIUM,
-        Sockaddr(addr, 4440)}},
+        default_client_data_address}},
       node.location,
       node.roles,
       node.tags};

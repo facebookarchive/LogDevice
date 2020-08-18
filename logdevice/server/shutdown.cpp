@@ -134,6 +134,8 @@ void shutdown_server(
     std::unique_ptr<LogDeviceThriftServer>& s2s_thrift_api_server,
     std::unique_ptr<LogDeviceThriftServer>& c2s_thrift_api_server,
     std::unique_ptr<Listener>& connection_listener,
+    std::map<ServerSettings::ClientNetworkPriority, std::unique_ptr<Listener>>&
+        listeners_per_priority,
     std::unique_ptr<Listener>& gossip_listener,
     std::unique_ptr<Listener>& ssl_connection_listener,
     std::unique_ptr<Listener>& server_to_server_listener,
@@ -199,30 +201,34 @@ void shutdown_server(
 
   // stop accepting new connections
   ld_info("Destroying listeners");
-  std::vector<folly::SemiFuture<folly::Unit>> listeners_closed;
+  std::vector<folly::SemiFuture<folly::Unit>> closed_listeners;
   if (connection_listener) {
-    listeners_closed.emplace_back(
+    closed_listeners.emplace_back(
         connection_listener->stopAcceptingConnections());
+  }
+  for (auto& [_, listener] : listeners_per_priority) {
+    closed_listeners.emplace_back(listener->stopAcceptingConnections());
   }
 
   if (gossip_listener) {
-    listeners_closed.emplace_back(gossip_listener->stopAcceptingConnections());
+    closed_listeners.emplace_back(gossip_listener->stopAcceptingConnections());
   }
   if (ssl_connection_listener) {
-    listeners_closed.emplace_back(
+    closed_listeners.emplace_back(
         ssl_connection_listener->stopAcceptingConnections());
   }
   if (server_to_server_listener) {
-    listeners_closed.emplace_back(
+    closed_listeners.emplace_back(
         server_to_server_listener->stopAcceptingConnections());
   }
 
-  folly::collectAllUnsafe(listeners_closed.begin(), listeners_closed.end())
+  folly::collectAllUnsafe(closed_listeners.begin(), closed_listeners.end())
       .wait();
 
   gossip_listener.reset();
   gossip_listener_loop.reset();
   ssl_connection_listener.reset();
+  listeners_per_priority.clear();
   server_to_server_listener.reset();
   server_to_server_listener_loop.reset();
   connection_listener.reset();

@@ -289,6 +289,8 @@ class Server {
   std::unique_ptr<Listener> ssl_connection_listener_;
   std::unique_ptr<Listener> gossip_listener_;
   std::unique_ptr<Listener> server_to_server_listener_;
+  std::map<ServerSettings::ClientNetworkPriority, std::unique_ptr<Listener>>
+      listeners_per_network_priority_;
 
   // initStore()
   std::unique_ptr<ShardedRocksDBLocalLogStore> sharded_store_;

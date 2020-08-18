@@ -13,6 +13,7 @@
 #include <folly/io/async/EventBaseThread.h>
 
 #include "logdevice/common/WorkerType.h"
+#include "logdevice/server/ServerSettings.h"
 
 namespace facebook { namespace logdevice {
 
@@ -61,6 +62,8 @@ void shutdown_server(
     std::unique_ptr<LogDeviceThriftServer>& s2s_thrift_api_server,
     std::unique_ptr<LogDeviceThriftServer>& c2s_thrift_api_server,
     std::unique_ptr<Listener>& connection_listener,
+    std::map<ServerSettings::ClientNetworkPriority, std::unique_ptr<Listener>>&
+        listeners_per_priority,
     std::unique_ptr<Listener>& gossip_listener,
     std::unique_ptr<Listener>& ssl_connection_listener,
     std::unique_ptr<Listener>& server_to_server_listener,

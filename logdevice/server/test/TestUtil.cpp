@@ -118,6 +118,9 @@ std::shared_ptr<ServerProcessor> TestServerProcessorBuilder::build() && {
 }
 
 void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {
+  using ClientNetworkPriority =
+      configuration::nodes::NodeServiceDiscovery::ClientNetworkPriority;
+
   std::unique_ptr<LogDeviceThriftServer> admin_handle;
   std::unique_ptr<LogDeviceThriftServer> s2s_thrift_api_server;
   std::unique_ptr<LogDeviceThriftServer> c2s_thrift_api_server;
@@ -125,6 +128,8 @@ void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {
   std::unique_ptr<Listener> gossip_listener;
   std::unique_ptr<Listener> ssl_connection_listener;
   std::unique_ptr<Listener> server_to_server_listener;
+  std::map<ClientNetworkPriority, std::unique_ptr<Listener>>
+      listeners_per_priority;
   std::unique_ptr<folly::EventBaseThread> connection_listener_loop;
   std::unique_ptr<folly::EventBaseThread> gossip_listener_loop;
   std::unique_ptr<folly::EventBaseThread> server_to_server_listener_loop;
@@ -144,6 +149,7 @@ void shutdown_test_server(std::shared_ptr<ServerProcessor>& processor) {
                   s2s_thrift_api_server,
                   c2s_thrift_api_server,
                   connection_listener,
+                  listeners_per_priority,
                   gossip_listener,
                   ssl_connection_listener,
                   server_to_server_listener,
