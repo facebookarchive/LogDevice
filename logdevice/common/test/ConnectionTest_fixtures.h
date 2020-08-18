@@ -38,8 +38,7 @@ class ConnectionTest;
 
 class TestSocketDependencies : public SocketDependencies {
  public:
-  explicit TestSocketDependencies(ConnectionTest* owner)
-      : SocketDependencies(nullptr, nullptr), owner_(owner) {}
+  explicit TestSocketDependencies(ConnectionTest* owner);
 
   virtual const Settings& getSettings() const override;
   virtual StatsHolder* getStats() const override;
@@ -53,10 +52,10 @@ class TestSocketDependencies : public SocketDependencies {
   virtual std::shared_ptr<folly::SSLContext> getSSLContext() const override;
   virtual bool shuttingDown() const override;
   virtual std::string dumpQueuedMessages(Address addr) const override;
-  virtual const Sockaddr&
-  getNodeSockaddr(NodeID node_id,
-                  SocketType socket_type,
-                  ConnectionType connection_type) override;
+
+  MOCK_METHOD3(getNodeSockaddr,
+               const Sockaddr&(NodeID, SocketType, ConnectionType));
+
   EvBase* getEvBase() override;
   virtual SteadyTimestamp getCurrentTimestamp() override;
   virtual void onSent(std::unique_ptr<Message> msg,
@@ -83,6 +82,8 @@ class TestSocketDependencies : public SocketDependencies {
   ResourceBudget::Token getResourceToken(size_t payload_size) override;
   virtual int setSoMark(int fd, uint32_t so_mark) override;
   virtual int getTCPInfo(TCPInfo*, int fd) override;
+  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  getNodesConfiguration() const override;
 
   NodeID getDestinationNodeID();
 
@@ -174,7 +175,7 @@ class ConnectionTest : public ::testing::Test {
       on_received_hook_;
 
   std::unique_ptr<Connection> conn_;
-  SocketDependencies* deps_;
+  TestSocketDependencies* deps_;
 
   testing::NiceMock<MockSocketAdapter>* sock_;
   folly::AsyncSocket::WriteCallback* wr_callback_;
@@ -182,6 +183,8 @@ class ConnectionTest : public ::testing::Test {
   bool tamper_checksum_;
   bool socket_closed_{false};
   SteadyTimestamp last_usage_check_time_{SteadyTimestamp::min()};
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
+      nodes_configuration_;
 };
 
 class ClientConnectionTest : public ConnectionTest {

@@ -17,6 +17,7 @@
 #include "logdevice/common/protocol/CHECK_NODE_HEALTH_Message.h"
 #include "logdevice/common/protocol/GET_SEQ_STATE_Message.h"
 #include "logdevice/common/test/ConnectionTest_fixtures.h"
+#include "logdevice/common/test/NodesConfigurationTestUtil.h"
 
 using ::testing::_;
 using ::testing::Args;
@@ -1241,4 +1242,57 @@ TEST_F(ClientConnectionTest, SenderBytesPendingTest) {
   writeSuccess();
   // Message written into tcp socket.
   EXPECT_EQ(bytes_pending_, 0);
+}
+
+TEST_F(ClientConnectionTest, ShouldDetectChangesInAddressForConnection) {
+  using namespace configuration::nodes;
+
+  const Sockaddr kTestAddress1 = conn_->peerSockaddr();
+  const Sockaddr kTestAddress2 = Sockaddr{get_localhost_address_str(), 4441};
+  const int server_nidx = server_name_.index();
+  const int other_server_nidx = server_nidx + 1;
+  const auto generation = server_name_.generation();
+  const auto metadata_replication_property =
+      ReplicationProperty{{NodeLocationScope::NODE, 1}};
+
+  // setup nodes configuration to contain server_name_
+  Configuration::Nodes nodes;
+  for (auto nidx : {server_nidx, other_server_nidx}) {
+    nodes[nidx].generation = generation;
+    nodes[nidx].addSequencerRole();
+    nodes[nidx].addStorageRole(2);
+  }
+  nodes_configuration_ = NodesConfigurationTestUtil::provisionNodes(
+      nodes, metadata_replication_property);
+
+  EXPECT_CALL(*deps_, getNodeSockaddr(_, _, _))
+      .WillRepeatedly(testing::ReturnRef(kTestAddress1));
+
+  EXPECT_FALSE(conn_->isNodeConnectionAddressOrGenerationOutdated())
+      << "Initial config should have correct address";
+
+  EXPECT_CALL(*deps_, getNodeSockaddr(_, _, _))
+      .WillRepeatedly(testing::ReturnRef(kTestAddress2));
+  EXPECT_TRUE(conn_->isNodeConnectionAddressOrGenerationOutdated())
+      << "Changing node address in config should result in outdated address";
+
+  EXPECT_CALL(*deps_, getNodeSockaddr(_, _, _))
+      .WillRepeatedly(testing::ReturnRef(kTestAddress1));
+  EXPECT_FALSE(conn_->isNodeConnectionAddressOrGenerationOutdated())
+      << "Initial config should have correct address";
+
+  nodes[server_nidx].generation = generation + 1;
+  nodes_configuration_ = NodesConfigurationTestUtil::provisionNodes(
+      nodes, metadata_replication_property);
+  EXPECT_TRUE(conn_->isNodeConnectionAddressOrGenerationOutdated())
+      << "Change in generation should be detected";
+
+  // replace config by one without server
+  nodes.erase(server_nidx);
+  nodes_configuration_ = NodesConfigurationTestUtil::provisionNodes(
+      nodes, metadata_replication_property);
+
+  EXPECT_TRUE(conn_->isNodeConnectionAddressOrGenerationOutdated())
+      << "Removing node from config should make connection have outdated "
+         "address.";
 }

@@ -19,6 +19,12 @@ using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::SaveArg;
 
+TestSocketDependencies::TestSocketDependencies(ConnectionTest* owner)
+    : SocketDependencies(nullptr, nullptr), owner_(owner) {
+  ON_CALL(*this, getNodeSockaddr(owner_->server_name_, _, _))
+      .WillByDefault(testing::ReturnRef(owner_->server_addr_));
+}
+
 const Settings& TestSocketDependencies::getSettings() const {
   return owner_->settings_;
 }
@@ -55,16 +61,6 @@ bool TestSocketDependencies::shuttingDown() const {
 
 std::string TestSocketDependencies::dumpQueuedMessages(Address /*addr*/) const {
   return "";
-}
-
-const Sockaddr&
-TestSocketDependencies::getNodeSockaddr(NodeID node_id,
-                                        SocketType /* socket_type */,
-                                        ConnectionType /* connection_type */) {
-  // Socket should only call this function on owner_->server_name_.
-  EXPECT_EQ(owner_->server_name_, node_id);
-  EXPECT_TRUE(owner_->server_addr_.valid());
-  return owner_->server_addr_;
 }
 
 EvBase* TestSocketDependencies::getEvBase() {
@@ -157,6 +153,11 @@ folly::Executor* TestSocketDependencies::getExecutor() const {
 int TestSocketDependencies::getTCPInfo(TCPInfo* info, int /*fd*/) {
   *info = owner_->socket_flow_stats_;
   return 0;
+}
+
+std::shared_ptr<const configuration::nodes::NodesConfiguration>
+TestSocketDependencies::getNodesConfiguration() const {
+  return owner_->nodes_configuration_;
 }
 
 //
