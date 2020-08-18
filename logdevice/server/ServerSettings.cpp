@@ -103,20 +103,6 @@ static configuration::nodes::RoleSet parse_roles(const std::string& value) {
   return roles;
 }
 
-ClientNetworkPriority parse_network_priority(const std::string& value) {
-  if (value == "high") {
-    return ClientNetworkPriority::HIGH;
-  } else if (value == "medium") {
-    return ClientNetworkPriority::MEDIUM;
-  } else if (value == "low") {
-    return ClientNetworkPriority::LOW;
-  } else {
-    throw boost::program_options::error(
-        folly::sformat("Invalid network priority: {}", value));
-  }
-  folly::assume_unreachable();
-}
-
 template <typename T, typename F>
 decltype(auto) parse_values_per_network_priority(const std::string& value,
                                                  F func) {
@@ -139,7 +125,11 @@ decltype(auto) parse_values_per_network_priority(const std::string& value,
     }
 
     auto priority = parse_network_priority(kv_str[0]);
-    result[priority] = func(kv_str[1]);
+    if (!priority.has_value()) {
+      throw boost::program_options::error(
+          folly::sformat("Invalid network priority definition: {}", kv_str[0]));
+    }
+    result[priority.value()] = func(kv_str[1]);
   }
   return result;
 }

@@ -232,6 +232,7 @@ sidebar_label: Settings
 |-----------|-----------------|:---------:|-----------|
 | checksumming-blacklisted-messages | Used to control what messages shouldn't be checksummed at the protocol layer |  | requires&nbsp;restart, **experimental** |
 | checksumming-enabled | A switch to turn on/off checksumming for all LogDevice protocol messages. If false: no checksumming is done, If true: checksumming-blacklisted-messages is consulted. | false | **experimental** |
+| client-default-network-priority | Sets the default client network priority. Clients will connect to the server port associated with this priority, unless 'enable-port-based-qos' is false. Value must be one of 'low','medium', or 'high. |  |  |
 | command-conn-limit | Maximum number of concurrent admin connections | 32 | server&nbsp;only |
 | connect-throttle | timeout after it which two nodes retry to connect when they loose a a connection. Used in ConnectThrottle to ensure we don't retry too  often. Needs restart to load the new values. | 1ms..10s | requires&nbsp;restart |
 | connect-timeout | connection timeout when establishing a TCP connection to a node | 100ms |  |
@@ -239,6 +240,7 @@ sidebar_label: Settings
 | connection-backlog | (server-only setting) Maximum number of incoming connections that have been accepted by listener (have an open FD) but have not been processed by workers (made logdevice protocol handshake). | 2000 | server&nbsp;only |
 | connection-retries | the number of TCP connection retries before giving up | 4 |  |
 | enable-dscp-reflection | If enabled, server will use DSCP TypeOfService used by client for communicationoIf disabled, server will use default DSCP value  | true | requires&nbsp;restart, server&nbsp;only |
+| enable-port-based-qos | Feature gate setting for allowing port-based QoS / connections per network priority. If disabled, all addresses will resolve to the default\_data\_address listed in nodes configuration. Note that this feature does not apply to connections between servers, only client to server. | false |  |
 | handshake-timeout | LogDevice protocol handshake timeout | 1s |  |
 | idle-connection-keep-alive | How long inactive client-to-server connection will stay open before being shut down automatically. | 5min | client&nbsp;only |
 | include-destination-on-handshake | Include the destination node ID in the LogDevice protocol handshake. If the actual node ID of the connection target does not match the intended destination ID, the connection is terminated. | true |  |

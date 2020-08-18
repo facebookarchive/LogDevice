@@ -47,7 +47,9 @@ class ServerAddressRouter {
              bool is_server,
              bool use_dedicated_server_to_server_address,
              bool use_dedicated_gossip_port,
-             const std::vector<node_index_t>& same_partition_nodes) const;
+             const std::vector<node_index_t>& same_partition_nodes,
+             folly::Optional<NodeServiceDiscovery::ClientNetworkPriority>
+                 network_priority) const;
 
   /**
    * Returns the corresponding Thrift API address for given server node.

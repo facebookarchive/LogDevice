@@ -13,6 +13,7 @@
 #include <boost/program_options.hpp>
 #include <folly/small_vector.h>
 
+#include "logdevice/common/if/gen-cpp2/common_types.h"
 #include "logdevice/common/util.h"
 
 /**
@@ -295,5 +296,8 @@ void validate_unix_socket(const std::string& unix_socket);
 
 void validate_port(int port);
 void validate_optional_port(int port);
+
+folly::Optional<thrift::ClientNetworkPriority>
+parse_network_priority(const std::string& value);
 
 }}} // namespace facebook::logdevice::setting_validators

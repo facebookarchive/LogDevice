@@ -150,6 +150,8 @@ struct NodeServiceDiscovery {
   const RoleSet& getRoles() const {
     return roles;
   }
+
+  static std::string networkPriorityToString(const ClientNetworkPriority&);
 };
 
 using ServiceDiscoveryConfig = NodeAttributesConfig<NodeServiceDiscovery>;

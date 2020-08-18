@@ -35,7 +35,9 @@ const Sockaddr& ServerAddressRouter::getAddress(
     bool is_server,
     bool use_dedicated_server_to_server_address,
     bool use_dedicated_gossip_port,
-    const std::vector<node_index_t>& same_partition_nodes) const {
+    const std::vector<node_index_t>& same_partition_nodes,
+    folly::Optional<NodeServiceDiscovery::ClientNetworkPriority>
+        network_priority) const {
   {
     //  If the node we're trying to reach is not in our partition then we're
     //  going to return an invalid address to simulate it being unreachable.
@@ -60,6 +62,21 @@ const Sockaddr& ServerAddressRouter::getAddress(
           return Sockaddr::INVALID;
         }
         return node_svc.server_to_server_address.value();
+      }
+
+      if (!is_server && network_priority.has_value()) {
+        if (node_svc.addresses_per_priority.count(network_priority.value())) {
+          return node_svc.addresses_per_priority.at(network_priority.value());
+        } else {
+          RATELIMIT_ERROR(std::chrono::minutes{10},
+                          1,
+                          "No address found with priority '%s' to server %s",
+                          NodeServiceDiscovery::networkPriorityToString(
+                              network_priority.value())
+                              .c_str(),
+                          NodeID(idx).toString().c_str());
+          return Sockaddr::INVALID;
+        }
       }
 
       if (connection_type == ConnectionType::SSL) {
@@ -93,7 +110,10 @@ ServerAddressRouter::getAddress(node_index_t idx,
                     settings.server,
                     settings.use_dedicated_server_to_server_address,
                     settings.send_to_gossip_port,
-                    settings.test_same_partition_nodes);
+                    settings.test_same_partition_nodes,
+                    settings.enable_port_based_qos
+                        ? settings.client_default_network_priority
+                        : folly::none);
 }
 
 folly::Optional<Sockaddr> ServerAddressRouter::getThriftAddress(

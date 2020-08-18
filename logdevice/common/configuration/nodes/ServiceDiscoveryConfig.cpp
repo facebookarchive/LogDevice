@@ -45,7 +45,9 @@ bool isOptionalFieldValid(const F& field, folly::StringPiece name) {
   return !field.hasValue() || isFieldValid(field.value(), name);
 }
 
-std::string networkPriorityToString(
+} // namespace
+
+std::string NodeServiceDiscovery::networkPriorityToString(
     const NodeServiceDiscovery::ClientNetworkPriority& priority) {
   using ClientNetworkPriority = NodeServiceDiscovery::ClientNetworkPriority;
   switch (priority) {
@@ -59,7 +61,6 @@ std::string networkPriorityToString(
   ld_check(false);
   folly::assume_unreachable();
 }
-} // namespace
 
 const Sockaddr& NodeServiceDiscovery::getGossipAddress() const {
   return gossip_address.has_value() ? gossip_address.value()

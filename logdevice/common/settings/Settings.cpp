@@ -15,6 +15,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/program_options.hpp>
 #include <boost/thread/thread.hpp>
+#include <folly/Format.h>
 #include <folly/String.h>
 
 #include "logdevice/common/SnapshotStoreTypes.h"
@@ -2688,6 +2689,29 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "Range was defined by https://tools.ietf.org/html/rfc4594#section-1.4.4",
        SERVER | CLIENT | REQUIRES_RESTART,
        SettingsCategory::Configuration);
+
+  init("client-default-network-priority",
+       &client_default_network_priority,
+       "",
+       parse_network_priority,
+       "Sets the default client network priority. Clients will connect to the "
+       "server port associated with this priority, unless "
+       "'enable-port-based-qos' is false. Value must be one of 'low','medium', "
+       "or 'high.",
+       CLIENT | SERVER,
+       SettingsCategory::Network);
+
+  init("enable-port-based-qos",
+       &enable_port_based_qos,
+       "false",
+       nullptr,
+       "Feature gate setting for allowing port-based QoS / connections per "
+       "network priority. If disabled, all addresses will resolve to the "
+       "default_data_address listed in nodes configuration. Note that this "
+       "feature does not apply to connections between servers, only client to "
+       "server.",
+       CLIENT | SERVER,
+       SettingsCategory::Network);
 
   init("disable-event-log-trimming",
        &disable_event_log_trimming,

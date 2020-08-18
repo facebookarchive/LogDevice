@@ -18,6 +18,7 @@
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/StorageTask-enums.h"
 #include "logdevice/common/configuration/NodeLocation.h"
+#include "logdevice/common/if/gen-cpp2/common_types.h"
 #include "logdevice/common/protocol/MessageType.h"
 #include "logdevice/common/settings/ClientReadStreamFailureDetectorSettings.h"
 #include "logdevice/common/settings/Durability.h"
@@ -58,6 +59,7 @@ struct StorageTaskShare {
 };
 
 struct Settings : public SettingsBundle {
+  using ClientNetworkPriority = logdevice::thrift::ClientNetworkPriority;
   const char* getName() const override {
     return "ProcessorSettings";
   }
@@ -1157,6 +1159,17 @@ struct Settings : public SettingsBundle {
 
   // Default DSCP value for client sockets at the Sender.
   uint8_t client_dscp_default;
+
+  // Sets the default client network priority. This setting might cause clients
+  // to connect to alternative server ports associated with particular network
+  // priorities. Value must be one of 'low','medium', or 'high.
+  folly::Optional<ClientNetworkPriority> client_default_network_priority;
+
+  // Feature gate setting for allowing port-based QoS / connections per network
+  // priority. If disabled, all addresses will resolve to the
+  // default_data_address listed in nodes configuration. Note that this feature
+  // does not apply to connections between servers, only client to server.
+  bool enable_port_based_qos;
 
   // Disable trimming the event log.
   bool disable_event_log_trimming;

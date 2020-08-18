@@ -9,6 +9,7 @@
 #include "logdevice/common/settings/Validators.h"
 
 #include <boost/program_options.hpp>
+#include <folly/Format.h>
 #include <folly/String.h>
 #include <sys/sysinfo.h>
 
@@ -152,5 +153,22 @@ void validate_optional_port(int port) {
   }
   validate_port(port);
 }
+
+folly::Optional<thrift::ClientNetworkPriority>
+parse_network_priority(const std::string& value) {
+  if (value == "high") {
+    return thrift::ClientNetworkPriority::HIGH;
+  } else if (value == "medium") {
+    return thrift::ClientNetworkPriority::MEDIUM;
+  } else if (value == "low") {
+    return thrift::ClientNetworkPriority::LOW;
+  } else if (value == "") {
+    return folly::none;
+  }
+
+  throw boost::program_options::error(
+      folly::sformat("Invalid network priority: {}", value));
+  return folly::none;
+};
 
 }}} // namespace facebook::logdevice::setting_validators

@@ -27,6 +27,7 @@ constexpr in_port_t kTestDataPort = 4440;
 constexpr in_port_t kTestGossipPort = 4441;
 constexpr in_port_t kTestServerToServerPort = 4442;
 constexpr in_port_t kTestDataSslPort = 4444;
+constexpr in_port_t kTestLowPriorityDataPort = 4446;
 const Sockaddr kTestDefaultAddress =
     Sockaddr{kTestAddress.toString(), kTestDataPort};
 const Sockaddr kTestSslAddress =
@@ -36,6 +37,8 @@ const Sockaddr kTestGossipAddress =
 const Sockaddr kTestServerToServerAddress =
     Sockaddr{kTestAddress.toString(), kTestServerToServerPort};
 const Sockaddr kNonExistentAddress = Sockaddr("/nonexistent");
+const Sockaddr kTestLowPriorityDataAddress =
+    Sockaddr{kTestAddress.toString(), kTestLowPriorityDataPort};
 
 class ServerAddressRouterTest : public ::testing::Test {};
 
@@ -53,7 +56,8 @@ TEST(ServerAddressRouterTest, GetDefaultSockAddr) {
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ false,
       /* use_dedicated_gossip_port */ true,
-      /* same_parition_nodes */ {});
+      /* same_parition_nodes */ {},
+      /* network_priority */ folly::none);
 
   EXPECT_EQ(actual, kTestDefaultAddress);
 }
@@ -72,7 +76,8 @@ TEST(ServerAddressRouterTest, GetDefaultSockAddrClient) {
       /* is_server */ false,
       /* use_dedicated_server_to_server_address */ false,
       /* use_dedicated_gossip_port */ true,
-      /* same_parition_nodes */ {});
+      /* same_parition_nodes */ {},
+      /* network_priority */ folly::none);
 
   EXPECT_EQ(actual, kTestDefaultAddress);
 }
@@ -92,7 +97,8 @@ TEST(ServerAddressRouterTest, IgnoreServerToServerAddressParam) {
       /* is_server */ false,
       /* use_dedicated_server_to_server_address */ true,
       /* use_dedicated_gossip_port */ true,
-      /* same_parition_nodes */ {});
+      /* same_parition_nodes */ {},
+      /* network_priority */ folly::none);
 
   EXPECT_EQ(actual, kTestDefaultAddress);
 }
@@ -112,7 +118,8 @@ TEST(ServerAddressRouterTest, SslAddress) {
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ false,
       /* use_dedicated_gossip_port */ true,
-      /* same_parition_nodes */ {});
+      /* same_parition_nodes */ {},
+      /* network_priority */ folly::none);
 
   EXPECT_EQ(actual, kTestSslAddress);
 }
@@ -131,7 +138,8 @@ TEST(ServerAddressRouterTest, SslAddressClient) {
       /* is_server */ false,
       /* use_dedicated_server_to_server_address */ false,
       /* use_dedicated_gossip_port */ true,
-      /* same_parition_nodes */ {});
+      /* same_parition_nodes */ {},
+      /* network_priority */ folly::none);
 
   EXPECT_EQ(actual, kTestSslAddress);
 }
@@ -151,7 +159,8 @@ TEST(ServerAddressRouterTest, DefaultServerToServerIsBaseAddress) {
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ false,
       /* use_dedicated_gossip_port */ true,
-      /* same_parition_nodes */ {});
+      /* same_parition_nodes */ {},
+      /* network_priority */ folly::none);
 
   EXPECT_EQ(actual, kTestDefaultAddress);
 }
@@ -172,7 +181,8 @@ TEST(ServerAddressRouterTest, DedicatedServerToServerAddressIfEnabled) {
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ true,
       /* use_dedicated_gossip_port */ true,
-      /* same_parition_nodes */ {});
+      /* same_parition_nodes */ {},
+      /* network_priority */ folly::none);
 
   EXPECT_EQ(actual, kTestServerToServerAddress);
 }
@@ -193,7 +203,8 @@ TEST(ServerAddressRouterTest, ServerToServerOverridesSslAddress) {
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ true,
       /* use_dedicated_gossip_port */ true,
-      /* same_parition_nodes */ {});
+      /* same_parition_nodes */ {},
+      /* network_priority */ folly::none);
 
   EXPECT_EQ(actual, kTestServerToServerAddress);
 }
@@ -214,7 +225,8 @@ TEST(ServerAddressRouterTest, gossipAddressOverridesData) {
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ true,
       /* use_dedicated_gossip_port */ true,
-      /* same_parition_nodes */ {});
+      /* same_parition_nodes */ {},
+      /* network_priority */ folly::none);
 
   EXPECT_EQ(actual, kTestGossipAddress);
 }
@@ -234,7 +246,8 @@ TEST(ServerAddressRouterTest, invalidServerToServerAddress) {
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ true,
       /* use_dedicated_gossip_port */ true,
-      /* same_parition_nodes */ {});
+      /* same_parition_nodes */ {},
+      /* network_priority */ folly::none);
 
   EXPECT_EQ(actual, Sockaddr::INVALID);
 }
@@ -254,7 +267,8 @@ TEST(ServerAddressRouterTest, invalidSslAddress) {
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ true,
       /* use_dedicated_gossip_port */ true,
-      /* same_parition_nodes */ {});
+      /* same_parition_nodes */ {},
+      /* network_priority */ folly::none);
 
   EXPECT_EQ(actual, Sockaddr::INVALID);
 }
@@ -273,7 +287,8 @@ TEST(ServerAddressRouterTest, dedicatedGossipPortDisabled) {
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ false,
       /* use_dedicated_gossip_port */ false,
-      /* same_parition_nodes */ {});
+      /* same_parition_nodes */ {},
+      /* network_priority */ folly::none);
 
   EXPECT_EQ(actual, kTestDefaultAddress);
 }
@@ -291,7 +306,8 @@ TEST(ServerAddressRouterTest, sameParitionNodes) {
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ false,
       /* use_dedicated_gossip_port */ false,
-      /* same_parition_nodes */ {1, 2, 3});
+      /* same_parition_nodes */ {1, 2, 3},
+      /* network_priority */ folly::none);
   EXPECT_EQ(actual, kTestDefaultAddress);
 
   // Test for a node in a different partition
@@ -303,7 +319,8 @@ TEST(ServerAddressRouterTest, sameParitionNodes) {
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ false,
       /* use_dedicated_gossip_port */ false,
-      /* same_parition_nodes */ {1, 2, 3});
+      /* same_parition_nodes */ {1, 2, 3},
+      /* network_priority */ folly::none);
   EXPECT_EQ(actual, kNonExistentAddress);
 
   // Test with this error injection disabled.
@@ -315,7 +332,8 @@ TEST(ServerAddressRouterTest, sameParitionNodes) {
       /* is_server */ true,
       /* use_dedicated_server_to_server_address */ false,
       /* use_dedicated_gossip_port */ false,
-      /* same_parition_nodes */ {});
+      /* same_parition_nodes */ {},
+      /* network_priority */ folly::none);
 
   EXPECT_EQ(actual, kTestDefaultAddress);
 }
@@ -357,6 +375,52 @@ TEST(ServerAddressRouterTest, thriftPartion) {
                                    /* is_server */ true,
                                    /* same_parition_nodes */ {1, 2, 3});
   EXPECT_EQ(actual, kNonExistentAddress);
+}
+
+TEST(ServerAddressRouterTest,
+     ShouldReturnLowPriorityAddressForDataAccessFromClient) {
+  using ClientNetworkPriority = NodeServiceDiscovery::ClientNetworkPriority;
+
+  NodeServiceDiscovery nodeServiceDiscovery;
+  nodeServiceDiscovery.default_client_data_address = kTestDefaultAddress;
+  nodeServiceDiscovery.ssl_address = kTestDefaultAddress;
+  nodeServiceDiscovery.addresses_per_priority = {
+      {ClientNetworkPriority::LOW, kTestLowPriorityDataAddress},
+      {ClientNetworkPriority::MEDIUM, kTestDefaultAddress}};
+
+  for (auto conn_type : {ConnectionType::PLAIN, ConnectionType::SSL}) {
+    auto actual = ServerAddressRouter().getAddress(
+        /*idx*/ 1,
+        nodeServiceDiscovery,
+        SocketType::DATA,
+        conn_type,
+        /* is_server */ false,
+        /* use_dedicated_server_to_server_address */ false,
+        /* use_dedicated_gossip_port */ true,
+        /* same_parition_nodes */ {},
+        ClientNetworkPriority::LOW);
+
+    ASSERT_EQ(actual, kTestLowPriorityDataAddress)
+        << "Clients should route low priority connections to low priority port "
+           "for conn_type = "
+        << connectionTypeToString(conn_type);
+
+    actual = ServerAddressRouter().getAddress(
+        /*idx*/ 1,
+        nodeServiceDiscovery,
+        SocketType::DATA,
+        conn_type,
+        /* is_server */ true,
+        /* use_dedicated_server_to_server_address */ false,
+        /* use_dedicated_gossip_port */ true,
+        /* same_parition_nodes */ {},
+        ClientNetworkPriority::LOW);
+
+    ASSERT_EQ(actual, kTestDefaultAddress)
+        << "Servers should not route low priority connections to low priority "
+           "port for conn_type = "
+        << connectionTypeToString(conn_type);
+  }
 }
 
 } // namespace
