@@ -139,7 +139,6 @@ void shutdown_server(
     std::unique_ptr<Listener>& server_to_server_listener,
     std::unique_ptr<folly::EventBaseThread>& connection_listener_loop,
     std::unique_ptr<folly::EventBaseThread>& gossip_listener_loop,
-    std::unique_ptr<folly::EventBaseThread>& ssl_connection_listener_loop,
     std::unique_ptr<folly::EventBaseThread>& server_to_server_listener_loop,
     std::unique_ptr<LogStoreMonitor>& logstore_monitor,
     std::shared_ptr<ServerProcessor>& processor,
@@ -221,14 +220,13 @@ void shutdown_server(
   folly::collectAllUnsafe(listeners_closed.begin(), listeners_closed.end())
       .wait();
 
-  connection_listener.reset();
-  connection_listener_loop.reset();
   gossip_listener.reset();
   gossip_listener_loop.reset();
   ssl_connection_listener.reset();
-  ssl_connection_listener_loop.reset();
   server_to_server_listener.reset();
   server_to_server_listener_loop.reset();
+  connection_listener.reset();
+  connection_listener_loop.reset();
 
   auto health_monitor_closed = processor->getHealthMonitor() != nullptr
       ? processor->getHealthMonitor()->shutdown()

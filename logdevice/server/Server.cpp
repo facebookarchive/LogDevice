@@ -724,18 +724,11 @@ bool Server::initListeners() {
           // validateSSLCertificatesExist() should output the error
           return false;
         }
-        ssl_connection_listener_loop_ =
-            std::make_unique<folly::EventBaseThread>(
-                true,
-                nullptr,
-                ConnectionListener::connectionKindNames()
-                    [ConnectionKind::DATA_SSL]);
         ssl_connection_listener_ = initListener<ConnectionListener>(
             ssl_port,
             ssl_unix_socket,
             true,
-            folly::getKeepAliveToken(
-                ssl_connection_listener_loop_->getEventBase()),
+            folly::getKeepAliveToken(connection_listener_loop_->getEventBase()),
             conn_shared_state,
             ConnectionKind::DATA_SSL,
             conn_budget_backlog_,
@@ -1672,7 +1665,7 @@ bool Server::startListening() {
     processor_->failure_detector_->start();
   }
 
-  if (ssl_connection_listener_loop_ &&
+  if (ssl_connection_listener_ &&
       !startConnectionListener(ssl_connection_listener_)) {
     return false;
   }
@@ -1716,7 +1709,6 @@ void Server::gracefulShutdown() {
                   server_to_server_listener_,
                   connection_listener_loop_,
                   gossip_listener_loop_,
-                  ssl_connection_listener_loop_,
                   server_to_server_listener_loop_,
                   logstore_monitor_,
                   processor_,

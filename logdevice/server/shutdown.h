@@ -66,7 +66,6 @@ void shutdown_server(
     std::unique_ptr<Listener>& server_to_server_listener,
     std::unique_ptr<folly::EventBaseThread>& connection_listener_loop,
     std::unique_ptr<folly::EventBaseThread>& gossip_listener_loop,
-    std::unique_ptr<folly::EventBaseThread>& ssl_connection_listener_loop,
     std::unique_ptr<folly::EventBaseThread>& server_to_server_listener_loop,
     std::unique_ptr<LogStoreMonitor>& logstore_monitor,
     std::shared_ptr<ServerProcessor>& processor,

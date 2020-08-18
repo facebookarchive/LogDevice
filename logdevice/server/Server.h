@@ -280,7 +280,6 @@ class Server {
 
   // initListeners()
   std::unique_ptr<folly::EventBaseThread> connection_listener_loop_;
-  std::unique_ptr<folly::EventBaseThread> ssl_connection_listener_loop_;
   std::unique_ptr<folly::EventBaseThread> gossip_listener_loop_;
   std::unique_ptr<folly::EventBaseThread> server_to_server_listener_loop_;
   std::unique_ptr<LogDeviceThriftServer> s2s_thrift_api_handle_;
