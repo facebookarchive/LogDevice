@@ -1374,55 +1374,30 @@ void DisconnectedClientCallback::operator()(Status st, const Address& name) {
 void Sender::noteConfigurationChanged(
     std::shared_ptr<const NodesConfiguration> nodes_configuration) {
   nodes_ = std::move(nodes_configuration);
+  disconnectFromNodesThatChangedAddressOrGeneration();
+}
 
-  auto it = impl_->server_conns_.begin();
+void Sender::disconnectFromNodesThatChangedAddressOrGeneration() {
   std::vector<std::unique_ptr<Connection>> to_close;
-  while (it != impl_->server_conns_.end()) {
+
+  for (auto it = impl_->server_conns_.begin();
+       it != impl_->server_conns_.end();) {
     auto& s = it->second;
-    auto i = it->first;
-    ld_check(!s->peer_name_.isClientAddress());
-    ld_check(s->peer_name_.asNodeID().index() == i);
-
-    const auto node_service_discovery = nodes_->getNodeServiceDiscovery(i);
-
-    if (node_service_discovery != nullptr) {
-      node_gen_t generation = nodes_->getNodeGeneration(i);
-      auto newaddr = configuration::nodes::ServerAddressRouter().getAddress(
-          i,
-          *node_service_discovery,
-          s->getSockType(),
-          s->getConnType(),
-          Worker::settings());
-      if (s->peer_name_.asNodeID().generation() == generation &&
-          s->peer_sockaddr_ == newaddr) {
-        ++it;
-        continue;
-      } else {
-        ld_info(
-            "Configuration change detected for node %s. New generation "
-            "count is %d. New IP address is %s. Destroying old Connection .",
-            Sender::describeConnection(Address(s->peer_name_.id_.node_))
-                .c_str(),
-            generation,
-            newaddr.toString().c_str());
-      }
-
+    if (s->isNodeConnectionAddressOrGenerationOutdated()) {
+      // Socket close might trigger a rehash on the map
+      // and invalidate iterators which will cause a memory violation.
+      // So let's move it out first.
+      to_close.push_back(std::move(it->second));
+      it = impl_->server_conns_.erase(it);
     } else {
-      ld_info(
-          "Node %s is no longer in cluster configuration. New cluster "
-          "size is %zu. Destroying old Connection .",
-          Sender::describeConnection(Address(s->peer_name_.id_.node_)).c_str(),
-          nodes_->clusterSize());
+      ++it;
     }
-
-    // Socket close might trigger a rehash on the map
-    // and invalidate iterators which will cause a memory violation.
-    // So let's move it out first.
-    to_close.push_back(std::move(it->second));
-    it = impl_->server_conns_.erase(it);
   }
 
   for (auto& socket : to_close) {
+    ld_info("Closing connection to %s with E::NOTINFCONFIG",
+            Sender::describeConnection(Address(socket->peer_name_.id_.node_))
+                .c_str());
     socket->close(E::NOTINCONFIG);
   }
 }

@@ -33,6 +33,7 @@
 #include "logdevice/common/SSLPrincipalParser.h"
 #include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/SocketDependencies.h"
+#include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/network/MessageReader.h"
 #include "logdevice/common/network/SessionInjectorCallback.h"
@@ -256,6 +257,37 @@ Connection::~Connection() {
   auto g = folly::makeGuard(deps_->setupContextGuard());
   ld_debug("Destroying Socket %s", conn_description_.c_str());
   close(E::SHUTDOWN);
+}
+
+bool Connection::isNodeConnectionAddressOrGenerationOutdated() const {
+  if (peer_name_.valid() && peer_name_.isNodeAddress()) {
+    auto nodes_config = deps_->getNodesConfiguration();
+    auto node_id = peer_name_.asNodeID();
+    auto node_idx = node_id.index();
+
+    if (!nodes_config->isNodeInServiceDiscoveryConfig(node_idx)) {
+      ld_info("Node %s is no longer in cluster configuration.",
+              node_id.toString().c_str());
+      return true;
+    }
+
+    auto expected_address = deps_->getNodeSockaddr(node_id, type_, conntype_);
+    auto expected_generation = nodes_config->getNodeGeneration(node_idx);
+
+    if (expected_address != peer_sockaddr_ ||
+        expected_generation != node_id.generation()) {
+      ld_info("Configuration change detected for node %s. Expected address: "
+              "%s, generation: %d, found address %s, generation %d.",
+              node_id.toString().c_str(),
+              expected_address.toString().c_str(),
+              expected_generation,
+              peer_sockaddr_.toString().c_str(),
+              node_id.generation());
+      return true;
+    }
+  }
+
+  return false;
 }
 
 void Connection::updateOpenConnectionStats() {

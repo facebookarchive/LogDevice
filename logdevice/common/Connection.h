@@ -263,6 +263,13 @@ class Connection : public TrafficShappingSocket {
     }
   }
 
+  /**
+   * If connection to node, returns whether current settings/nodes
+   * configuration point to a different address than we used to connect the
+   * first time. Otherwise, returns false.
+   */
+  bool isNodeConnectionAddressOrGenerationOutdated() const;
+
   // LogDevice-level address of peer end-point at the other end of the
   // connection
   const Address peer_name_;

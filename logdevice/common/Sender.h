@@ -784,7 +784,10 @@ class Sender : public SenderBase {
 
   void onSettingsUpdated(std::shared_ptr<const Settings> new_settings) {
     settings_.swap(new_settings);
+    disconnectFromNodesThatChangedAddressOrGeneration();
   }
+
+  void disconnectFromNodesThatChangedAddressOrGeneration();
 
   /**
    * Add a client id to the list of Connections to be erased from
