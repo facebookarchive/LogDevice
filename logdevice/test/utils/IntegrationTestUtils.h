@@ -766,7 +766,7 @@ class ClusterFactory {
 
 // All ports logdeviced can listen on.
 struct ServerAddresses {
-  static constexpr size_t COUNT = 9;
+  static constexpr size_t COUNT = 10;
 
   Sockaddr protocol;
   Sockaddr gossip;
@@ -775,6 +775,7 @@ struct ServerAddresses {
   Sockaddr protocol_ssl;
   Sockaddr server_thrift_api;
   Sockaddr client_thrift_api;
+  Sockaddr data_low_priority;
 
   // If we're holding open sockets on the above ports, this list contains the
   // fd-s of these sockets. This list is cleared (and sockets closed) just
@@ -783,6 +784,8 @@ struct ServerAddresses {
 
   void toNodeConfig(configuration::nodes::NodeServiceDiscovery& node,
                     bool ssl) {
+    using Priority =
+        configuration::nodes::NodeServiceDiscovery::ClientNetworkPriority;
     node.default_client_data_address = protocol;
     node.gossip_address = gossip;
     if (ssl) {
@@ -792,6 +795,8 @@ struct ServerAddresses {
     node.server_to_server_address.assign(server_to_server);
     node.server_thrift_api_address.assign(server_thrift_api);
     node.client_thrift_api_address.assign(client_thrift_api);
+    node.addresses_per_priority = {
+        {Priority::LOW, data_low_priority}, {Priority::MEDIUM, protocol}};
   }
 
   static ServerAddresses withTCPPorts(std::vector<detail::PortOwner> ports) {
@@ -805,6 +810,7 @@ struct ServerAddresses {
     r.server_to_server = Sockaddr(addr, ports[6].port);
     r.server_thrift_api = Sockaddr(addr, ports[7].port);
     r.client_thrift_api = Sockaddr(addr, ports[8].port);
+    r.data_low_priority = Sockaddr(addr, ports[9].port);
 
     r.owners = std::move(ports);
 
@@ -820,6 +826,7 @@ struct ServerAddresses {
     r.protocol_ssl = Sockaddr(path + "/ssl_socket_main");
     r.server_thrift_api = Sockaddr(path + "/server_thrift_api");
     r.client_thrift_api = Sockaddr(path + "/client_thrift_api");
+    r.data_low_priority = Sockaddr(path + "/socket_data_low_pri");
     return r;
   }
 };
