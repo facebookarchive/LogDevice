@@ -33,6 +33,8 @@ namespace facebook { namespace logdevice {
 
 struct ServerSettings : public SettingsBundle {
   using NodeServiceDiscovery = configuration::nodes::NodeServiceDiscovery;
+  using ClientNetworkPriority =
+      configuration::nodes::NodeServiceDiscovery::ClientNetworkPriority;
   using NodesConfigTagMapT = std::unordered_map<std::string, std::string>;
 
   /**
@@ -44,10 +46,10 @@ struct ServerSettings : public SettingsBundle {
    */
   static NodesConfigTagMapT parse_tags(const std::string& tags_string);
 
-  static std::map<NodeServiceDiscovery::ClientNetworkPriority, int>
+  static std::map<ClientNetworkPriority, int>
   parse_ports_per_net_priority(const std::string& value);
 
-  static std::map<NodeServiceDiscovery::ClientNetworkPriority, std::string>
+  static std::map<ClientNetworkPriority, std::string>
   parse_unix_sockets_per_net_priority(const std::string& value);
 
   struct TaskQueueParams {
@@ -138,10 +140,9 @@ struct ServerSettings : public SettingsBundle {
 
   bool enable_dscp_reflection;
 
-  std::map<NodeServiceDiscovery::ClientNetworkPriority, std::string>
+  std::map<ClientNetworkPriority, std::string>
       unix_addresses_per_network_priority;
-  std::map<NodeServiceDiscovery::ClientNetworkPriority, int>
-      ports_per_network_priority;
+  std::map<ClientNetworkPriority, int> ports_per_network_priority;
 
  private:
   // Only UpdateableSettings can create this bundle to ensure defaults are

@@ -20,7 +20,8 @@ using namespace facebook::logdevice::setting_validators;
 
 namespace facebook { namespace logdevice {
 
-using NodeServiceDiscovery = configuration::nodes::NodeServiceDiscovery;
+using ClientNetworkPriority =
+    configuration::nodes::NodeServiceDiscovery::ClientNetworkPriority;
 
 // maximum allowed number of storage threads to run
 #define STORAGE_THREADS_MAX 10000
@@ -102,14 +103,13 @@ static configuration::nodes::RoleSet parse_roles(const std::string& value) {
   return roles;
 }
 
-NodeServiceDiscovery::ClientNetworkPriority
-parse_network_priority(const std::string& value) {
+ClientNetworkPriority parse_network_priority(const std::string& value) {
   if (value == "high") {
-    return NodeServiceDiscovery::ClientNetworkPriority::HIGH;
+    return ClientNetworkPriority::HIGH;
   } else if (value == "medium") {
-    return NodeServiceDiscovery::ClientNetworkPriority::MEDIUM;
+    return ClientNetworkPriority::MEDIUM;
   } else if (value == "low") {
-    return NodeServiceDiscovery::ClientNetworkPriority::LOW;
+    return ClientNetworkPriority::LOW;
   } else {
     throw boost::program_options::error(
         folly::sformat("Invalid network priority: {}", value));
@@ -120,7 +120,7 @@ parse_network_priority(const std::string& value) {
 template <typename T, typename F>
 decltype(auto) parse_values_per_network_priority(const std::string& value,
                                                  F func) {
-  std::map<NodeServiceDiscovery::ClientNetworkPriority, T> result;
+  std::map<ClientNetworkPriority, T> result;
 
   if (value.empty()) {
     return result;
@@ -162,7 +162,7 @@ static NodeLocation parse_location(const std::string& value) {
 
 } // namespace
 
-std::map<NodeServiceDiscovery::ClientNetworkPriority, int>
+std::map<ClientNetworkPriority, int>
 ServerSettings::parse_ports_per_net_priority(const std::string& value) {
   return parse_values_per_network_priority<int>(
       value, [](const std::string& v) {
@@ -172,7 +172,7 @@ ServerSettings::parse_ports_per_net_priority(const std::string& value) {
       });
 }
 
-std::map<NodeServiceDiscovery::ClientNetworkPriority, std::string>
+std::map<ClientNetworkPriority, std::string>
 ServerSettings::parse_unix_sockets_per_net_priority(const std::string& value) {
   return parse_values_per_network_priority<std::string>(
       value, [](const std::string& v) {
