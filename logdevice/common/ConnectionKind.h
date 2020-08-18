@@ -17,6 +17,8 @@ namespace facebook { namespace logdevice {
 
 enum class ConnectionKind : uint8_t {
   DATA,
+  DATA_LOW_PRIORITY,
+  DATA_HIGH_PRIORITY,
   DATA_SSL,
   GOSSIP,
   SERVER_TO_SERVER,

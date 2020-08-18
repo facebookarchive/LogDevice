@@ -305,6 +305,12 @@ void Connection::updateOpenConnectionStats() {
     case ConnectionKind::DATA:
       STAT_INCR(deps_->getStats(), num_connections_incoming_data);
       break;
+    case ConnectionKind::DATA_LOW_PRIORITY:
+      STAT_INCR(deps_->getStats(), num_connections_incoming_data_low_priority);
+      break;
+    case ConnectionKind::DATA_HIGH_PRIORITY:
+      STAT_INCR(deps_->getStats(), num_connections_incoming_data_high_priority);
+      break;
     case ConnectionKind::DATA_SSL:
       STAT_INCR(deps_->getStats(), num_connections_incoming_data_ssl);
       break;
@@ -333,6 +339,12 @@ void Connection::updateCloseConnectionStats() {
   switch (connection_kind_.value()) {
     case ConnectionKind::DATA:
       STAT_DECR(deps_->getStats(), num_connections_incoming_data);
+      break;
+    case ConnectionKind::DATA_LOW_PRIORITY:
+      STAT_DECR(deps_->getStats(), num_connections_incoming_data_low_priority);
+      break;
+    case ConnectionKind::DATA_HIGH_PRIORITY:
+      STAT_DECR(deps_->getStats(), num_connections_incoming_data_high_priority);
       break;
     case ConnectionKind::DATA_SSL:
       STAT_DECR(deps_->getStats(), num_connections_incoming_data_ssl);

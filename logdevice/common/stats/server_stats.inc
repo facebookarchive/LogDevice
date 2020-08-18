@@ -1198,6 +1198,8 @@ STAT_DEFINE(num_backlog_connections, SUM)
 // Total number of open connections
 STAT_DEFINE(num_connections, SUM)
 STAT_DEFINE(num_connections_incoming_data, SUM)
+STAT_DEFINE(num_connections_incoming_data_low_priority, SUM)
+STAT_DEFINE(num_connections_incoming_data_high_priority, SUM)
 STAT_DEFINE(num_connections_incoming_data_ssl, SUM)
 STAT_DEFINE(num_connections_incoming_gossip, SUM)
 STAT_DEFINE(num_connections_incoming_server_to_server, SUM)

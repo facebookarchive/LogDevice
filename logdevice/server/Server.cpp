@@ -99,6 +99,20 @@ static void bumpErrorCounter(dbg::Level level) {
   ld_check(false);
 }
 
+static ConnectionKind
+priorityToConnectionKind(NodeServiceDiscovery::ClientNetworkPriority priority) {
+  using Priority = NodeServiceDiscovery::ClientNetworkPriority;
+  switch (priority) {
+    case Priority::LOW:
+      return ConnectionKind::DATA_LOW_PRIORITY;
+    case Priority::MEDIUM:
+      return ConnectionKind::DATA;
+    case Priority::HIGH:
+      return ConnectionKind::DATA_HIGH_PRIORITY;
+  }
+  folly::assume_unreachable();
+}
+
 bool ServerParameters::shutdownIfMyNodeInfoChanged(
     const NodesConfiguration& config) {
   if (!my_node_id_.has_value()) {
@@ -836,7 +850,7 @@ bool Server::initListeners() {
           /* ssl */ true,
           folly::getKeepAliveToken(connection_listener_loop_->getEventBase()),
           conn_shared_state,
-          ConnectionKind::DATA_SSL,
+          priorityToConnectionKind(priority),
           conn_budget_backlog_,
           server_settings_->enable_dscp_reflection);
 

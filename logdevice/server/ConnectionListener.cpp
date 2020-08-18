@@ -45,6 +45,10 @@ ConnectionListener::connectionKindToThreadName(ConnectionKind connection_kind) {
   switch (connection_kind) {
     case ConnectionKind::DATA:
       return "ld:conn-listen";
+    case ConnectionKind::DATA_LOW_PRIORITY:
+      return "ld:lo-pri-listen";
+    case ConnectionKind::DATA_HIGH_PRIORITY:
+      return "ld:hi-pri-listen";
     case ConnectionKind::DATA_SSL:
       return "ld:sconn-listen";
     case ConnectionKind::GOSSIP:
