@@ -50,7 +50,7 @@ StandaloneAdminServer::StandaloneAdminServer(
 
 void StandaloneAdminServer::start() {
   // ASCII ART
-  std::cout <<
+  ld_info(
       R"(
    __                ___           _
   / /  ___   __ _   /   \_____   _(_) ___ ___
@@ -59,7 +59,7 @@ void StandaloneAdminServer::start() {
 \____/\___/ \__, /___,' \___| \_/ |_|\___\___|   Admin Server!
             |___/
 
-)" << std::endl;
+  )");
   ld_info("Starting Standalone Admin Server");
 
   if (!folly::kIsDebug) {
@@ -467,11 +467,45 @@ void StandaloneAdminServer::shutdown() {
   main_thread_sem_.post();
 }
 
+static void set_admin_server_log_file(
+    const UpdateableSettings<ServerSettings>& server_settings) {
+  static std::string prev;
+  if (prev == server_settings->log_file) {
+    // This setting did not change.
+    return;
+  }
+
+  ld_info("Logging to %s",
+          server_settings->log_file.empty()
+              ? "stderr"
+              : server_settings->log_file.c_str());
+
+  if (!server_settings->log_file.empty()) {
+    int log_file_fd = open(
+        server_settings->log_file.c_str(), O_APPEND | O_CREAT | O_WRONLY, 0666);
+    if (log_file_fd >= 0) {
+      dbg::useFD(log_file_fd);
+    } else {
+      ld_error("Failed to open error log file %s. Will keep logging to %s",
+               server_settings->log_file.c_str(),
+               prev.empty() ? "stderr" : prev.c_str());
+    }
+  } else {
+    dbg::useFD(STDERR_FILENO);
+  }
+
+  dbg::enableNonblockingPipe();
+
+  prev = server_settings->log_file;
+}
+
 void StandaloneAdminServer::onSettingsUpdate() {
   dbg::assertOnData = server_settings_->assert_on_data;
   dbg::currentLevel = server_settings_->loglevel;
   ZookeeperClient::setDebugLevel(server_settings_->loglevel);
   dbg::setLogLevelOverrides(server_settings_->loglevel_overrides);
+
+  set_admin_server_log_file(server_settings_);
 }
 
 bool StandaloneAdminServer::onConfigUpdate(ServerConfig& config) {
