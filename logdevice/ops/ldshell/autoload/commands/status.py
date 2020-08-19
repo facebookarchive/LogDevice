@@ -119,9 +119,15 @@ async def get_host_info(client_factory, *args, **kwargs) -> Optional[HostInfo]:
 
 
 async def print_results_tabular(results, *args, **kwargs):
+    def get_sort_key(x):
+        # this ensures that None values are sorted last,
+        # and avoids type errors when comparing values with Nones
+        attr = getattr(x, sort_key)
+        return (attr is None, attr)
+
     sort_key = kwargs["sort"] if "sort" in kwargs else "hostname"
     if results:
-        results.sort(key=lambda x: getattr(x, sort_key))
+        results.sort(key=get_sort_key)
     else:
         results = []
 
