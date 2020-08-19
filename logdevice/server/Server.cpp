@@ -869,27 +869,29 @@ bool Server::initListeners() {
 
 bool Server::initThriftServers() {
   const auto server_settings = params_->getServerSettings();
+  auto nodes_configuration = updateable_config_->getNodesConfiguration();
+  ld_check(nodes_configuration);
+  NodeID node_id = params_->getMyNodeID().value();
+  const NodeServiceDiscovery* node_svc =
+      nodes_configuration->getNodeServiceDiscovery(node_id.index());
+  ld_check(node_svc);
+
   s2s_thrift_api_handle_ =
-      initThriftServer("s2s-api",
-                       server_settings->server_thrift_api_port,
-                       server_settings->server_thrift_api_unix_socket);
+      initThriftServer("s2s-api", node_svc->server_thrift_api_address);
+
   c2s_thrift_api_handle_ =
-      initThriftServer("c2s-api",
-                       server_settings->client_thrift_api_port,
-                       server_settings->client_thrift_api_unix_socket);
+      initThriftServer("c2s-api", node_svc->client_thrift_api_address);
   return true;
 }
 
 std::unique_ptr<LogDeviceThriftServer>
-Server::initThriftServer(std::string name, int port, std::string unix_socket) {
-  // TODO(mmhg): Add server Thrift addresses to service discovery
-  if (unix_socket.empty() && port == 0) {
+Server::initThriftServer(std::string name,
+                         const folly::Optional<Sockaddr>& address) {
+  if (!address) {
     ld_info("%s Thrift API server disabled", name.c_str());
     return nullptr;
   }
 
-  Sockaddr address =
-      unix_socket.empty() ? Sockaddr("::", port) : Sockaddr(unix_socket);
   auto handler =
       std::make_shared<LogDeviceAPIThriftHandler>(name,
                                                   processor_.get(),
@@ -902,11 +904,11 @@ Server::initThriftServer(std::string name, int port, std::string unix_socket) {
           PluginType::THRIFT_SERVER_FACTORY);
 
   if (factory_plugin) {
-    return (*factory_plugin)(name, address, std::move(handler));
+    return (*factory_plugin)(name, *address, std::move(handler));
   } else {
     // Fallback to built-in SimpleThriftApiServer
     return std::make_unique<SimpleThriftServer>(
-        name, address, std::move(handler));
+        name, *address, std::move(handler));
   }
 }
 

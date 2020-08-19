@@ -347,7 +347,7 @@ class Server {
   // Initializes single Thrift API server and returns pointer to it or nullptr
   // if server is disabled
   std::unique_ptr<LogDeviceThriftServer>
-  initThriftServer(std::string name, int port, std::string unix_socket);
+  initThriftServer(std::string name, const folly::Optional<Sockaddr>& address);
 
   bool initStore();
   bool initLogStorageStateMap();
