@@ -56,5 +56,7 @@ PLUGIN_TYPE(DEFAULT_SETTINGS_PROVIDER, 16, "Default settings provider", false)
 PLUGIN_TYPE(ROCKSDB_CUSTOMISER_FACTORY, 17, "RocksDB customiser factory", false)
 // See server/locallogstore/RocksDBMetricsExport.h
 PLUGIN_TYPE(ROCKSDB_METRICS_EXPORT, 18, "RocksDB metrics export", false)
+// See ThriftClientFactoryPlugin.h
+PLUGIN_TYPE(THRIFT_CLIENT_FACTORY, 19, "Thrift client factory plugin", false)
 
 #undef PLUGIN_TYPE

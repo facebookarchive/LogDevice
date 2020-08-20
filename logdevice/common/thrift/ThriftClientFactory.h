@@ -20,6 +20,9 @@ namespace facebook { namespace logdevice {
 
 /**
  * API for creating instances of Thrift client.
+ * Depending on implementation this object might be expensive to create, so try
+ * avoid creating them ad-hoc. Ideally, single object should be created and
+ * re-used across the whole application.
  */
 class ThriftClientFactory {
  public:

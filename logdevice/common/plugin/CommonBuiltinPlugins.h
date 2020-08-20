@@ -10,6 +10,7 @@
 #include "logdevice/common/BuildInfo.h"
 #include "logdevice/common/plugin/BuiltinConfigSourceFactory.h"
 #include "logdevice/common/plugin/BuiltinPermissionCheckerFactory.h"
+#include "logdevice/common/plugin/BuiltinThriftClientFactoryPlugin.h"
 #include "logdevice/common/plugin/BuiltinZookeeperClientFactory.h"
 #include "logdevice/common/plugin/Plugin.h"
 
@@ -25,6 +26,7 @@ PluginVector createAugmentedCommonBuiltinPluginVector() {
                             BuiltinZookeeperClientFactory,
                             BuiltinConfigSourceFactory,
                             BuiltinPermissionCheckerFactory,
+                            BuiltinThriftClientFactoryPlugin,
                             Types...>();
 }
 

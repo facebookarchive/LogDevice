@@ -48,8 +48,6 @@ class SimpleThriftClientFactory : public ThriftClientFactory {
         connect_timeout_(connect_timeout),
         request_timeout_(request_timeout) {}
 
-  ~SimpleThriftClientFactory() override = default;
-
  protected:
   ThriftClientFactory::ChannelPtr
   createChannel(const folly::SocketAddress& address) override {
