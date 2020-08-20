@@ -392,17 +392,17 @@ int shell(Cluster& cluster) {
     int nstorage_nodes =
         cluster.getConfig()->getNodesConfiguration()->getStorageNodes().size();
 
-    auto& first_node = cluster.getNode(0);
-    auto first_node_admin_addr = first_node.addrs_.admin;
+    auto* admin_server = cluster.getAdminServer();
+    auto admin_address = admin_server->address_;
     std::string ldshell_admin_arg;
-    if (first_node_admin_addr.isUnixAddress()) {
+    if (admin_address.isUnixAddress()) {
       ldshell_admin_arg = folly::sformat(
-          "--admin-server-unix-path={}", first_node_admin_addr.getPath());
+          "--admin-server-unix-path={}", admin_address.getPath());
     } else {
       ldshell_admin_arg =
           folly::sformat("--admin-server-host={} --admin-server-port={}",
-                         first_node_admin_addr.toStringNoPort(),
-                         first_node_admin_addr.port());
+                         admin_address.toStringNoPort(),
+                         admin_address.port());
     }
 
     std::cout << "\033[1;31mTo connect to the cluster via ldshell:\033[1;0m"
@@ -483,10 +483,17 @@ int shell(Cluster& cluster) {
   }
 #endif
 
+  auto* admin_server = cluster.getAdminServer();
+  ld_check(admin_server != nullptr);
   auto& first_node = cluster.getNode(0);
   std::cout << "\033[1;31mTo tail the error log of a node:\033[1;0m"
             << std::endl;
   std::cout << "\ttail -f " << first_node.getLogPath() << std::endl
+            << std::endl;
+
+  std::cout << "\033[1;31mTo tail the error log of the admin server:\033[1;0m"
+            << std::endl;
+  std::cout << "\ttail -f " << admin_server->getLogPath() << std::endl
             << std::endl;
 
   // The user can stop by sending SIGTERM or SIGINT
@@ -530,6 +537,7 @@ int main(int argc, const char* argv[]) {
   parse_command_line(argc, argv);
 
   IntegrationTestUtils::ClusterFactory factory;
+  factory.useStandaloneAdminServer(true);
   factory.setNumLogs(options::nlogs);
   factory.setNumLogsConfigManagerLogs(options::nlogs);
   factory.useDefaultTrafficShapingConfig(options::traffic_shaping);

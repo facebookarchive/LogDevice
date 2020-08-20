@@ -26,8 +26,9 @@ REMOVE_MATCHES_FROM_LISTS(test_util_files test_util_hfiles
 
 add_library(test_util STATIC ${test_util_hfiles} ${test_util_files})
 
-add_dependencies(test_util googletest)
+add_dependencies(test_util googletest ld-admin-server)
 target_link_libraries(test_util
+  fb303-cpp2
   admin_command_client
   common
   common_test_util

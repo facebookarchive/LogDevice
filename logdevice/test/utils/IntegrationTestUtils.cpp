@@ -27,6 +27,7 @@
 #include <sys/wait.h>
 #include <thrift/lib/cpp2/async/HeaderClientChannel.h>
 
+#include "common/fb303/if/gen-cpp2/FacebookServiceAsyncClient.h"
 #include "logdevice/admin/if/gen-cpp2/AdminAPI.h"
 #include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 #include "logdevice/common/CheckSealRequest.h"
@@ -66,6 +67,7 @@
 #include "logdevice/test/utils/AdminAPITestUtils.h"
 #include "logdevice/test/utils/ServerInfo.h"
 #include "logdevice/test/utils/port_selection.h"
+#include "logdevice/test/utils/util.h"
 
 using facebook::logdevice::configuration::LocalLogsConfig;
 #ifdef FB_BUILD_PATHS
@@ -78,6 +80,9 @@ namespace facebook { namespace logdevice { namespace IntegrationTestUtils {
 std::string defaultLogdevicedPath() {
   return "logdevice/server/logdeviced_nofb";
 }
+std::string defaultAdminServerPath() {
+  return "logdevice/ops/admin_server/ld-admin-server-nofb";
+}
 std::string defaultMarkdownLDQueryPath() {
   return "logdevice/ops/ldquery/markdown-ldquery";
 }
@@ -86,6 +91,9 @@ static const char* CHECKER_PATH =
 #else
 std::string defaultLogdevicedPath() {
   return "bin/logdeviced";
+}
+std::string defaultAdminServerPath() {
+  return "bin/ld-admin-server";
 }
 std::string defaultMarkdownLDQueryPath() {
   return "bin/markdown-ldquery";
@@ -99,7 +107,6 @@ namespace fs = boost::filesystem;
 // requested
 static void maybe_pause_for_gdb(Cluster&,
                                 const std::vector<node_index_t>& indices);
-static int dump_file_to_stderr(const char* path);
 
 namespace {
 // Helper classes and functions used to parse the output of admin commands
@@ -298,6 +305,7 @@ Cluster::Cluster(std::string root_path,
                  std::string epoch_store_path,
                  std::string ncs_path,
                  std::string server_binary,
+                 std::string admin_server_binary,
                  std::string cluster_name,
                  bool enable_logsconfig_manager,
                  dbg::Level default_log_level,
@@ -308,6 +316,7 @@ Cluster::Cluster(std::string root_path,
       epoch_store_path_(std::move(epoch_store_path)),
       ncs_path_(std::move(ncs_path)),
       server_binary_(std::move(server_binary)),
+      admin_server_binary_(std::move(admin_server_binary)),
       cluster_name_(std::move(cluster_name)),
       enable_logsconfig_manager_(enable_logsconfig_manager),
       nodes_configuration_sot_(nodes_configuration_sot),
@@ -746,6 +755,11 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
     // Abort early if this failed
     return nullptr;
   }
+  const std::string actual_admin_server_binary = actualAdminServerBinary();
+  if (actual_admin_server_binary.empty()) {
+    // Abort early if this failed
+    return nullptr;
+  }
 
   auto nodes_configuration = source_config.getNodesConfiguration();
   const int nnodes = nodes_configuration->clusterSize();
@@ -889,6 +903,7 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
                   epoch_store_path,
                   ncs_path,
                   actual_server_binary,
+                  actual_admin_server_binary,
                   cluster_name_,
                   enable_logsconfig_manager_,
                   default_log_level_,
@@ -916,6 +931,11 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
   wait_until("NodesConfiguration is picked by the updater", [&]() {
     return cluster->getConfig()->getNodesConfiguration() != nullptr;
   });
+
+  // Start Admin Server if enabled
+  if (use_standalone_admin_server_) {
+    cluster->admin_server_ = cluster->createAdminServer();
+  }
 
   // create Node objects, but don't start the processes
   for (int i = 0; i < nnodes; i++) {
@@ -1237,6 +1257,11 @@ void Cluster::stop() {
 }
 
 int Cluster::start(std::vector<node_index_t> indices) {
+  // Start admin server if we are configured to start one first.
+  if (admin_server_) {
+    admin_server_->start();
+    admin_server_->waitUntilStarted();
+  }
   if (indices.size() == 0) {
     for (auto& it : nodes_) {
       indices.push_back(it.first);
@@ -1299,6 +1324,52 @@ int Cluster::updateNodesConfiguration(
   waitForServersToProcessNodesConfiguration(nodes_configuration.getVersion());
   return 0;
 }
+
+std::unique_ptr<AdminServer> Cluster::createAdminServer() {
+  std::unique_ptr<AdminServer> server = std::make_unique<AdminServer>();
+  server->data_path_ = root_path_ + "/admin_server";
+  // Create the directory for logs and unix socket
+  mkdir(server->data_path_.c_str(), 0777);
+  // This test uses TCP. Look for enough free ports for each node.
+  Sockaddr admin_address;
+  std::vector<detail::PortOwner> port_owners;
+  if (use_tcp_) {
+    if (detail::find_free_port_set(1, port_owners) != 0) {
+      ld_error("No free ports on system for admin server");
+      return nullptr;
+    }
+
+    admin_address = Sockaddr(get_localhost_address_str(), port_owners[0].port);
+  } else {
+    // This test uses unix domain sockets. These will be created in the
+    // test directory.
+    admin_address = Sockaddr(server->data_path_ + "/socket_admin");
+  }
+  auto protocol_addr_param = admin_address.isUnixAddress()
+      ? std::make_pair(
+            "--admin-unix-socket", ParamValue{admin_address.getPath()})
+      : std::make_pair(
+            "--admin-port", ParamValue{std::to_string(admin_address.port())});
+  server->address_ = admin_address;
+  server->port_owners_ = std::move(port_owners);
+  server->admin_server_binary_ = admin_server_binary_;
+  server->config_path_ = config_path_;
+  server->cmd_args_ = {
+      protocol_addr_param,
+      {"--config-path", ParamValue{"file:" + server->config_path_}},
+      {"--loglevel", ParamValue{loglevelToString(default_log_level_)}},
+      {"--log-file", ParamValue{server->getLogPath()}},
+      {"--enable-maintenance-manager", ParamValue{"true"}},
+      {"--enable-cluster-maintenance-state-machine", ParamValue{"true"}},
+      {"--maintenance-manager-reevaluation-timeout", ParamValue{"5s"}},
+      {"--enable-safety-check-periodic-metadata-update", ParamValue{"true"}},
+      {"--safety-check-metadata-update-period", ParamValue{"30s"}},
+      {"--maintenance-log-snapshotting", ParamValue{"true"}},
+  };
+  ld_info("Admin Server will be started on address: %s",
+          server->address_.toString().c_str());
+  return server;
+} // namespace IntegrationTestUtils
 
 std::unique_ptr<Node> Cluster::createNode(node_index_t index,
                                           ServerAddresses addrs) const {
@@ -3344,6 +3415,16 @@ std::string ClusterFactory::actualServerBinary() const {
   return findBinary(relative_to_build_out);
 }
 
+std::string ClusterFactory::actualAdminServerBinary() const {
+  const char* envpath = getenv("LOGDEVICE_ADMIN_SERVER_BINARY");
+  if (envpath != nullptr) {
+    return envpath;
+  }
+  std::string relative_to_build_out =
+      admin_server_binary_.value_or(defaultAdminServerPath());
+  return findBinary(relative_to_build_out);
+}
+
 void ClusterFactory::setInternalLogAttributes(const std::string& name,
                                               logsconfig::LogAttributes attrs) {
   auto log_group_node = internal_logs_.insert(name, attrs);
@@ -3689,25 +3770,6 @@ Cluster::readNodesConfigurationFromStore() const {
   }
 
   return NodesConfigurationCodec::deserialize(std::move(serialized));
-}
-
-int dump_file_to_stderr(const char* path) {
-  FILE* fp = std::fopen(path, "r");
-  if (fp == nullptr) {
-    ld_error("fopen(\"%s\") failed with errno %d (%s)",
-             path,
-             errno,
-             strerror(errno));
-    return -1;
-  }
-  fprintf(stderr, "=== begin %s\n", path);
-  std::vector<char> buf(16 * 1024);
-  while (std::fgets(buf.data(), buf.size(), fp) != nullptr) {
-    fprintf(stderr, "    %s", buf.data());
-  }
-  fprintf(stderr, "=== end %s\n", path);
-  std::fclose(fp);
-  return 0;
 }
 
 class ManualNodeSetSelector : public NodeSetSelector {

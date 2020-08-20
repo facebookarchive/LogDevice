@@ -34,8 +34,10 @@
 #include "logdevice/include/ClientSettings.h"
 #include "logdevice/include/LogsConfigTypes.h"
 #include "logdevice/include/types.h"
+#include "logdevice/test/utils/AdminServer.h"
 #include "logdevice/test/utils/MetaDataProvisioner.h"
 #include "logdevice/test/utils/NodesConfigurationFileUpdater.h"
+#include "logdevice/test/utils/ParamMaps.h"
 #include "logdevice/test/utils/port_selection.h"
 
 namespace facebook { namespace logdevice {
@@ -71,6 +73,9 @@ namespace facebook { namespace logdevice {
  * LOGDEVICE_TEST_BINARY controls which binary to run as the server.  If not
  * set, _bin/logdevice/server/logdeviced is used.
  *
+ * LOGDEVICE_TEST_ADMIN_SERVER_BINARY controls which binary to run as the admin
+ * server.  If not set, _bin/logdevice/ops/admin_server/ld-admin-server is used.
+
  * LOGDEVICE_TEST_USE_TCP        use TCP ports instead of UNIX domain sockets
  *
  * LOGDEVICE_LOG_LEVEL           set the default log level used by tests
@@ -104,31 +109,6 @@ namespace IntegrationTestUtils {
 
 class Cluster;
 class Node;
-
-// scope in which command line parameters that applies to different
-// types of nodes. Must be defined continuously.
-enum class ParamScope : uint8_t { ALL = 0, SEQUENCER = 1, STORAGE_NODE = 2 };
-
-using ParamValue = folly::Optional<std::string>;
-using ParamMap = std::unordered_map<std::string, ParamValue>;
-using ParamMaps = std::map<ParamScope, ParamMap>;
-
-class ParamSpec {
- public:
-  std::string key_;
-  std::string value_;
-  ParamScope scope_;
-
-  /* implicit */ ParamSpec(std::string key, ParamScope scope = ParamScope::ALL)
-      : ParamSpec(std::move(key), "true", scope) {}
-
-  ParamSpec(std::string key,
-            std::string value,
-            ParamScope scope = ParamScope::ALL)
-      : key_(key), value_(value), scope_(scope) {
-    ld_check(!key_.empty());
-  }
-};
 
 // used to specify the type of rockdb local logstore for storage
 // nodes in the cluster
@@ -336,6 +316,14 @@ class ClusterFactory {
     // TODO (#54454518): Maybe make MaintenanceManager not do that.
     setParam("--maintenance-manager-reevaluation-timeout", "5s");
 
+    return *this;
+  }
+
+  /**
+   * Sets whether the standalone admin server will be running or not.
+   */
+  ClusterFactory& useStandaloneAdminServer(bool enable) {
+    use_standalone_admin_server_ = enable;
     return *this;
   }
 
@@ -592,6 +580,15 @@ class ClusterFactory {
   }
 
   /**
+   * Sets the path to the admin server binary (relative to the build root) to
+   * use if a custom one is needed.
+   */
+  ClusterFactory& setAdminServerBinary(std::string path) {
+    admin_server_binary_ = path;
+    return *this;
+  }
+
+  /**
    * By default, the cluster will use a traffic shaping configuration which is
    * designed for coverage of the traffic shaping logic in tests, but limits
    * throughput.  This method allows traffic shaping to be turned off in cases
@@ -716,6 +713,9 @@ class ClusterFactory {
   // The node designated to run a instance of MaintenanceManager
   node_index_t maintenance_manager_node_ = -1;
 
+  // Whether to start the standalone admin server or not.
+  bool use_standalone_admin_server_ = false;
+
   // Type of rocksdb local log store
   RocksDBType rocksdb_type_ = RocksDBType::PARTITIONED;
 
@@ -724,6 +724,9 @@ class ClusterFactory {
 
   // Server binary if setServerBinary() was called
   folly::Optional<std::string> server_binary_;
+
+  // Server binary if setAdminServerBinary() was called
+  folly::Optional<std::string> admin_server_binary_;
 
   std::string cluster_name_ = "integration_test";
 
@@ -738,13 +741,25 @@ class ClusterFactory {
 
   static logsconfig::LogAttributes createLogAttributesStub(int nstorage_nodes);
 
-  // Figures out the full path to the server binary, considering in order of
-  // precedence:
-  //
-  // - the environment variable LOGDEVICED_TEST_BINARY,
-  // - setServerBinary() override
-  // - a default path
+  /**
+   * Figures out the full path to the server binary, considering in order of
+   * precedence:
+   *
+   * - the environment variable LOGDEVICE_TEST_BINARY,
+   * - setServerBinary() override
+   * - a default path
+   */
   std::string actualServerBinary() const;
+
+  /**
+   * Figures out the full path to the server binary, considering in order of
+   * precedence:
+   *
+   * - the environment variable LOGDEVICE_ADMIN_SERVER_BINARY,
+   * - setAdminServerBinary() override
+   * - a default path
+   */
+  std::string actualAdminServerBinary() const;
 
   // Set the attributes of an internal log.
   void setInternalLogAttributes(const std::string& name,
@@ -916,6 +931,17 @@ class Cluster {
 
   const Nodes& getNodes() const {
     return nodes_;
+  }
+
+  // Creates a thrift client for the standalone admin server if enabled. Returns
+  // nullptr if not.
+  std::unique_ptr<thrift::AdminAPIAsyncClient> createAdminClient() const;
+
+  /**
+   * Returns the admin server instance if started.
+   */
+  AdminServer* FOLLY_NULLABLE getAdminServer() {
+    return admin_server_.get();
   }
 
   Node& getNode(node_index_t index) {
@@ -1367,6 +1393,7 @@ class Cluster {
           std::string epoch_store_path,
           std::string ncs_path,
           std::string server_binary,
+          std::string admin_server_binary,
           std::string cluster_name,
           bool enable_logsconfig_manager,
           dbg::Level default_log_level,
@@ -1411,6 +1438,10 @@ class Cluster {
   // specified node
   ParamMap commandArgsForNode(const Node& node) const;
 
+  // Creates an admin server instance for this cluster. This does not wait for
+  // the process to start.
+  std::unique_ptr<AdminServer> createAdminServer();
+
   // Helper for createClient() to populate client
   // settings.
   void populateClientSettings(std::unique_ptr<ClientSettings>& settings,
@@ -1432,6 +1463,7 @@ class Cluster {
   // path for the file-based nodes configuration store
   std::string ncs_path_;
   std::string server_binary_;
+  std::string admin_server_binary_;
   std::string cluster_name_;
   bool enable_logsconfig_manager_ = false;
   const NodesConfigurationSourceOfTruth nodes_configuration_sot_;
@@ -1443,7 +1475,8 @@ class Cluster {
 
   // ordered map for convenience
   Nodes nodes_;
-
+  // The admin server object if standalone admin server is enabled.
+  std::unique_ptr<AdminServer> admin_server_;
   // keep track of node replacement events. for nodes with storage role, the
   // counter should be in sync with the `generation' in its config. For nodes
   // without storage role, counter is only used for tracking/directory keeping
