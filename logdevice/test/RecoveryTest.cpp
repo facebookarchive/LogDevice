@@ -17,7 +17,6 @@
 #include "logdevice/common/Digest.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
 #include "logdevice/common/EpochStore.h"
-#include "logdevice/common/FileEpochStore.h"
 #include "logdevice/common/LegacyLogToShard.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/Metadata.h"
@@ -35,6 +34,7 @@
 #include "logdevice/server/EpochRecordCacheEntry.h"
 #include "logdevice/server/RecordCache.h"
 #include "logdevice/server/RecordCacheDependencies.h"
+#include "logdevice/server/epoch_store/FileEpochStore.h"
 #include "logdevice/server/locallogstore/test/StoreUtil.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 

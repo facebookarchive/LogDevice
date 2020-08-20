@@ -9,11 +9,11 @@
 
 #include <cstdio>
 
-#include "logdevice/common/EpochStoreLastCleanEpochFormat.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
-#include "logdevice/server/LastCleanEpochZRQ.h"
+#include "logdevice/server/epoch_store/EpochStoreLastCleanEpochFormat.h"
+#include "logdevice/server/epoch_store/LastCleanEpochZRQ.h"
 
 namespace facebook { namespace logdevice {
 

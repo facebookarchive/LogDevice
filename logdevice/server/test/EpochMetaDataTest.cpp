@@ -15,14 +15,14 @@
 
 #include "logdevice/common/EpochMetaDataMap.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
-#include "logdevice/common/EpochStoreEpochMetaDataFormat.h"
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestNodeSetSelector.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/Record.h"
-#include "logdevice/server/ZookeeperEpochStore.h"
+#include "logdevice/server/epoch_store/EpochStoreEpochMetaDataFormat.h"
+#include "logdevice/server/epoch_store/ZookeeperEpochStore.h"
 
 namespace facebook { namespace logdevice {
 

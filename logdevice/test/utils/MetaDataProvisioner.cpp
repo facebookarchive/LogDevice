@@ -8,7 +8,6 @@
 #include "logdevice/test/utils/MetaDataProvisioner.h"
 
 #include "logdevice/common/EpochMetaDataUpdater.h"
-#include "logdevice/common/FileEpochStore.h"
 #include "logdevice/common/LegacyLogToShard.h"
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/WeightedCopySetSelector.h"
@@ -19,6 +18,7 @@
 #include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
 #include "logdevice/common/test/CopySetSelectorTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
+#include "logdevice/server/epoch_store/FileEpochStore.h"
 #include "logdevice/server/locallogstore/LocalLogStore.h"
 #include "logdevice/server/locallogstore/ShardedRocksDBLocalLogStore.h"
 #include "logdevice/server/locallogstore/test/StoreUtil.h"

@@ -15,7 +15,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/LogTailAttributes.h"
-#include "logdevice/server/ZookeeperEpochStoreRequest.h"
+#include "logdevice/server/epoch_store/ZookeeperEpochStoreRequest.h"
 
 namespace facebook { namespace logdevice {
 

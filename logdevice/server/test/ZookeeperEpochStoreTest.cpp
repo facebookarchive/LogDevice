@@ -5,7 +5,7 @@
  * This source code is licensed under the BSD-style license found in the
  * LICENSE file in the root directory of this source tree.
  */
-#include "logdevice/server/ZookeeperEpochStore.h"
+#include "logdevice/server/epoch_store/ZookeeperEpochStore.h"
 
 #include <memory>
 #include <thread>
@@ -25,7 +25,7 @@
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/test/ZookeeperClientInMemory.h"
 #include "logdevice/server/ServerProcessor.h"
-#include "logdevice/server/SetLastCleanEpochZRQ.h"
+#include "logdevice/server/epoch_store/SetLastCleanEpochZRQ.h"
 
 using namespace facebook::logdevice;
 

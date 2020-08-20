@@ -7,8 +7,8 @@
  */
 #pragma once
 
-#include "logdevice/common/FileEpochStore.h"
 #include "logdevice/server/admincommands/AdminCommand.h"
+#include "logdevice/server/epoch_store/FileEpochStore.h"
 
 namespace facebook { namespace logdevice { namespace commands {
 

@@ -14,7 +14,6 @@
 #include "logdevice/common/EpochMetaDataCache.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
 #include "logdevice/common/EpochStore.h"
-#include "logdevice/common/FileEpochStore.h"
 #include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
@@ -27,6 +26,7 @@
 #include "logdevice/lib/ClientImpl.h"
 #include "logdevice/lib/ClientPluginHelper.h"
 #include "logdevice/lib/RemoteLogsConfig.h"
+#include "logdevice/server/epoch_store/FileEpochStore.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 

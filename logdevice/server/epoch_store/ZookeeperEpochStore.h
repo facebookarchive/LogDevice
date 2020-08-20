@@ -17,7 +17,6 @@
 #include <zookeeper/zookeeper.h>
 
 #include "logdevice/common/EpochStore.h"
-#include "logdevice/common/EpochStoreEpochMetaDataFormat.h"
 #include "logdevice/common/MetaDataTracer.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Processor.h"
@@ -28,6 +27,7 @@
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/include/ConfigSubscriptionHandle.h"
+#include "logdevice/server/epoch_store/EpochStoreEpochMetaDataFormat.h"
 
 /**
  * @file ZookeeperEpochStore implements an EpochStore interface to a

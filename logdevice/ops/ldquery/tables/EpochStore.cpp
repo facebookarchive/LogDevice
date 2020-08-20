@@ -15,7 +15,6 @@
 #include "../Table.h"
 #include "../Utils.h"
 #include "logdevice/admin/safety/LogMetaDataFetcher.h"
-#include "logdevice/common/FileEpochStore.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/ZookeeperClient.h"
 #include "logdevice/common/configuration/Configuration.h"
@@ -26,7 +25,8 @@
 #include "logdevice/common/plugin/ZookeeperClientFactory.h"
 #include "logdevice/lib/ClientImpl.h"
 #include "logdevice/ops/ldquery/Errors.h"
-#include "logdevice/server/ZookeeperEpochStore.h"
+#include "logdevice/server/epoch_store/FileEpochStore.h"
+#include "logdevice/server/epoch_store/ZookeeperEpochStore.h"
 
 namespace facebook {
   namespace logdevice {

@@ -9,10 +9,10 @@
 
 #include <folly/Memory.h>
 
-#include "logdevice/common/EpochStoreEpochMetaDataFormat.h"
 #include "logdevice/common/MetaDataTracer.h"
 #include "logdevice/common/debug.h"
-#include "logdevice/server/ZookeeperEpochStoreRequest.h"
+#include "logdevice/server/epoch_store/EpochStoreEpochMetaDataFormat.h"
+#include "logdevice/server/epoch_store/ZookeeperEpochStoreRequest.h"
 
 namespace facebook { namespace logdevice {
 

@@ -11,11 +11,11 @@
 
 #include <gtest/gtest.h>
 
-#include "logdevice/common/EpochStoreEpochMetaDataFormat.h"
-#include "logdevice/common/EpochStoreLastCleanEpochFormat.h"
 #include "logdevice/common/TailRecord.h"
 #include "logdevice/include/Record.h"
-#include "logdevice/server/LastCleanEpochZRQ.h"
+#include "logdevice/server/epoch_store/EpochStoreEpochMetaDataFormat.h"
+#include "logdevice/server/epoch_store/EpochStoreLastCleanEpochFormat.h"
+#include "logdevice/server/epoch_store/LastCleanEpochZRQ.h"
 
 namespace {
 
