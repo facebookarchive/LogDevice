@@ -620,6 +620,12 @@ int main(int argc, const char* argv[]) {
     factory.setParam("--disable-rebuilding", "false");
   }
 
+  // TODO, these should be the default. This is temporary override until we do
+  // that.
+  factory.setParam("--enable-cluster-maintenance-state-machine", "true");
+  factory.setParam("--enable-self-initiated-rebuilding", "true");
+  factory.setParam("--event-log-snapshotting", "true");
+  factory.setParam("--enable-config-synchronization", "false");
   factory.eventLogMode(
       IntegrationTestUtils::ClusterFactory::EventLogMode::SNAPSHOTTED);
   factory.setNumDBShards(options::nshards);
