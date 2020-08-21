@@ -62,15 +62,14 @@ class ZookeeperEpochStoreTest : public ::testing::Test {
 
     auto znodes = getPrefillZnodes();
 
-    std::shared_ptr<ZookeeperClientFactory> zookeeper_client_factory =
-        std::make_shared<ZookeeperClientInMemoryFactory>(znodes);
+    zkclient = std::make_shared<ZookeeperClientInMemory>(
+        config->getZookeeperConfig()->getQuorumString(), std::move(znodes));
     epochstore = std::make_unique<ZookeeperEpochStore>(
         TEST_CLUSTER,
         processor.get(),
-        config->updateableZookeeperConfig(),
+        zkclient,
         config->updateableNodesConfiguration(),
-        processor->updateableSettings(),
-        zookeeper_client_factory);
+        processor->updateableSettings());
 
     dbg::assertOnData = true;
   }
@@ -104,6 +103,7 @@ class ZookeeperEpochStoreTest : public ::testing::Test {
   std::shared_ptr<Processor> processor;
   std::shared_ptr<Processor> other_node_processor;
   std::shared_ptr<UpdateableConfig> config;
+  std::shared_ptr<ZookeeperClientInMemory> zkclient;
   std::unique_ptr<ZookeeperEpochStore> epochstore;
 
  private:
@@ -676,55 +676,6 @@ TEST_F(ZookeeperEpochStoreTestEmpty, NoRootNodeEpochMetaDataTestNoCreation) {
   while (n_operations_pending--) {
     sem.wait();
   }
-}
-
-TEST_F(ZookeeperEpochStoreTest, QuorumChangeTest) {
-  // Change the quorum to one that points somewhere else
-  auto orig_zk_config = config->getZookeeperConfig();
-  ASSERT_NE(orig_zk_config, nullptr);
-  const std::vector<Sockaddr> new_quorum = {
-      Sockaddr("2401:db00:21:3:face:0:43:0", 2183),
-      Sockaddr("2401:db00:21:3:face:0:45:0", 2183),
-      Sockaddr("2401:db00:2030:6103:face:0:27:0", 2183),
-      Sockaddr("2401:db00:2030:6103:face:0:1d:0", 2183),
-      Sockaddr("2401:db00:2030:6103:face:0:17:0", 2183)};
-  config->updateableZookeeperConfig()->update(
-      std::make_shared<configuration::ZookeeperConfig>(
-          new_quorum, orig_zk_config->getSessionTimeout()));
-
-  // Run a ZK request
-  Semaphore sem;
-  Status zk_req_st = E::OK;
-
-  int rv = epochstore->getLastCleanEpoch(
-      logid_t(1),
-      [&](Status st, logid_t /*logid*/, epoch_t /*read_epoch*/, TailRecord) {
-        ld_info("get LCE completed with %s", error_description(st));
-        zk_req_st = st;
-        sem.post();
-      });
-  ASSERT_EQ(0, rv);
-  ld_info("Posted request");
-  // Change the quorum back to the original
-  config->updateableZookeeperConfig()->update(orig_zk_config);
-  ld_info("Changed quorum");
-
-  ld_info("Waiting for request to complete");
-  sem.wait();
-  ASSERT_EQ(E::CONNFAILED, zk_req_st);
-  ld_info("Request completed");
-
-  // Try again
-  rv = epochstore->getLastCleanEpoch(
-      logid_t(1),
-      [&](Status st, logid_t /*logid*/, epoch_t /*read_epoch*/, TailRecord) {
-        zk_req_st = st;
-        sem.post();
-      });
-
-  ASSERT_EQ(0, rv);
-  sem.wait();
-  ASSERT_NE(E::SHUTDOWN, zk_req_st);
 }
 
 /*

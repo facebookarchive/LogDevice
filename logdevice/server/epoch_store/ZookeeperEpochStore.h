@@ -48,16 +48,14 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
    * @param   config        Zookeeper config, we only use this to get the id
    *                        of the node we are running on
    * @param   settings      settings, used to get zk-create-root-znodes
-   * @param   zkFactory     factory used to create ZookeeperClient
    *
    */
   ZookeeperEpochStore(
       std::string cluster_name,
       Processor* processor,
-      const std::shared_ptr<UpdateableZookeeperConfig>& zk_config,
+      std::shared_ptr<ZookeeperClientBase> zkclient,
       const std::shared_ptr<UpdateableNodesConfiguration>& nodes_configuration,
-      UpdateableSettings<Settings> settings,
-      std::shared_ptr<ZookeeperClientFactory> zkFactory);
+      UpdateableSettings<Settings> settings);
 
   ~ZookeeperEpochStore() override;
 
@@ -115,7 +113,7 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
   // destroyed, no new calls should be made using this zkclient pointer. The
   // behaviour is currently undefined
   std::shared_ptr<ZookeeperClientBase> getZookeeperClient() const {
-    return zkclient_.load();
+    return zkclient_;
   }
 
   std::shared_ptr<std::atomic<bool>> getShuttingDownPtr() const {
@@ -134,13 +132,11 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
   Processor* processor_;
 
   // wraps the zhandle_t over which we talk to Zookeeper.
-  folly::atomic_shared_ptr<ZookeeperClientBase> zkclient_;
+  std::shared_ptr<ZookeeperClientBase> zkclient_;
 
   // name of LD cluster serviced by this epoch store. Used as a
   // component of the path to epoch znodes
   std::string cluster_name_;
-
-  std::shared_ptr<UpdateableZookeeperConfig> zk_config_;
 
   // Cluster config, used to figure out NodeID
   std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration_;
@@ -154,12 +150,6 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
   // had been destroyed
   std::shared_ptr<std::atomic<bool>> shutting_down_;
 
-  // Used to detect changes in Zookeeper quorum
-  folly::Optional<ConfigSubscriptionHandle> config_subscription_;
-
-  // ZookeeperClientFactory to create ZookeeperClient
-  std::shared_ptr<ZookeeperClientFactory> zkFactory_;
-
   /**
    * Run a zoo_aget() on a znode, optionally followed by a modify and a
    * version-conditional zoo_aset() of a new value into the same znode.
@@ -172,10 +162,6 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
    *         defined for EpochStore::nextEpoch().
    */
   int runRequest(std::unique_ptr<ZookeeperEpochStoreRequest> zrq);
-
-  // Callback invoked when the config has changed.  Checks if the Zookeper
-  // quorum changed; if so, creates a new ZookeperClient.
-  void onConfigUpdate();
 
   /**
    * Schedules a request on the Processor after a Zookeeper modification

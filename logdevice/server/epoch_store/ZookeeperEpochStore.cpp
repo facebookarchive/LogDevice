@@ -32,31 +32,21 @@ namespace facebook { namespace logdevice {
 ZookeeperEpochStore::ZookeeperEpochStore(
     std::string cluster_name,
     Processor* processor,
-    const std::shared_ptr<UpdateableZookeeperConfig>& zk_config,
+    std::shared_ptr<ZookeeperClientBase> zkclient,
     const std::shared_ptr<UpdateableNodesConfiguration>& nodes_configuration,
-    UpdateableSettings<Settings> settings,
-    std::shared_ptr<ZookeeperClientFactory> zkFactory)
+    UpdateableSettings<Settings> settings)
     : processor_(processor),
+      zkclient_(std::move(zkclient)),
       cluster_name_(cluster_name),
-      zk_config_(zk_config),
       nodes_configuration_(nodes_configuration),
       settings_(settings),
-      shutting_down_(std::make_shared<std::atomic<bool>>(false)),
-      zkFactory_(zkFactory) {
+      shutting_down_(std::make_shared<std::atomic<bool>>(false)) {
   ld_check(!cluster_name.empty() &&
            cluster_name.length() <
                configuration::ZookeeperConfig::MAX_CLUSTER_NAME);
-
-  auto cfg = zk_config_->get();
-  std::shared_ptr<ZookeeperClientBase> zkclient = zkFactory_->getClient(*cfg);
-
-  if (!zkclient) {
+  if (!zkclient_) {
     throw ConstructorFailed();
   }
-  zkclient_.store(zkclient);
-
-  config_subscription_ = zk_config_->subscribeToUpdates(
-      std::bind(&ZookeeperEpochStore::onConfigUpdate, this));
 }
 
 ZookeeperEpochStore::~ZookeeperEpochStore() {
@@ -64,11 +54,11 @@ ZookeeperEpochStore::~ZookeeperEpochStore() {
   // close() ensures that no callbacks are invoked after this point. So, we can
   // be sure that no references are held to zkclient_ from any of the callback
   // functions.
-  zkclient_.load()->close();
+  zkclient_->close();
 }
 
 std::string ZookeeperEpochStore::identify() const {
-  return "zookeeper://" + zkclient_.load()->getQuorum() + rootPath();
+  return "zookeeper://" + zkclient_->getQuorum() + rootPath();
 }
 
 void ZookeeperEpochStore::postCompletion(
@@ -120,7 +110,6 @@ void ZookeeperEpochStore::postCompletion(
 }
 
 Status ZookeeperEpochStore::completionStatus(int rc, logid_t logid) {
-  std::shared_ptr<ZookeeperClientBase> zkclient = zkclient_.load();
   // Special handling for cases where additional information would be helpful
   if (rc == ZRUNTIMEINCONSISTENCY) {
     RATELIMIT_CRITICAL(
@@ -142,7 +131,7 @@ Status ZookeeperEpochStore::completionStatus(int rc, logid_t logid) {
   } else if (rc == ZINVALIDSTATE) {
     // Note: state() returns the current state of the session and does not
     // necessarily reflect that state at the time of error
-    int zstate = zkclient->state();
+    int zstate = zkclient_->state();
     // ZOO_ constants are C const ints, can't switch()
     if (zstate == ZOO_EXPIRED_SESSION_STATE) {
       return E::NOTCONN;
@@ -248,8 +237,7 @@ void ZookeeperEpochStore::provisionLogZnodes(
             postRequestCompletion(rootrc, std::move(zrq));
           }
         };
-        std::shared_ptr<ZookeeperClientBase> zkclient = zkclient_.load();
-        zkclient->createWithAncestors(rootPath(), "", std::move(rootcb));
+        zkclient_->createWithAncestors(rootPath(), "", std::move(rootcb));
         // not calling postRequestCompletion, since the request will be retried
         // and hopefully will succeed afterwards
         return;
@@ -266,8 +254,7 @@ void ZookeeperEpochStore::provisionLogZnodes(
     postRequestCompletion(rc, std::move(zrq));
   };
 
-  std::shared_ptr<ZookeeperClientBase> zkclient = zkclient_.load();
-  zkclient->multiOp(std::move(ops), std::move(cb));
+  zkclient_->multiOp(std::move(ops), std::move(cb));
 }
 
 void ZookeeperEpochStore::onGetZnodeComplete(
@@ -355,14 +342,13 @@ void ZookeeperEpochStore::onGetZnodeComplete(
       // number of znode on every write to that znode. If the versions do not
       // match zkSetCf() will be called with status ZBADVERSION. This ensures
       // that if our read-modify-write of znode_path succeeds, it was atomic.
-      std::shared_ptr<ZookeeperClientBase> zkclient = zkclient_.load();
       auto cb = [this, req = std::move(zrq)](int res, zk::Stat) mutable {
         postRequestCompletion(res, std::move(req));
       };
-      zkclient->setData(std::move(znode_path),
-                        std::move(znode_value_str),
-                        std::move(cb),
-                        stat.version_);
+      zkclient_->setData(std::move(znode_path),
+                         std::move(znode_value_str),
+                         std::move(cb),
+                         stat.version_);
       return;
     }
   }
@@ -401,40 +387,12 @@ int ZookeeperEpochStore::runRequest(
   ld_check(zrq);
 
   std::string znode_path = zrq->getZnodePath();
-  std::shared_ptr<ZookeeperClientBase> zkclient = zkclient_.load();
   auto cb = [this, req = std::move(zrq)](
                 int rc, std::string value, zk::Stat stat) mutable {
     onGetZnodeComplete(rc, std::move(value), stat, std::move(req));
   };
-  zkclient->getData(znode_path, std::move(cb));
+  zkclient_->getData(znode_path, std::move(cb));
   return 0;
-}
-
-void ZookeeperEpochStore::onConfigUpdate() {
-  std::shared_ptr<ZookeeperConfig> cfg = zk_config_->get();
-  if (cfg == nullptr) {
-    RATELIMIT_ERROR(
-        std::chrono::seconds(10),
-        1,
-        "Zookeeper configuration is empty. Failed to update epoch store.");
-    return;
-  }
-
-  std::shared_ptr<ZookeeperClientBase> cur = zkclient_.load();
-  auto quorum = cfg->getQuorumString();
-  if (quorum == cur->getQuorum()) {
-    return;
-  }
-
-  ld_info("Zookeeper quorum changed, reconnecting: %s", quorum.c_str());
-
-  std::shared_ptr<ZookeeperClientBase> zkclient = zkFactory_->getClient(*cfg);
-
-  if (!zkclient) {
-    ld_error("Zookeeper reconnect failed: %s", error_description(err));
-    return;
-  }
-  zkclient_.store(zkclient);
 }
 
 int ZookeeperEpochStore::getLastCleanEpoch(logid_t logid, CompletionLCE cf) {

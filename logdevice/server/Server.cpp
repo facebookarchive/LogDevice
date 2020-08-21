@@ -1369,10 +1369,10 @@ bool Server::initSequencers() {
       epoch_store = std::make_unique<ZookeeperEpochStore>(
           server_config_->getClusterName(),
           processor_.get(),
-          updateable_config_->updateableZookeeperConfig(),
+          zk_client_factory->getClient(
+              *updateable_config_->updateableZookeeperConfig()->get()),
           updateable_config_->updateableNodesConfiguration(),
-          processor_->updateableSettings(),
-          zk_client_factory);
+          processor_->updateableSettings());
     } catch (const ConstructorFailed&) {
       ld_error("Failed to construct ZookeeperEpochStore: %s",
                error_description(err));

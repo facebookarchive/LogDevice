@@ -100,28 +100,4 @@ class ZookeeperClientInMemory : public ZookeeperClientBase {
                const void* context);
 };
 
-class ZookeeperClientInMemoryFactory : public ZookeeperClientFactory {
- public:
-  explicit ZookeeperClientInMemoryFactory(
-      ZookeeperClientInMemory::state_map_t znodes)
-      : znodes_(znodes) {}
-
-  std::string identifier() const override {
-    return "in-memory-zk";
-  }
-
-  std::string displayName() const override {
-    return "In Memory ZK";
-  }
-
-  std::unique_ptr<ZookeeperClientBase>
-  getClient(const configuration::ZookeeperConfig& config) override {
-    return std::make_unique<ZookeeperClientInMemory>(
-        config.getQuorumString(), znodes_);
-  }
-
- private:
-  ZookeeperClientInMemory::state_map_t znodes_;
-};
-
 }} // namespace facebook::logdevice

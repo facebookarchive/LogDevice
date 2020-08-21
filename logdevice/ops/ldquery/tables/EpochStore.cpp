@@ -135,10 +135,10 @@ std::shared_ptr<TableData> EpochStore::getData(QueryContext& ctx) {
       epoch_store = std::make_shared<ZookeeperEpochStore>(
           config->serverConfig()->getClusterName(),
           &processor,
-          upd_config->updateableZookeeperConfig(),
+          zookeeper_client_factory->getClient(
+              *upd_config->updateableZookeeperConfig()->get()),
           upd_config->updateableNodesConfiguration(),
-          processor.updateableSettings(),
-          zookeeper_client_factory);
+          processor.updateableSettings());
     } catch (const ConstructorFailed&) {
       std::string error =
           folly::format("Failed to construct a Zookeeper client for [{}]: {}",
