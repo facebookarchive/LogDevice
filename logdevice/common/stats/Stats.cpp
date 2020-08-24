@@ -156,7 +156,10 @@ PerMonitoringTagStats::PerMonitoringTagStats()
 
 PerMonitoringTagStats::PerMonitoringTagStats(const PerMonitoringTagStats& other)
     : histograms{
-          std::make_unique<PerMonitoringTagHistograms>(*other.histograms)} {}
+          std::make_unique<PerMonitoringTagHistograms>(*other.histograms)} {
+#define STAT_DEFINE(name, agg) name = other.name;
+#include "logdevice/common/stats/per_monitoring_tag_stats.inc" // nolint
+}
 
 void PerMonitoringTagStats::aggregate(PerMonitoringTagStats const& other,
                                       StatsAggOptional agg_override) {
