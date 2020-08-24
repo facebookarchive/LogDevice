@@ -140,6 +140,7 @@ class UpdateableConfig;
 class WorkerImpl;
 class WorkerTimeoutStats;
 class OverloadDetector;
+class ThriftRouter;
 
 namespace maintenance {
 class ClusterMaintenanceStateMachine;
@@ -397,6 +398,11 @@ class Worker : public WorkContext {
   // An interface for sending Messages on this Worker. This object owns all
   // Connections on this Worker.
   Sender& sender() const;
+
+  /**
+   * Creates an instance of Thrift client for sending RPC to given node.
+   */
+  ThriftRouter* getThriftRouter() const;
 
   // a map of all currently running FindKeyRequests
   FindKeyRequestMap& runningFindKey() const;

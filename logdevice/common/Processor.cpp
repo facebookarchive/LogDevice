@@ -48,8 +48,10 @@
 #include "logdevice/common/plugin/CommonBuiltinPlugins.h"
 #include "logdevice/common/plugin/SequencerLocatorFactory.h"
 #include "logdevice/common/plugin/StaticPluginLoader.h"
+#include "logdevice/common/plugin/ThriftClientFactoryPlugin.h"
 #include "logdevice/common/stats/ServerHistograms.h"
 #include "logdevice/common/stats/Stats.h"
+#include "logdevice/common/thrift/ThriftRouter.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
 
@@ -167,6 +169,15 @@ get_sequencer_locator(std::shared_ptr<PluginRegistry> plugin_registry,
   }
 }
 
+std::unique_ptr<ThriftClientFactory>
+createThriftClientFactory(std::shared_ptr<PluginRegistry> plugin_registry,
+                          std::shared_ptr<UpdateableConfig> config) {
+  auto plugin = plugin_registry->getSinglePlugin<ThriftClientFactoryPlugin>(
+      PluginType::THRIFT_CLIENT_FACTORY);
+  ld_check(plugin);
+  return (*plugin)(std::move(config));
+}
+
 } // namespace
 
 Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
@@ -181,6 +192,8 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
     : config_(std::move(updateable_config)),
       settings_(settings),
       plugin_registry_(std::move(plugin_registry)),
+      thrift_client_factory_(
+          createThriftClientFactory(plugin_registry_, config_)),
       stats_(stats),
       impl_(new ProcessorImpl(this, settings, trace_logger)),
       sequencer_locator_(get_sequencer_locator(plugin_registry_, config_)),
@@ -246,6 +259,11 @@ void Processor::init() {
 
   initTLSCredMonitor();
 
+  thrift_router_ = std::make_unique<NcmThriftRouter>(
+      thrift_client_factory_.get(),
+      settings_,
+      config_->updateableNodesConfiguration());
+
   if (settings_->server) {
     // Remaining necessary steps are implemented in ServerProcessor::init().
     return;
@@ -262,6 +280,10 @@ void Processor::startRunning() {
 
 ReadStreamDebugInfoSamplingConfig& Processor::getDebugClientConfig() {
   return impl_->read_stream_debug_info_sampling_config_;
+}
+
+ThriftRouter* Processor::getThriftRouter() const {
+  return thrift_router_.get();
 }
 
 workers_t Processor::createWorkerPool(WorkerType type, size_t count) {
@@ -310,6 +332,8 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
       settings_(settings),
       plugin_registry_(std::make_shared<PluginRegistry>(
           createAugmentedCommonBuiltinPluginVector<StaticPluginLoader>())),
+      thrift_client_factory_(
+          createThriftClientFactory(plugin_registry_, config_)),
       stats_(stats),
       impl_(new ProcessorImpl(this,
                               settings,

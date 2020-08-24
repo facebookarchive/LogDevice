@@ -61,6 +61,8 @@ class SequencerLocator;
 class SSLSessionCache;
 class StatsHolder;
 class TraceLogger;
+class ThriftClientFactory;
+class ThriftRouter;
 class TLSCredMonitor;
 class UpdateableConfig;
 class UpdateableSecurityInfo;
@@ -78,21 +80,6 @@ class Processor : public folly::enable_shared_from_this<Processor> {
    * Creates a new Processor.  You cannot use this directly, need to call the
    * create() factory method which performs two-step initialisation with init().
    *
-   * @param cluster_config config to pass to Worker threads
-   * @param Settings       common setting shared by all EventLoops in this
-   *                       Processor and all the objects running on them.
-   *                       Must be non-null. Is NOT owned by Processor.
-   * @param rebuilding_mode             whether this Processor is part of
-   *                                    rebuilding process
-   * @param permission_checker          pointer to a PermissionChecker.
-   *                                    Ownership is transferred to the
-   *                                    processor
-   * @param principal_parser            pointer to a PrinciplaParser. Ownership
-   *                                    is transferred to the processor
-   * @param stats                       object used to update various stat
-   *                                    counters
-   * @param sequencer_locator           used on clients and storage nodes to
-   *                                    map from log ids to sequencer nodes
    * @param credentials                 an optional field used in the initial
    *                                    handshake of a Connection. Used
    *                                    only when the configuration file has set
@@ -490,8 +477,13 @@ class Processor : public folly::enable_shared_from_this<Processor> {
 
   std::shared_ptr<PluginRegistry> plugin_registry_;
 
+  std::unique_ptr<ThriftClientFactory> thrift_client_factory_;
+  std::unique_ptr<ThriftRouter> thrift_router_;
+
  public:
   StatsHolder* stats_;
+
+  ThriftRouter* getThriftRouter() const;
 
   friend class ProcessorImpl;
   std::unique_ptr<ProcessorImpl> impl_;

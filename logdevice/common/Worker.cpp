@@ -71,6 +71,7 @@
 #include "logdevice/common/protocol/MessageTracer.h"
 #include "logdevice/common/stats/ServerHistograms.h"
 #include "logdevice/common/stats/Stats.h"
+#include "logdevice/common/thrift/ThriftRouter.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
@@ -1108,6 +1109,10 @@ void Worker::unpackRunContext(
 
 Sender& Worker::sender() const {
   return impl_->sender_;
+}
+
+ThriftRouter* Worker::getThriftRouter() const {
+  return processor_->getThriftRouter();
 }
 
 FindKeyRequestMap& Worker::runningFindKey() const {
