@@ -18,6 +18,7 @@ using namespace facebook::logdevice;
 TEST(ConnectionIntegrationTest, ShouldBeAbleToUseLowPriorityPort) {
   logid_t log{1};
   auto cluster = IntegrationTestUtils::ClusterFactory()
+                     .setClientSetting("enable-port-based-qos", "true")
                      .setClientSetting("client-default-network-priority", "low")
                      .create(1);
   cluster->waitUntilAllSequencersQuiescent();
