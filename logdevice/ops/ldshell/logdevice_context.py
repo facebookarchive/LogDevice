@@ -29,7 +29,7 @@ from nubia import context, exceptions
 from nubia.internal.io.eventbus import Message
 from nubia.internal.io.session_logger import SessionLogger
 from pygments.token import Token
-from termcolor import colored, cprint
+from termcolor import cprint
 from thrift.py3 import get_client as create_thrift_client
 
 

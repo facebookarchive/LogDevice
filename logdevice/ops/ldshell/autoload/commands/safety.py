@@ -9,7 +9,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 from collections import defaultdict
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple, TypeVar
+from typing import List, Mapping, Optional, Sequence, Set, Tuple, TypeVar
 
 import prettytable as pt
 from ldops.cluster import get_cluster_view
@@ -25,13 +25,7 @@ from logdevice.admin.safety.types import (
     OperationImpact,
 )
 from logdevice.client import get_internal_log_name, is_internal_log
-from logdevice.common.types import (
-    Location,
-    LocationScope,
-    NodeID,
-    ReplicationProperty,
-    ShardID,
-)
+from logdevice.common.types import LocationScope, NodeID, ReplicationProperty, ShardID
 from nubia import context
 from nubia.internal.typing import argument, command
 from termcolor import colored, cprint

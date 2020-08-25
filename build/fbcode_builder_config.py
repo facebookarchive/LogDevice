@@ -11,7 +11,6 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import specs.fizz as fizz
 import specs.fmt as fmt
 import specs.folly as folly
-import specs.rocksdb as rocksdb
 import specs.sodium as sodium
 import specs.wangle as wangle
 import specs.zstd as zstd

@@ -9,7 +9,6 @@
 import sys
 import textwrap
 import traceback
-from collections import Counter
 
 from nubia import context
 from nubia.internal.cmdbase import Command

@@ -7,8 +7,6 @@
 # LICENSE file in the root directory of this source tree.
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-import sys
-
 # pyre-fixme[21]: T48485855
 from logdevice.ldquery.internal import ext
 
