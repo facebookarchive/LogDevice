@@ -66,7 +66,7 @@ whether an operation can be done safely or not.
 
 ## The Maintenance Manager
 
-The maintenane manager is a central event-driven orchestration system for
+The maintenance manager is a central event-driven orchestration system for
 LogDevice clusters. It is responsible for guaranteeing safety of maintenance
 operations and automatic sequencing and resolution of maintenance requests
 coming from different actors or users.
