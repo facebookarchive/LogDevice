@@ -90,6 +90,23 @@ bool NodeServiceDiscovery::isValid() const {
     return false;
   }
 
+  if (!addresses_per_priority.empty()) {
+    if (!addresses_per_priority.count(ClientNetworkPriority::MEDIUM)) {
+      RATELIMIT_ERROR(std::chrono::seconds(10),
+                      5,
+                      "If an address for any priority is defined, the config "
+                      "should also contain the MEDIUM priority address.");
+      return false;
+    } else if (addresses_per_priority.at(ClientNetworkPriority::MEDIUM) !=
+               default_client_data_address) {
+      RATELIMIT_ERROR(std::chrono::seconds(10),
+                      5,
+                      "MEDIUM priority address should be the same as "
+                      "default_client_data_address");
+      return false;
+    }
+  }
+
   std::string name_invalid_reason;
   if (!name.empty() && !nodes::isValidServerName(name, &name_invalid_reason)) {
     RATELIMIT_ERROR(std::chrono::seconds(10),

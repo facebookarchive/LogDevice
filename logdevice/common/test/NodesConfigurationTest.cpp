@@ -243,6 +243,8 @@ TEST_F(NodesConfigurationTest, TestServerToServerDefaultingToDataAddress) {
 }
 
 TEST_F(NodesConfigurationTest, ChangingServiceDiscoveryAfterProvision) {
+  using Priority = NodeServiceDiscovery::ClientNetworkPriority;
+
   auto config = provisionNodes();
   ASSERT_TRUE(config->validate());
   NodesConfiguration::Update update{};
@@ -254,6 +256,8 @@ TEST_F(NodesConfigurationTest, ChangingServiceDiscoveryAfterProvision) {
     new_svc.default_client_data_address = Sockaddr("/tmp/new_addr1");
     new_svc.gossip_address = Sockaddr("/tmp/new_addr2");
     new_svc.ssl_address = Sockaddr("/tmp/new_addr3");
+    new_svc.addresses_per_priority[Priority::MEDIUM] =
+        new_svc.default_client_data_address;
 
     update.service_discovery_update =
         std::make_unique<ServiceDiscoveryConfig::Update>();
@@ -711,6 +715,49 @@ TEST_F(NodesConfigurationTest, ExtractVersionError) {
   auto version =
       NodesConfigurationCodec::extractConfigVersion(std::string("123"));
   ASSERT_FALSE(version.has_value());
+}
+
+TEST_F(NodesConfigurationTest, ShouldMeetAddressesPerPriorityConditions) {
+  using Priority = NodeServiceDiscovery::ClientNetworkPriority;
+
+  auto svc = *provisionNodes()->getNodeServiceDiscovery(2);
+  ASSERT_TRUE(svc.isValid()) << "Initial config must be valid.";
+
+  // MEDIUM priority address should be the same as default_client_data_address.
+  {
+    auto new_svc = svc;
+    new_svc.default_client_data_address =
+        Sockaddr("/default/client/data/address");
+    new_svc.addresses_per_priority[Priority::MEDIUM] =
+        Sockaddr("/not/default/client/data/address");
+
+    EXPECT_FALSE(new_svc.isValid()) << "default_client_data_address should be "
+                                       "equal to MEDIUM priority address";
+  }
+
+  // If an address for any priority is defined, then address for MEDIUM
+  // priority should be defined.
+  {
+    auto new_svc = svc;
+    new_svc.addresses_per_priority = {
+        {Priority::LOW, Sockaddr("/low/priority/address")}};
+    EXPECT_FALSE(new_svc.isValid())
+        << "If an address for any priority is defined, then address for MEDIUM "
+           "priority should be defined.";
+  }
+
+  // All conditions met.
+  {
+    auto new_svc = svc;
+    new_svc.default_client_data_address =
+        Sockaddr("/default/client/data/address");
+    new_svc.addresses_per_priority = {
+        {Priority::LOW, Sockaddr("/low/priority/address")},
+        {Priority::MEDIUM, new_svc.default_client_data_address}};
+
+    EXPECT_TRUE(new_svc.isValid()) << "All conditions for address_per_priority "
+                                      "are met. Config should be updated.";
+  }
 }
 
 } // namespace

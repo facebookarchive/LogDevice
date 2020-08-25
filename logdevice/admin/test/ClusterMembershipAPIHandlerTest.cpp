@@ -104,6 +104,7 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
             make_address(150 + idx, 7000 + idx));
         other_addresses.set_addresses_per_priority(
             {{ClientNetworkPriority::LOW, make_address(0 + idx, 8000 + idx)},
+             {ClientNetworkPriority::MEDIUM, cfg.data_address_ref().value()},
              {ClientNetworkPriority::HIGH, make_address(0 + idx, 9000 + idx)}});
         cfg.set_other_addresses(other_addresses);
       }
@@ -396,6 +397,7 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestInvalidAddNodesRequest) {
 }
 
 TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateRequest) {
+  using Priority = thrift::ClientNetworkPriority;
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
   auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
 
@@ -414,6 +416,9 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateRequest) {
   cfg.other_addresses_ref()->server_to_server_ref()->set_address("/test4");
   cfg.other_addresses_ref()->server_thrift_api_ref()->set_address("/test5");
   cfg.other_addresses_ref()->client_thrift_api_ref()->set_address("/test6");
+  (*cfg.other_addresses_ref()->addresses_per_priority_ref())[Priority::MEDIUM]
+      .set_address("/test1");
+
   cfg.storage_ref()->set_weight(123);
   cfg.sequencer_ref()->set_weight(122);
 
