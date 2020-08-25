@@ -8,11 +8,13 @@
 
 from nubia import command, context
 
+
 @command
 class Config:
     """
     Commands about logdevice config
     """
+
     @command
     async def dump(self):
         """

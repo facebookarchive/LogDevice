@@ -127,8 +127,8 @@ const FeatureCallout = props => (
   <div
     className="productShowcaseSection paddingBottom"
     style={{textAlign: 'center'}}>
-	<h2>Feature Callout</h2>
-	<MarkdownBlock>These are features of this project</MarkdownBlock>
+  <h2>Feature Callout</h2>
+  <MarkdownBlock>These are features of this project</MarkdownBlock>
   </div>
 );
 

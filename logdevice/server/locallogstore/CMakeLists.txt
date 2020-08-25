@@ -4,14 +4,14 @@
 # This source code is licensed under the BSD-style license found in the
 # LICENSE file in the root directory of this source tree.
 
-auto_sources(locallogstore_hfiles "*.h" RECURSE 
+auto_sources(locallogstore_hfiles "*.h" RECURSE
   "${LOGDEVICE_SERVER_DIR}/locallogstore/test"
 )
-auto_sources(locallogstore_files "*.cpp" RECURSE 
+auto_sources(locallogstore_files "*.cpp" RECURSE
   "${LOGDEVICE_SERVER_DIR}/locallogstore/test"
 )
 
-add_library(locallogstore_test_util STATIC 
+add_library(locallogstore_test_util STATIC
   ${locallogstore_hfiles}
   ${locallogstore_files}
 )

@@ -18,4 +18,3 @@ target_link_libraries(ld-replication-checker
   ldclient_static
   logdevice_server
   ${LOGDEVICE_EXTERNAL_DEPS})
-
