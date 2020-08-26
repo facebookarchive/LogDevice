@@ -33,7 +33,7 @@ class MockFileEpochStore : public FileEpochStore {
   explicit MockFileEpochStore(
       std::string path,
       const std::shared_ptr<UpdateableNodesConfiguration>& config)
-      : FileEpochStore(path, nullptr, config) {}
+      : FileEpochStore(path, RequestExecutor(nullptr), folly::none, config) {}
 
  protected:
   void postCompletionMetaData(

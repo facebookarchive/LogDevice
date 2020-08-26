@@ -31,10 +31,12 @@ namespace facebook { namespace logdevice {
 
 FileEpochStore::FileEpochStore(
     std::string path,
-    Processor* processor,
+    RequestExecutor request_executor,
+    folly::Optional<NodeID> my_node_id,
     std::shared_ptr<UpdateableNodesConfiguration> config)
     : path_(std::move(path)),
-      processor_(processor),
+      request_executor_(std::move(request_executor)),
+      my_node_id_(std::move(my_node_id)),
       config_(std::move(config)) {
   ld_check(!path_.empty());
 }
@@ -299,12 +301,7 @@ int FileEpochStore::createOrUpdateMetaData(
   }
 
   MetaDataUpdater file_updater(
-      log_id,
-      updater,
-      &tracer,
-      config_->get(),
-      processor_ == nullptr ? folly::none : processor_->getOptionalMyNodeID(),
-      write_node_id);
+      log_id, updater, &tracer, config_->get(), my_node_id_, write_node_id);
 
   int rv = updateEpochStore(log_id, "seq", file_updater);
   tracer.trace(rv == 0 ? E::OK : err);
@@ -384,7 +381,7 @@ void FileEpochStore::postCompletionLCE(EpochStore::CompletionLCE cf,
           epoch,
           std::move(tail_record));
 
-  int rv = processor_->postWithRetrying(rq);
+  int rv = request_executor_.postWithRetrying(rq);
   if (rv != 0) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     1,
@@ -425,7 +422,7 @@ void FileEpochStore::postCompletionMetaData(
           std::move(metadata),
           std::move(meta_properties));
 
-  int rv = processor_->postWithRetrying(rq);
+  int rv = request_executor_.postWithRetrying(rq);
   if (rv != 0 && err != E::SHUTDOWN) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     1,

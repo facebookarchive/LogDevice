@@ -1352,7 +1352,8 @@ bool Server::initSequencers() {
       ld_info("Initializing FileEpochStore");
       epoch_store = std::make_unique<FileEpochStore>(
           server_settings_->epoch_store_path,
-          processor_.get(),
+          processor_->getRequestExecutor(),
+          processor_->getOptionalMyNodeID(),
           updateable_config_->updateableNodesConfiguration());
     } catch (const ConstructorFailed&) {
       ld_error(

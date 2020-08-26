@@ -13,7 +13,7 @@
 
 #include "logdevice/common/EpochStore.h"
 #include "logdevice/common/MetaDataTracer.h"
-#include "logdevice/common/Processor.h"
+#include "logdevice/common/RequestExecutor.h"
 
 /**
  * @file  FileEpochStore is an implementation of the EpochStore interface
@@ -32,7 +32,8 @@ class FileEpochStore : public EpochStore, boost::noncopyable {
    * @param processor parent processor for current FileEpochStore
    */
   FileEpochStore(std::string path,
-                 Processor* processor,
+                 RequestExecutor request_executor,
+                 folly::Optional<NodeID> my_node_id,
                  std::shared_ptr<UpdateableNodesConfiguration> config);
 
   ~FileEpochStore() override {}
@@ -149,7 +150,9 @@ class FileEpochStore : public EpochStore, boost::noncopyable {
                        FileUpdater& file_updater);
 
   std::string path_;
-  Processor* processor_;
+
+  RequestExecutor request_executor_;
+  folly::Optional<NodeID> my_node_id_;
 
   // Cluster config.
   std::shared_ptr<UpdateableNodesConfiguration> config_;

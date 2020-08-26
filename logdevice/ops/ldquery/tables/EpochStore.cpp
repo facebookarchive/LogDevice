@@ -122,7 +122,8 @@ std::shared_ptr<TableData> EpochStore::getData(QueryContext& ctx) {
     std::string epoch_store_path = config_path.str() + "/epoch_store";
     epoch_store = std::make_shared<FileEpochStore>(
         epoch_store_path,
-        &(client_impl->getProcessor()),
+        client_impl->getProcessor().getRequestExecutor(),
+        client_impl->getProcessor().getOptionalMyNodeID(),
         client_impl->getConfig()->updateableNodesConfiguration());
   } else {
     try {

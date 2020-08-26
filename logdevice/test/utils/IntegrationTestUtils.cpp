@@ -2786,7 +2786,10 @@ class IntegrationTestFileEpochStore : public FileEpochStore {
   explicit IntegrationTestFileEpochStore(
       std::string path,
       const std::shared_ptr<UpdateableNodesConfiguration>& config)
-      : FileEpochStore(std::move(path), nullptr, config) {}
+      : FileEpochStore(std::move(path),
+                       RequestExecutor(nullptr),
+                       folly::none,
+                       config) {}
 
  protected:
   void postCompletionMetaData(
