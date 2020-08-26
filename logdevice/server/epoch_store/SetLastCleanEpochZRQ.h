@@ -30,9 +30,8 @@ class SetLastCleanEpochZRQ : public LastCleanEpochZRQ {
   SetLastCleanEpochZRQ(logid_t logid,
                        epoch_t epoch,
                        TailRecord tail_record,
-                       EpochStore::CompletionLCE cf,
-                       ZookeeperEpochStore* store)
-      : LastCleanEpochZRQ(logid, epoch, cf, store) {
+                       EpochStore::CompletionLCE cf)
+      : LastCleanEpochZRQ(logid, epoch, std::move(cf)) {
     tail_record_ = std::move(tail_record);
     ld_check(tail_record_.isValid());
     ld_check(tail_record_.header.log_id == logid);

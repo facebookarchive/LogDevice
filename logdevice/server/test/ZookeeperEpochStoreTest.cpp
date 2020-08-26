@@ -69,10 +69,12 @@ class ZookeeperEpochStoreTest : public ::testing::Test {
         config->getZookeeperConfig()->getQuorumString(), std::move(znodes));
     epochstore = std::make_unique<ZookeeperEpochStore>(
         TEST_CLUSTER,
-        processor.get(),
+        processor->getRequestExecutor(),
         zkclient,
         config->updateableNodesConfiguration(),
-        processor->updateableSettings());
+        processor->updateableSettings(),
+        processor->getOptionalMyNodeID(),
+        processor->stats_);
 
     dbg::assertOnData = true;
   }
@@ -506,15 +508,14 @@ TEST_F(ZookeeperEpochStoreTest, LastCleanEpochMetaDataZnodePath) {
       logid,
       epoch_t(1),
       gen_tail_record(logid, LSN_INVALID, 0, OffsetMap()),
-      [](Status, logid_t, epoch_t, TailRecord) {},
-      epochstore.get());
+      [](Status, logid_t, epoch_t, TailRecord) {});
   SetLastCleanEpochZRQ lce_metadata_zrq(
       meta_logid,
       epoch_t(1),
       gen_tail_record(meta_logid, LSN_INVALID, 0, OffsetMap()),
-      [](Status, logid_t, epoch_t, TailRecord) {},
-      epochstore.get());
-  ASSERT_NE(lce_data_zrq.getZnodePath(), lce_metadata_zrq.getZnodePath());
+      [](Status, logid_t, epoch_t, TailRecord) {});
+  ASSERT_NE(lce_data_zrq.getZnodePath(epochstore->rootPath()),
+            lce_metadata_zrq.getZnodePath(epochstore->rootPath()));
 }
 
 /**
@@ -1018,10 +1019,12 @@ TEST_F(ZookeeperEpochStoreTest, ZookeeperFailures) {
   auto mock_zk = std::make_shared<MockZookeeperClient>();
   epochstore = std::make_unique<ZookeeperEpochStore>(
       TEST_CLUSTER,
-      processor.get(),
+      processor->getRequestExecutor(),
       mock_zk,
       config->updateableNodesConfiguration(),
-      processor->updateableSettings());
+      processor->updateableSettings(),
+      processor->getOptionalMyNodeID(),
+      processor->stats_);
 
   {
     // When epoch store fails auth, epoch update should fail with E::ACCESS

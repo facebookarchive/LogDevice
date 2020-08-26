@@ -31,16 +31,20 @@ namespace facebook { namespace logdevice {
 
 ZookeeperEpochStore::ZookeeperEpochStore(
     std::string cluster_name,
-    Processor* processor,
+    RequestExecutor request_executor,
     std::shared_ptr<ZookeeperClientBase> zkclient,
     const std::shared_ptr<UpdateableNodesConfiguration>& nodes_configuration,
-    UpdateableSettings<Settings> settings)
-    : processor_(processor),
+    UpdateableSettings<Settings> settings,
+    folly::Optional<NodeID> my_node_id,
+    StatsHolder* stats)
+    : request_executor_(std::move(request_executor)),
       zkclient_(std::move(zkclient)),
       cluster_name_(cluster_name),
       nodes_configuration_(nodes_configuration),
       settings_(settings),
-      shutting_down_(std::make_shared<std::atomic<bool>>(false)) {
+      my_node_id_(std::move(my_node_id)),
+      stats_(stats),
+      shutting_down_(false) {
   ld_check(!cluster_name.empty() &&
            cluster_name.length() <
                configuration::ZookeeperConfig::MAX_CLUSTER_NAME);
@@ -50,7 +54,7 @@ ZookeeperEpochStore::ZookeeperEpochStore(
 }
 
 ZookeeperEpochStore::~ZookeeperEpochStore() {
-  shutting_down_->store(true);
+  shutting_down_.store(true);
   // close() ensures that no callbacks are invoked after this point. So, we can
   // be sure that no references are held to zkclient_ from any of the callback
   // functions.
@@ -59,54 +63,6 @@ ZookeeperEpochStore::~ZookeeperEpochStore() {
 
 std::string ZookeeperEpochStore::identify() const {
   return "zookeeper://" + zkclient_->getQuorum() + rootPath();
-}
-
-void ZookeeperEpochStore::postCompletion(
-    std::unique_ptr<EpochStore::CompletionMetaDataRequest>&& completion) const {
-  int rv;
-
-  ld_check(completion);
-
-  logid_t logid = std::get<0>(completion->params_);
-
-  std::unique_ptr<Request> rq(std::move(completion));
-
-  rv = processor_->postWithRetrying(rq);
-
-  if (rv != 0 && err != E::SHUTDOWN) {
-    RATELIMIT_ERROR(std::chrono::seconds(1),
-                    1,
-                    "Got an unexpected status "
-                    "code %s from Processor::postWithRetrying(), dropping "
-                    "request for log %lu",
-                    error_name(err),
-                    logid.val_);
-    ld_check(false);
-  }
-}
-
-void ZookeeperEpochStore::postCompletion(
-    std::unique_ptr<EpochStore::CompletionLCERequest>&& completion) const {
-  int rv;
-
-  ld_check(completion);
-
-  logid_t logid = std::get<0>(completion->params_);
-
-  std::unique_ptr<Request> rq(std::move(completion));
-
-  rv = processor_->postWithRetrying(rq);
-
-  if (rv != 0 && err != E::SHUTDOWN) {
-    RATELIMIT_ERROR(std::chrono::seconds(1),
-                    1,
-                    "Got an unexpected status "
-                    "code %s from Processor::postWithRetrying(), dropping "
-                    "request for log %lu",
-                    error_name(err),
-                    logid.val_);
-    ld_check(false);
-  }
 }
 
 Status ZookeeperEpochStore::completionStatus(int rc, logid_t logid) {
@@ -118,8 +74,7 @@ Status ZookeeperEpochStore::completionStatus(int rc, logid_t logid) {
         "Got status code %s from Zookeeper completion function for log %lu.",
         zerror(rc),
         logid.val_);
-    STAT_INCR(
-        processor_->stats_, zookeeper_epoch_store_internal_inconsistency_error);
+    STAT_INCR(stats_, zookeeper_epoch_store_internal_inconsistency_error);
     return E::FAILED;
   } else if (rc == ZBADARGUMENTS) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
@@ -335,7 +290,7 @@ void ZookeeperEpochStore::onGetZnodeComplete(
       provisionLogZnodes(std::move(zrq), std::move(znode_value_str));
       return;
     } else {
-      std::string znode_path = zrq->getZnodePath();
+      std::string znode_path = zrq->getZnodePath(rootPath());
       // setData() below succeeds only if the current version number of
       // znode at znode_path matches the version that the znode had
       // when we read its value. Zookeeper atomically increments the version
@@ -357,8 +312,8 @@ err:
   ld_check(st != E::OK);
 
 done:
-  if (st != E::SHUTDOWN || !zrq->epoch_store_shutting_down_->load()) {
-    zrq->postCompletion(st);
+  if (st != E::SHUTDOWN || !shutting_down_.load()) {
+    zrq->postCompletion(st, request_executor_);
   } else {
     // Do not post a CompletionRequest if Zookeeper client is shutting down and
     // the EpochStore is being destroyed. Note that we can get also get an
@@ -372,8 +327,8 @@ void ZookeeperEpochStore::postRequestCompletion(
     std::unique_ptr<ZookeeperEpochStoreRequest> zrq) {
   Status st = completionStatus(rc, zrq->logid_);
 
-  if (st != E::SHUTDOWN || !zrq->epoch_store_shutting_down_->load()) {
-    zrq->postCompletion(st);
+  if (st != E::SHUTDOWN || !shutting_down_.load()) {
+    zrq->postCompletion(st, request_executor_);
   } else {
     // Do not post a CompletionRequest if Zookeeper client is shutting down and
     // the EpochStore is being destroyed. Note that we can get also get an
@@ -386,7 +341,7 @@ int ZookeeperEpochStore::runRequest(
     std::unique_ptr<ZookeeperEpochStoreRequest> zrq) {
   ld_check(zrq);
 
-  std::string znode_path = zrq->getZnodePath();
+  std::string znode_path = zrq->getZnodePath(rootPath());
   auto cb = [this, req = std::move(zrq)](
                 int rc, std::string value, zk::Stat stat) mutable {
     onGetZnodeComplete(rc, std::move(value), stat, std::move(req));
@@ -397,7 +352,7 @@ int ZookeeperEpochStore::runRequest(
 
 int ZookeeperEpochStore::getLastCleanEpoch(logid_t logid, CompletionLCE cf) {
   return runRequest(std::unique_ptr<ZookeeperEpochStoreRequest>(
-      new GetLastCleanEpochZRQ(logid, EPOCH_INVALID, cf, this)));
+      new GetLastCleanEpochZRQ(logid, EPOCH_INVALID, cf)));
 }
 
 int ZookeeperEpochStore::setLastCleanEpoch(logid_t logid,
@@ -418,7 +373,7 @@ int ZookeeperEpochStore::setLastCleanEpoch(logid_t logid,
   }
 
   return runRequest(std::unique_ptr<ZookeeperEpochStoreRequest>(
-      new SetLastCleanEpochZRQ(logid, lce, tail_record, cf, this)));
+      new SetLastCleanEpochZRQ(logid, lce, tail_record, cf)));
 }
 
 int ZookeeperEpochStore::createOrUpdateMetaData(
@@ -437,12 +392,11 @@ int ZookeeperEpochStore::createOrUpdateMetaData(
       new EpochMetaDataZRQ(logid,
                            EPOCH_INVALID,
                            cf,
-                           this,
                            std::move(updater),
                            std::move(tracer),
                            write_node_id,
                            nodes_configuration_->get(),
-                           processor_->getOptionalMyNodeID())));
+                           my_node_id_)));
 }
 
 }} // namespace facebook::logdevice

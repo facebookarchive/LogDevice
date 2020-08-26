@@ -27,18 +27,19 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
   EpochMetaDataZRQ(logid_t logid,
                    epoch_t epoch,
                    EpochStore::CompletionMetaData cf,
-                   ZookeeperEpochStore* store,
                    std::shared_ptr<EpochMetaData::Updater> updater,
                    MetaDataTracer tracer,
                    EpochStore::WriteNodeID write_node_id,
                    std::shared_ptr<const NodesConfiguration> cfg,
                    folly::Optional<NodeID> my_node_id)
-      : ZookeeperEpochStoreRequest(logid, epoch, std::move(cf), store),
+      : ZookeeperEpochStoreRequest(logid, epoch),
+        cf_meta_data_(std::move(cf)),
         updater_(updater),
         cfg_(std::move(cfg)),
         tracer_(std::move(tracer)),
         write_node_id_(write_node_id),
         my_node_id_(my_node_id) {
+    ld_check(cf_meta_data_);
     ld_check(updater_);
     ld_check(cfg_);
   }
@@ -112,24 +113,36 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
   }
 
   // see ZookeeperEpochStoreRequest.h
-  std::string getZnodePath() const override {
+  std::string getZnodePath(const std::string& rootpath) const override {
     ld_check(logid_ != LOGID_INVALID);
-    return store_->rootPath() + "/" + std::to_string(logid_.val_) + "/" +
-        znodeName;
+    return rootpath + "/" + std::to_string(logid_.val_) + "/" + znodeName;
   }
 
-  void postCompletion(Status st) override {
+  void postCompletion(Status st, RequestExecutor& executor) override {
     tracer_.trace(st);
-    store_->postCompletion(
-        // eventually transfer metadata_ to the completion function
-        std::make_unique<EpochStore::CompletionMetaDataRequest>(
-            cf_meta_data_,
-            worker_idx_,
-            worker_type_,
-            st,
-            logid_,
-            std::move(metadata_),
-            std::move(meta_properties_)));
+    // eventually transfer metadata_ to the completion function
+    auto completion = std::make_unique<EpochStore::CompletionMetaDataRequest>(
+        cf_meta_data_,
+        worker_idx_,
+        worker_type_,
+        st,
+        logid_,
+        std::move(metadata_),
+        std::move(meta_properties_));
+
+    std::unique_ptr<Request> rq(std::move(completion));
+    int rv = executor.postWithRetrying(rq);
+
+    if (rv != 0 && err != E::SHUTDOWN) {
+      RATELIMIT_ERROR(std::chrono::seconds(1),
+                      1,
+                      "Got an unexpected status "
+                      "code %s from Processor::postWithRetrying(), dropping "
+                      "request for log %lu",
+                      error_name(err),
+                      logid_.val_);
+      ld_check(false);
+    }
   }
 
   // see ZookeeperEpochStoreRequest.h
@@ -167,6 +180,9 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
   static constexpr const char* znodeName = "sequencer";
 
  private:
+  // completion function to call
+  const EpochStore::CompletionMetaData cf_meta_data_;
+
   std::shared_ptr<EpochMetaData::Updater> updater_;
   // true if the writer's NodeID should be written to the metadata
   std::shared_ptr<const NodesConfiguration> cfg_;

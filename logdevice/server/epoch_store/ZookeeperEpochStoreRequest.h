@@ -25,15 +25,7 @@ namespace facebook { namespace logdevice {
 
 class ZookeeperEpochStoreRequest {
  public:
-  ZookeeperEpochStoreRequest(logid_t logid,
-                             epoch_t epoch,
-                             EpochStore::CompletionMetaData cf,
-                             ZookeeperEpochStore* store);
-
-  ZookeeperEpochStoreRequest(logid_t logid,
-                             epoch_t epoch,
-                             EpochStore::CompletionLCE cf,
-                             ZookeeperEpochStore* store);
+  ZookeeperEpochStoreRequest(logid_t logid, epoch_t epoch);
 
   virtual ~ZookeeperEpochStoreRequest() {}
 
@@ -48,12 +40,12 @@ class ZookeeperEpochStoreRequest {
    *
    * @param st   set the status argument of the completion function to this
    */
-  virtual void postCompletion(Status st) = 0;
+  virtual void postCompletion(Status st, RequestExecutor& executor) = 0;
 
   /**
    * Returns the path to znode on which this request operates.
    */
-  virtual std::string getZnodePath() const = 0;
+  virtual std::string getZnodePath(const std::string& rootpath) const = 0;
 
   /**
    * return value type used in parseZnodeValue(), describe the next step
@@ -103,21 +95,11 @@ class ZookeeperEpochStoreRequest {
    */
   virtual int composeZnodeValue(char* buf, size_t size) = 0;
 
-  // EpochStore that created this ZookeeperEpochStoreRequest
-  ZookeeperEpochStore* const store_;
-
   // id of log on whose metadata this request operates, passed to cf_
   const logid_t logid_;
 
-  // If this bit is true, the epoch store is shutting down
-  std::shared_ptr<std::atomic<bool>> epoch_store_shutting_down_;
-
  protected:
   epoch_t epoch_; // read from or stored in znode
-
-  // completion function to call
-  const EpochStore::CompletionMetaData cf_meta_data_;
-  const EpochStore::CompletionLCE cf_lce_;
 
   const worker_id_t worker_idx_; // id of Worker on which to execute cf_, or
                                  // -1 if cf_ can be executed on any Worker

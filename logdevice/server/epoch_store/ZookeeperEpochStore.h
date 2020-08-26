@@ -52,10 +52,12 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
    */
   ZookeeperEpochStore(
       std::string cluster_name,
-      Processor* processor,
+      RequestExecutor request_executor,
       std::shared_ptr<ZookeeperClientBase> zkclient,
       const std::shared_ptr<UpdateableNodesConfiguration>& nodes_configuration,
-      UpdateableSettings<Settings> settings);
+      UpdateableSettings<Settings> settings,
+      folly::Optional<NodeID> my_node_id,
+      StatsHolder* stats);
 
   ~ZookeeperEpochStore() override;
 
@@ -73,18 +75,6 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
       WriteNodeID write_node_id = WriteNodeID::NO) override;
 
   std::string identify() const override;
-
-  /**
-   * Attempts to post an completion requests containing the result of
-   * an async request to the epoch store. On transient failures (e.g., a
-   * Worker pipe overflow), queues up the completion request for redelivery.
-   *
-   * @param completion    completion request to post
-   */
-  virtual void
-  postCompletion(std::unique_ptr<EpochStore::CompletionLCERequest>&&) const;
-  virtual void postCompletion(
-      std::unique_ptr<EpochStore::CompletionMetaDataRequest>&&) const;
 
   /**
    * Returns the path to the root znode for the logdevice cluster that this
@@ -108,11 +98,6 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
   static const int ZNODE_VALUE_READ_LEN_MAX =
       EpochStoreEpochMetaDataFormat::BUFFER_LEN_MAX;
 
-  std::shared_ptr<std::atomic<bool>> getShuttingDownPtr() const {
-    ld_check(shutting_down_);
-    return shutting_down_;
-  }
-
   const UpdateableSettings<Settings>& getSettings() {
     return settings_;
   }
@@ -120,8 +105,8 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
   Status completionStatus(int rc, logid_t logid);
 
  private:
-  // parent processor for current ZookeeperEpochStore
-  Processor* processor_;
+  // RequestExecutor to post requests on
+  RequestExecutor request_executor_;
 
   // wraps the zhandle_t over which we talk to Zookeeper.
   std::shared_ptr<ZookeeperClientBase> zkclient_;
@@ -136,11 +121,15 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
   // Settings
   UpdateableSettings<Settings> settings_;
 
+  folly::Optional<NodeID> my_node_id_;
+
+  StatsHolder* stats_;
+
   // This bit changes when the epoch store is being destroyed. This is needed
   // to control whether the EpochStore is being destroyed in callbacks that get
   // a ZCLOSING status - even if they run after the ZookeperEpochStore instance
   // had been destroyed
-  std::shared_ptr<std::atomic<bool>> shutting_down_;
+  std::atomic<bool> shutting_down_;
 
   /**
    * Run a zoo_aget() on a znode, optionally followed by a modify and a
