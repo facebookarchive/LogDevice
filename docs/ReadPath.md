@@ -4,7 +4,7 @@ title: Read path
 sidebar_label: Read path
 ---
 
-One of the design principles for LogDevice is to maximize record placement options so as to increase write availability and handle spikes in the write rate. LogDevice uses non-deterministic record placement: each individual record may potentially be stored on any storage node in the cluster.  
+One of the design principles for LogDevice is to maximize record placement options so as to increase write availability and handle spikes in the write rate. LogDevice uses non-deterministic record placement: each individual record may potentially be stored on any storage node in the cluster.
 
 All of these placement options optimize for writing, but they complicate the read path for LogDevice. Client readers need to efficiently find and obtain the copies, and then deliver the records to the application in the correct order.
 
@@ -50,7 +50,7 @@ The client reader gets the nodeset, which is the set of storage nodes that conta
 
 ![read start](assets/readpath/read_start.png)
 
-As discussed in [Write path](Write_path.md), storage nodes only deliver records that have been released by the sequencer, i.e., those with LSNs less than or equal to the last known good pointer.
+As discussed in [Write path](Write_path.md), storage nodes only deliver records that have been released by the sequencer, i.e., those with LSNs less than or equal to the release pointer.
 
 Each server starts sending the records they have for the requested log ids. There is an implicit guarantee that each node sends its records in order.
 
