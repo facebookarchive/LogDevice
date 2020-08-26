@@ -411,7 +411,7 @@ class Results(ExecutionBase):
                     int(aggregated_read_events.ts[i] - aggregated_read_events.ts[0])
                 )
             ax1.boxplot(
-                [lats for lats in aggregated_read_events.events_by_ts],
+                list(aggregated_read_events.events_by_ts),
                 positions=relative_pos,
                 widths=group_interval * 0.6,
             )
@@ -474,7 +474,7 @@ class Results(ExecutionBase):
                     relative_pos, write_tp, label="write throughput", c="green"
                 )
 
-        labs = [l.get_label() for l in lines]
+        labs = [line.get_label() for line in lines]
         ax1.legend(lines, labs, fontsize=18)
         plt.savefig(fig_name)
 
