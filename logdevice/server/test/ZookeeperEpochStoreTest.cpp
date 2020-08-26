@@ -20,7 +20,9 @@
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/ZookeeperClient.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
+#include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/SettingsUpdater.h"
+#include "logdevice/common/test/MockZookeeperClient.h"
 #include "logdevice/common/test/TestNodeSetSelector.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/test/ZookeeperClientInMemory.h"
@@ -28,6 +30,7 @@
 #include "logdevice/server/epoch_store/SetLastCleanEpochZRQ.h"
 
 using namespace facebook::logdevice;
+using testing::_;
 
 #define TEST_CLUSTER "epochstore_test" // fake LD cluster name to use
 
@@ -895,4 +898,163 @@ TEST_F(ZookeeperEpochStoreTest, LastCleanEpochWithTailRecord) {
 
   ASSERT_EQ(0, rv);
   sem.wait();
+}
+
+/**
+ *  Provision a new log and make sure that epoch store creates its znodes.
+ */
+TEST_F(ZookeeperEpochStoreTest, ProvisionNewLog) {
+  auto get_znode = [&](std::string znode) {
+    Status status;
+    Semaphore sem;
+    auto cb = [&](int rc, std::string, zk::Stat) {
+      status = ZookeeperClientBase::toStatus(rc);
+      sem.post();
+    };
+    zkclient->getData(znode, std::move(cb));
+    sem.wait();
+    return status;
+  };
+
+  const std::array<std::string, 4> log4_znodes{
+      "/logdevice/epochstore_test/logs/4",
+      "/logdevice/epochstore_test/logs/4/sequencer",
+      "/logdevice/epochstore_test/logs/4/lce",
+      "/logdevice/epochstore_test/logs/4/metadatalog_lce",
+  };
+
+  // Make sure that the znodes don't exist.
+  for (const auto& znode : log4_znodes) {
+    const auto status = get_znode(znode);
+    ASSERT_EQ(E::NOTFOUND, status)
+        << "Initially znode: " << znode
+        << " shouldn't exist for the test correctness";
+  }
+
+  // Modify the config to add a new log.
+  {
+    auto logs_cfg = config->getLocalLogsConfig()->copyLocal();
+    logs_cfg->insert(boost::icl::right_open_interval<logid_t::raw_type>(4, 5),
+                     "logs4",
+                     logsconfig::LogAttributes().with_replicateAcross(
+                         {{NodeLocationScope::NODE, 1}}));
+    config->updateableLogsConfig()->update(std::move(logs_cfg));
+  }
+
+  // Now try to provision the log
+  Semaphore sem;
+  auto rq = FuncRequest::make(
+      worker_id_t(-1), WorkerType::GENERAL, RequestType::MISC, [&]() {
+        int rv = epochstore->createOrUpdateMetaData(
+            logid_t(4),
+            std::make_shared<EpochMetaDataUpdateToNextEpoch>(
+                config->get(), config->get()->getNodesConfiguration()),
+            [&sem](Status st,
+                   logid_t,
+                   std::unique_ptr<EpochMetaData> info,
+                   std::unique_ptr<EpochStoreMetaProperties> /*meta_props*/) {
+              EXPECT_EQ(Status::OK, st);
+              EXPECT_EQ(epoch_t(2), info->h.epoch);
+              sem.post();
+            },
+            MetaDataTracer());
+        ASSERT_EQ(0, rv);
+      });
+  ASSERT_EQ(0, processor->blockingRequest(rq));
+  sem.wait();
+
+  // Znodes should have been created by now
+  for (const auto& znode : log4_znodes) {
+    const auto status = get_znode(znode);
+    ASSERT_EQ(E::OK, status) << " znode: " << znode
+                             << " should exist after provisioning the metadata";
+  }
+}
+
+/**
+ * Creates a mock zookeeper client and checks how epoch store handle different
+ * failure scenarios.
+ */
+TEST_F(ZookeeperEpochStoreTest, ZookeeperFailures) {
+  // The epoch metadata that the mock zookeeper client will return
+  std::string epoch_metadata_payload(
+      "\x31\x35\x35\x32\x31\x33\x40\x4e\x30\x3a\x31\x23"
+      "\x02\x00\x00\x00\x4d\x5e\x02\x00\x4c\x5e\x02\x00"
+      "\x01\x00\x01\x00\x00\x00\x00\x00\x00\x00",
+      34);
+
+  // Runs an EpochMetadDataUpdateToNextEpoch and validates the expected
+  const auto run_epoch_update = [&](Status expected_status) {
+    Semaphore sem;
+    auto rq = FuncRequest::make(
+        worker_id_t(-1), WorkerType::GENERAL, RequestType::MISC, [&]() {
+          int rv = epochstore->createOrUpdateMetaData(
+              logid_t(1),
+              std::make_shared<EpochMetaDataUpdateToNextEpoch>(
+                  config->get(), config->get()->getNodesConfiguration()),
+              [&sem, expected_status](
+                  Status st,
+                  logid_t,
+                  std::unique_ptr<EpochMetaData> /* info */,
+                  std::unique_ptr<EpochStoreMetaProperties> /*meta_props*/) {
+                EXPECT_EQ(expected_status, st);
+                sem.post();
+              },
+              MetaDataTracer());
+          ASSERT_EQ(0, rv);
+        });
+    ASSERT_EQ(0, processor->blockingRequest(rq));
+    sem.wait();
+  };
+
+  // A helper function to easily create a zookeeper callback.
+  const auto build_read_cb =
+      [](int rc, std::string data = "", zk::Stat stat = zk::Stat{}) {
+        return [=](std::string, ZookeeperClientBase::data_callback_t* cb) {
+          (*cb)(rc, data, stat);
+        };
+      };
+
+  auto mock_zk = std::make_shared<MockZookeeperClient>();
+  epochstore = std::make_unique<ZookeeperEpochStore>(
+      TEST_CLUSTER,
+      processor.get(),
+      mock_zk,
+      config->updateableNodesConfiguration(),
+      processor->updateableSettings());
+
+  {
+    // When epoch store fails auth, epoch update should fail with E::ACCESS
+    EXPECT_CALL(
+        *mock_zk, getData("/logdevice/epochstore_test/logs/1/sequencer", _))
+        .WillOnce(testing::Invoke(build_read_cb(ZAUTHFAILED)));
+    run_epoch_update(E::ACCESS);
+  }
+
+  {
+    // When epoch store connection drops, epoch update should fail with
+    // E::CONNFAILED
+    EXPECT_CALL(
+        *mock_zk, getData("/logdevice/epochstore_test/logs/1/sequencer", _))
+        .WillOnce(testing::Invoke(build_read_cb(ZCONNECTIONLOSS)));
+    run_epoch_update(E::CONNFAILED);
+  }
+
+  {
+    // When epoch store tries to update the epoch and there's a version mismatch
+    // it should return E::AGAIN.
+    EXPECT_CALL(
+        *mock_zk, getData("/logdevice/epochstore_test/logs/1/sequencer", _))
+        .WillOnce(testing::Invoke(
+            build_read_cb(ZOK, epoch_metadata_payload, zk::Stat{123})));
+    EXPECT_CALL(
+        *mock_zk,
+        setData("/logdevice/epochstore_test/logs/1/sequencer", _, _, 123))
+        .WillOnce(testing::Invoke(
+            [](std::string,
+               std::string,
+               ZookeeperClientBase::stat_callback_t* cb,
+               zk::version_t) { (*cb)(ZBADVERSION, zk::Stat{}); }));
+    run_epoch_update(E::AGAIN);
+  }
 }
