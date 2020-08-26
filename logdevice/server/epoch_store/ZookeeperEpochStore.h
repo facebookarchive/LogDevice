@@ -108,14 +108,6 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
   static const int ZNODE_VALUE_READ_LEN_MAX =
       EpochStoreEpochMetaDataFormat::BUFFER_LEN_MAX;
 
-  // This method should be used cautiously. It returns a shared pointer to the
-  // zkclient created by ZookeeperEpochStore. Once ZookeeperEpochStore is
-  // destroyed, no new calls should be made using this zkclient pointer. The
-  // behaviour is currently undefined
-  std::shared_ptr<ZookeeperClientBase> getZookeeperClient() const {
-    return zkclient_;
-  }
-
   std::shared_ptr<std::atomic<bool>> getShuttingDownPtr() const {
     ld_check(shutting_down_);
     return shutting_down_;
