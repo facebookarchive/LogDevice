@@ -18,6 +18,7 @@
 #include <folly/Memory.h>
 #include <folly/memory/EnableSharedFromThis.h>
 
+#include "logdevice/common/RequestExecutor.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/WorkerType.h"
@@ -26,6 +27,7 @@
 #include "logdevice/common/types_internal.h"
 #include "logdevice/common/work_model/WorkContext.h"
 #include "logdevice/include/types.h"
+
 // Think twice before adding new includes here!  This file is included in many
 // translation units and increasing its transitive dependency footprint will
 // slow down the build.  We use forward declaration and the pimpl idiom to
@@ -72,7 +74,12 @@ class Configuration;
 enum class SequencerOptions : uint8_t;
 using workers_t = std::vector<std::unique_ptr<Worker>>;
 
-class Processor : public folly::enable_shared_from_this<Processor> {
+class Processor : public folly::enable_shared_from_this<Processor>,
+                  public RequestPoster,
+                  // TODO: Remove this inheritence after migrating all the
+                  // callsites to use RequestExecutorInterface instead of the
+                  // Processor directly.
+                  public RequestExecutor {
  public:
   enum class Order { FORWARD, REVERSE, RANDOM };
 
@@ -129,15 +136,12 @@ class Processor : public folly::enable_shared_from_this<Processor> {
                    bool force);
 
   /**
-   * Common implementation of postRequest(), postImportant() etc. Different
-   * processors can decide to override this accordingly.
+   * Implementation for the RequestExecutor interface.
    */
   int postImpl(std::unique_ptr<Request>& rq,
                WorkerType worker_type,
                int target_thread,
-               bool force);
-
-  int blockingRequestImpl(std::unique_ptr<Request>& rq, bool force);
+               bool force) override;
 
   /**
    * Decides which thread to send a request to.
@@ -265,67 +269,6 @@ class Processor : public folly::enable_shared_from_this<Processor> {
    * Returns the refernce to an object which is responsible for timers
    */
   WheelTimer& getWheelTimer();
-
-  /**
-   * Schedules rq to run on one of the Workers managed by this Processor.
-   *
-   * @param rq  request to execute. Must not be nullptr. On success the
-   *            function takes ownership of the object (and passes it on
-   *            to a Worker). On failure ownership remains with the
-   *            caller.
-   *
-   * @return 0 if request was successfully passed to a Worker thread for
-   *           execution, -1 on failure. err is set to
-   *     INVALID_PARAM  if rq is invalid
-   *     NOBUFS         if too many requests are pending to be delivered to
-   *                    Workers
-   *     SHUTDOWN       Processor is shutting down
-   */
-  int postRequest(std::unique_ptr<Request>& rq);
-
-  /**
-   * The same as standard postRequest() but worker id is being
-   * selected manually
-   */
-  int postRequest(std::unique_ptr<Request>& rq,
-                  WorkerType worker_type,
-                  int target_thread);
-
-  /**
-   * Runs a Request on one of the Workers, waiting for it to finish.
-   *
-   * For parameters and return values, see postRequest()/postImportant().
-   */
-  int blockingRequest(std::unique_ptr<Request>& rq);
-  int blockingRequestImportant(std::unique_ptr<Request>& rq);
-
-  /**
-   * Similar to postRequest() but proceeds regardless of how many requests are
-   * already pending on the worker (no NOBUFS error).
-   *
-   * This should be used when there is no avenue for pushback in case the
-   * worker is overloaded.  A guideline: if the only way to handle NOBUFS from
-   * the regular postRequest() would be to retry posting the request
-   * individually, then using this instead is appropriate and more efficient.
-   *
-   * @param rq  request to execute. Must not be nullptr. On success the
-   *            function takes ownership of the object (and passes it on
-   *            to the Processor). On failure ownership remains with the
-   *            caller.
-   *
-   * @return 0 if request was successfully passed to a Worker thread for
-   *           execution, -1 on failure. err is set to
-   *     INVALID_PARAM  if rq is invalid
-   *     SHUTDOWN       this queue or processor_ is shutting down
-   */
-  int postImportant(std::unique_ptr<Request>& rq);
-  int postImportant(std::unique_ptr<Request>& rq,
-                    WorkerType worker_type,
-                    int target_thread);
-  // Older alias for postImportant()
-  int postWithRetrying(std::unique_ptr<Request>& rq) {
-    return postImportant(rq);
-  }
 
   /**
    * Are we a storage node, able to store and deliver records?
@@ -463,6 +406,10 @@ class Processor : public folly::enable_shared_from_this<Processor> {
   ResourceBudget::Token getIncomingMessageToken(size_t payload_size);
 
   ReadStreamDebugInfoSamplingConfig& getDebugClientConfig();
+
+  RequestExecutor getRequestExecutor() {
+    return RequestExecutor(this);
+  }
 
  private:
   // Make runningOnStorageNode() return true. Used for tests.

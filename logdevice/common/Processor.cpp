@@ -189,7 +189,8 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
                      std::string csid,
                      std::string name,
                      folly::Optional<NodeID> my_node_id)
-    : config_(std::move(updateable_config)),
+    : RequestExecutor(this),
+      config_(std::move(updateable_config)),
       settings_(settings),
       plugin_registry_(std::move(plugin_registry)),
       thrift_client_factory_(
@@ -327,7 +328,8 @@ Processor::Processor(std::shared_ptr<UpdateableConfig> updateable_config,
                      bool fake_storage_node,
                      int /*max_logs*/,
                      StatsHolder* stats)
-    : config_(std::move(updateable_config)),
+    : RequestExecutor(this),
+      config_(std::move(updateable_config)),
       fake_storage_node_(fake_storage_node),
       settings_(settings),
       plugin_registry_(std::make_shared<PluginRegistry>(
@@ -440,6 +442,16 @@ int Processor::postImpl(std::unique_ptr<Request>& rq,
                         WorkerType worker_type,
                         int target_thread,
                         bool force) {
+  if (isShuttingDown()) {
+    if (!force || !allow_post_during_shutdown_.load()) {
+      err = E::SHUTDOWN;
+      return -1;
+    }
+  }
+
+  if (target_thread == -1) {
+    target_thread = getTargetThreadForRequest(rq);
+  }
   int nworkers = getWorkerCount(worker_type);
 
   if (folly::kIsDebug) {
@@ -456,43 +468,6 @@ int Processor::postImpl(std::unique_ptr<Request>& rq,
   }
   auto& w = getWorker(worker_id_t(target_thread), worker_type);
   return postToWorker(rq, w, worker_type, worker_id_t(target_thread), force);
-}
-
-int Processor::postRequest(std::unique_ptr<Request>& rq,
-                           WorkerType worker_type,
-                           int target_thread) {
-  if (shutting_down_.load()) {
-    err = E::SHUTDOWN;
-    return -1;
-  }
-  return postImpl(rq, worker_type, target_thread, /* force */ false);
-}
-
-int Processor::postRequest(std::unique_ptr<Request>& rq) {
-  return postRequest(
-      rq, rq->getWorkerTypeAffinity(), getTargetThreadForRequest(rq));
-}
-
-int Processor::blockingRequestImpl(std::unique_ptr<Request>& rq, bool force) {
-  Semaphore sem;
-  rq->setClientBlockedSemaphore(&sem);
-
-  int rv = force ? postImportant(rq) : postRequest(rq);
-  if (rv != 0) {
-    rq->setClientBlockedSemaphore(nullptr);
-    return rv;
-  }
-
-  // Block until the Request has completed
-  sem.wait();
-  return 0;
-}
-
-int Processor::blockingRequest(std::unique_ptr<Request>& rq) {
-  return blockingRequestImpl(rq, false);
-}
-int Processor::blockingRequestImportant(std::unique_ptr<Request>& rq) {
-  return blockingRequestImpl(rq, true);
 }
 
 bool Processor::isDataMissingFromShard(uint32_t shard_idx) {
@@ -653,21 +628,6 @@ void Processor::reportLoad(worker_id_t idx,
                            WorkerType worker_type) {
   ld_check(worker_type == WorkerType::GENERAL);
   impl_->worker_load_balancing_.reportLoad(idx, load);
-}
-
-int Processor::postImportant(std::unique_ptr<Request>& rq) {
-  return postImportant(
-      rq, rq->getWorkerTypeAffinity(), getTargetThreadForRequest(rq));
-}
-
-int Processor::postImportant(std::unique_ptr<Request>& rq,
-                             WorkerType worker_type,
-                             int target_thread) {
-  if (shutting_down_.load() && !allow_post_during_shutdown_) {
-    err = E::SHUTDOWN;
-    return -1;
-  }
-  return postImpl(rq, worker_type, target_thread, /* force */ true);
 }
 
 SequencerBatching& Processor::sequencerBatching() {
