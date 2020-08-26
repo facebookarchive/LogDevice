@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) 2018-present, Facebook, Inc. and its affiliates.
  * All rights reserved.
  *
@@ -41,8 +41,8 @@ service AdminAPI extends fb303.FacebookService {
    * available state even if the node is not fully ready. In this case we will
    * not throw NodeNotReady exception but we will return partial data.
    */
-   nodes.NodesStateResponse getNodesState(1: nodes.NodesStateRequest request) throws
-      (1: exceptions.NodeNotReady notready) (cpp.coroutine);
+   nodes.NodesStateResponse getNodesState(1: nodes.NodesStateRequest request)
+       throws (1: exceptions.NodeNotReady notready) (cpp.coroutine);
 
   /**
    * Add new nodes to the cluster. The request should contain the spec of each
@@ -241,8 +241,9 @@ service AdminAPI extends fb303.FacebookService {
    * more shards or not. That operation does and exhaustive test on all the
    * configured logs.
    */
-  safety.CheckImpactResponse checkImpact(1: safety.CheckImpactRequest request) throws
-      (1: exceptions.NodeNotReady notready,
+  safety.CheckImpactResponse checkImpact(1: safety.CheckImpactRequest request)
+      throws (
+       1: exceptions.NodeNotReady notready,
        2: exceptions.OperationError error,
        3: exceptions.InvalidRequest invalid_request,
        4: exceptions.NotSupported notsupported) (cpp.coroutine);
@@ -254,7 +255,8 @@ service AdminAPI extends fb303.FacebookService {
   /**
    * Get information about all or some of the settings
    */
-  settings.SettingsResponse getSettings(1: settings.SettingsRequest request) (cpp.coroutine);
+  settings.SettingsResponse getSettings(1: settings.SettingsRequest request)
+  (cpp.coroutine);
 
   /**
    * Apply a temporary override setting.
@@ -306,7 +308,7 @@ service AdminAPI extends fb303.FacebookService {
    * Get Log Group Throughput
    */
   logtree.LogGroupThroughputResponse getLogGroupThroughput(
-                                1: logtree.LogGroupThroughputRequest request) (cpp.coroutine);
+    1: logtree.LogGroupThroughputRequest request) (cpp.coroutine);
 
   /**
    * Get Log Group custom counters

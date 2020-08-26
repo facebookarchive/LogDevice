@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) Facebook, Inc. and its affiliates.
  * All rights reserved.
  *
@@ -7,7 +7,8 @@
  */
 
 namespace py3 logdevice.configuration
-namespace cpp2 facebook.logdevice.configuration.all_read_streams_debug_config.thrift
+namespace
+  cpp2 facebook.logdevice.configuration.all_read_streams_debug_config.thrift
 
 struct AllReadStreamsDebugConfig {
   # Emit debug line with such Client Session ID

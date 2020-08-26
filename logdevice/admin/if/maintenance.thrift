@@ -1,4 +1,4 @@
-/**
+/*
  * Copyright (c) 2018-present, Facebook, Inc. and its affiliates.
  * All rights reserved.
  *
@@ -140,11 +140,12 @@ struct MaintenanceDefinition {
    * The Maintenance Manager starts a count down that the maintenance will
    * expire in (now + 3600 seconds).
    * If the user wishes to extend the TTL, they should call the same
-   * applyMaintenance() call with same arguments (user, shards, shard_target_state,
+   * applyMaintenance() call with same arguments
+   * (user, shards, shard_target_state,
    * sequencer_nodes, sequencer_target_state, are what matter). Or simply
    * filling the (user, group-id) field instead. If the request didn't match all
-   * the shards in the group, we will fail the request with MaintenanceMatchError
-   * exception.
+   * the shards in the group, we will fail the request with
+   * MaintenanceMatchError exception.
    *
    * The Maintenance Manager will add another ttl_seconds to the current time.
    *
