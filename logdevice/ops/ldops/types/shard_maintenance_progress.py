@@ -32,7 +32,7 @@ class ShardMaintenanceProgress:
             target_states=set(target_states),
             created_at=int(created_at.timestamp() * 1000),
             last_updated_at=int(last_updated_at.timestamp() * 1000),
-            associated_group_ids=sorted(list(set(associated_group_ids))),
+            associated_group_ids=sorted(set(associated_group_ids)),
         )
 
     # pyre-ignore

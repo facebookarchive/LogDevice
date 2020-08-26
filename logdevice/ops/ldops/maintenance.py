@@ -195,7 +195,7 @@ async def apply_maintenance(
     req = MaintenanceDefinition(
         shards=list(shards),
         shard_target_state=shard_target_state,
-        sequencer_nodes=[n for n in sequencer_nodes],
+        sequencer_nodes=list(sequencer_nodes),
         sequencer_target_state=SequencingState.DISABLED,
         user=user,
         reason=reason,

@@ -35,7 +35,7 @@ class SequencerMaintenanceProgress:
             target_state=target_state,
             created_at=int(created_at.timestamp() * _MILLISECONDS_IN_SECOND),
             last_updated_at=int(last_updated_at.timestamp() * _MILLISECONDS_IN_SECOND),
-            associated_group_ids=sorted(list(set(associated_group_ids))),
+            associated_group_ids=sorted(set(associated_group_ids)),
         )
 
     # pyre-ignore

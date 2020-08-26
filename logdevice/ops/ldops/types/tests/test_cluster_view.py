@@ -251,8 +251,8 @@ class TestClusterView(TestCase):
             # pyre-fixme[6]: Expected `Iterable[Variable[_LT (bound to
             #  _SupportsLessThan)]]` for 1st param but got
             #  `Generator[typing.Optional[str], None, None]`.
-            list(sorted(m.group_id for m in mnts)),
-            list(sorted(mv.group_id for mv in cv.get_all_maintenance_views())),
+            sorted(m.group_id for m in mnts),
+            sorted(mv.group_id for mv in cv.get_all_maintenance_views()),
         )
 
         # expand_shards

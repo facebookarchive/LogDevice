@@ -159,7 +159,7 @@ class SelectCommand(Command):
         if not self.ldquery:
             return []
         if self._tables_cached is None:
-            self._tables_cached = [t for t in self.ldquery.tables]
+            self._tables_cached = list(self.ldquery.tables)
         return self._tables_cached
 
     @property
