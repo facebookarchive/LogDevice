@@ -7,6 +7,8 @@
  */
 #include "logdevice/common/ClientReadersFlowTracer.h"
 
+#include <cmath>
+
 #include "logdevice/common/DataRecordOwnsPayload.h"
 #include "logdevice/common/GetSeqStateRequest.h"
 #include "logdevice/common/Processor.h"
@@ -95,6 +97,24 @@ void updateCountersForState(
   }
 }
 
+namespace {
+
+/**
+ * This is a common way of calculating exponential moving average.
+ *
+ * See for example
+ * https://en.wikipedia.org/wiki/Moving_average#Application_to_measuring_computer_performance
+ */
+void updateExponentialMovingAverage(double& current_value,
+                                    double new_sample,
+                                    std::chrono::duration<double> time_diff) {
+  const std::chrono::duration<double> kWindowSize = std::chrono::minutes{1};
+  double alpha = 1.0 - std::exp(-time_diff / kWindowSize);
+  current_value = (1 - alpha) * current_value + alpha * new_sample;
+}
+
+} // namespace
+
 ClientReadersFlowTracer::ClientReadersFlowTracer(
     std::shared_ptr<TraceLogger> logger,
     ClientReadStream* owner,
@@ -129,13 +149,22 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
     return;
   }
 
-  auto reading_speed_bytes = num_bytes_read - last_num_bytes_read_;
-  auto reading_speed_records = num_records_read - last_num_records_read_;
+  auto now = SteadyClock::now();
 
-  auto sample_builder = [&,
-                         reading_speed_bytes,
-                         reading_speed_records,
-                         this]() -> std::unique_ptr<TraceSample> {
+  auto time_diff = now - last_trace_time_;
+  updateExponentialMovingAverage(speed_records_moving_avg_,
+                                 num_records_read - last_num_records_read_,
+                                 time_diff);
+  updateExponentialMovingAverage(speed_bytes_moving_avg_,
+                                 num_bytes_read - last_num_bytes_read_,
+                                 time_diff);
+
+  int reading_speed_records =
+      static_cast<int>(std::round(speed_records_moving_avg_));
+  int reading_speed_bytes =
+      static_cast<int>(std::round(speed_bytes_moving_avg_));
+
+  auto sample_builder = [&, this]() -> std::unique_ptr<TraceSample> {
     auto time_stuck = std::max(msec_since(last_time_stuck_), 0l);
     auto time_lagging = std::max(msec_since(last_time_lagging_), 0l);
     auto shard_status_version = owner_->deps_->getShardStatus().getVersion();
@@ -198,6 +227,7 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
   };
   last_num_bytes_read_ = num_bytes_read;
   last_num_records_read_ = num_records_read;
+  last_trace_time_ = now;
   publish(READERS_FLOW_TRACER,
           sample_builder,
           /*force=*/false,
@@ -255,7 +285,6 @@ void ClientReadersFlowTracer::onTimerTriggered() {
                        // changes.
 
   maybeBumpStats();
-  traceReaderFlow(owner_->num_bytes_delivered_, owner_->num_records_delivered_);
   timer_->activate(params_.tracer_period);
 }
 
@@ -338,6 +367,7 @@ void ClientReadersFlowTracer::onSyncSequencerRequestResponse(
     updateTimeStuck(LSN_INVALID, st);
   }
   updateTimeLagging(st);
+  traceReaderFlow(owner_->num_bytes_delivered_, owner_->num_records_delivered_);
   bumpHistograms();
 }
 

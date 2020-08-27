@@ -34,6 +34,7 @@ constexpr auto READERS_FLOW_TRACER = "readers_flow_tracer";
 class ClientReadersFlowTracer : public SampledTracer {
  public:
   using SystemClock = std::chrono::system_clock;
+  using SteadyClock = std::chrono::steady_clock;
   using TimePoint = SystemClock::time_point;
   template <typename T>
   using CircularBuffer = boost::circular_buffer_space_optimized<T>;
@@ -141,6 +142,10 @@ class ClientReadersFlowTracer : public SampledTracer {
   TimePoint last_time_stuck_{TimePoint::max()};
   TimePoint last_time_lagging_{TimePoint::max()};
   lsn_t last_next_lsn_to_deliver_{LSN_INVALID};
+
+  SteadyClock::time_point last_trace_time_{SteadyClock::now()};
+  double speed_records_moving_avg_{0};
+  double speed_bytes_moving_avg_{0};
 
   std::unique_ptr<Timer> timer_;
 
