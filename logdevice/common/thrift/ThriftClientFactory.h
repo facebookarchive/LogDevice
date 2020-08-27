@@ -9,6 +9,7 @@
 
 #include <memory>
 
+#include <folly/Executor.h>
 #include <folly/SocketAddress.h>
 #include <folly/io/async/DelayedDestruction.h>
 
@@ -35,8 +36,10 @@ class ThriftClientFactory {
    * @return Pointer to new client.
    */
   template <typename T>
-  std::unique_ptr<T> createClient(const folly::SocketAddress& address) {
-    ChannelPtr channel = createChannel(address);
+  std::unique_ptr<T>
+  createClient(const folly::SocketAddress& address,
+               folly::Executor* callback_executor = nullptr) {
+    ChannelPtr channel = createChannel(address, callback_executor);
     return std::make_unique<T>(std::move(channel));
   }
 
@@ -51,7 +54,8 @@ class ThriftClientFactory {
    *
    * @param address Address of the Thrift server to connect to.
    */
-  virtual ChannelPtr createChannel(const folly::SocketAddress& address) = 0;
+  virtual ChannelPtr createChannel(const folly::SocketAddress& address,
+                                   folly::Executor* callback_executor) = 0;
 };
 
 }} // namespace facebook::logdevice

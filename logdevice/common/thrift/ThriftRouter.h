@@ -10,6 +10,8 @@
 
 #include <memory>
 
+#include <folly/Executor.h>
+
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/settings/Settings.h"
@@ -35,10 +37,12 @@ class ThriftRouter {
   /**
    * Creates a new client for Thrift API on the node with given ID.
    *
+   * @param nid               ID of the node which will be used as a destination
+   *                          for all Thrift requests on the client
    * @return New Thrift client or nullptr if unable to router.
    */
   virtual std::unique_ptr<thrift::LogDeviceAPIAsyncClient>
-      getApiClient(node_index_t) = 0;
+  getApiClient(node_index_t nid) = 0;
 
   virtual ~ThriftRouter() = default;
 };

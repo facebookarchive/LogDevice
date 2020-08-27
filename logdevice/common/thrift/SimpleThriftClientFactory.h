@@ -50,19 +50,22 @@ class SimpleThriftClientFactory : public ThriftClientFactory {
 
  protected:
   ThriftClientFactory::ChannelPtr
-  createChannel(const folly::SocketAddress& address) override {
+  createChannel(const folly::SocketAddress& address,
+                folly::Executor* callback_executor) override {
     // Get random evb for this client
     auto evb = io_executor_.getEventBase();
     ThriftClientFactory::ChannelPtr channel;
-    evb->runInEventBaseThreadAndWait([address, evb, &channel, this]() {
-      AsyncSocket::UniquePtr socket(
-          new AsyncSocket(evb, address, connect_timeout_.count()));
-      auto rocket = RocketClientChannel::newChannel(std::move(socket));
-      if (request_timeout_.count() > 0) {
-        rocket->setTimeout(request_timeout_.count());
-      }
-      channel = RocketChannelWrapper::newChannel(std::move(rocket), evb);
-    });
+    evb->runInEventBaseThreadAndWait(
+        [address, evb, &channel, this, callback_executor]() {
+          AsyncSocket::UniquePtr socket(
+              new AsyncSocket(evb, address, connect_timeout_.count()));
+          auto rocket = RocketClientChannel::newChannel(std::move(socket));
+          if (request_timeout_.count() > 0) {
+            rocket->setTimeout(request_timeout_.count());
+          }
+          channel = RocketChannelWrapper::newChannel(
+              std::move(rocket), evb, callback_executor);
+        });
     return channel;
   }
 

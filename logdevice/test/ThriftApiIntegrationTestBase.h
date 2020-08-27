@@ -20,6 +20,7 @@
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
 using namespace ::testing;
+using apache::thrift::ClientReceiveState;
 using facebook::fb303::cpp2::fb_status;
 using facebook::logdevice::IntegrationTestUtils::ClusterFactory;
 
@@ -40,27 +41,79 @@ class ThriftApiIntegrationTestBase : public IntegrationTestBase {
   }
 
  protected:
+  using ThriftClient = thrift::LogDeviceAPIAsyncClient;
+  using ThriftClientPtr = std::unique_ptr<thrift::LogDeviceAPIAsyncClient>;
   // This test checks that Thirft server starts and we are able to make an RPC
   // request to it from within Worker
   void checkSingleRpcCall() {
-    auto status = runWithClient([](thrift::LogDeviceAPIAsyncClient& client) {
-      return client.semifuture_getStatus().get();
+    auto status = runWithClient([](ThriftClientPtr client) {
+      auto cb = std::make_unique<StatusCb>(std::move(client));
+      auto client_ptr = cb->client_ptr.get();
+      auto future = cb->responsePromise.getSemiFuture();
+      client_ptr->getStatus(std::move(cb));
+      return future;
     });
-    ASSERT_EQ(fb_status::ALIVE, status);
+    ASSERT_EQ(fb_status::ALIVE, std::move(status).get());
   }
+
+  class StatusCb : public apache::thrift::SendRecvRequestCallback {
+   public:
+    StatusCb(ThriftClientPtr client)
+        : client_ptr(std::move(client)),
+          original_worker(Worker::onThisThread()){};
+
+    bool ensureWorker() {
+      if (Worker::onThisThread(false) != original_worker) {
+        responsePromise.setException(
+            std::runtime_error("Callback is called either not in Worker "
+                               "context or by wrong worker"));
+        return false;
+      }
+      return true;
+    }
+
+    void send(folly::exception_wrapper&& ex) override {
+      if (!ensureWorker()) {
+        return;
+      }
+      if (ex) {
+        responsePromise.setException(std::move(ex));
+      }
+    }
+
+    void recv(ClientReceiveState&& state) override {
+      if (!ensureWorker()) {
+        return;
+      }
+      if (state.isException()) {
+        responsePromise.setException(std::move(state.exception()));
+      } else {
+        fb_status response;
+        auto exception = ThriftClient::recv_wrapped_getStatus(response, state);
+        if (exception) {
+          responsePromise.setException(std::move(exception));
+        } else {
+          responsePromise.setValue(response);
+        }
+      }
+    }
+
+    ThriftClientPtr client_ptr;
+    folly::Promise<fb_status> responsePromise;
+    Worker* original_worker;
+  };
 
  private:
   // Runs arbitrary code on client's worker thread and provides Thrift client
   // created on this worker
   template <typename Func>
-  typename std::result_of<Func(thrift::LogDeviceAPIAsyncClient&)>::type
-  runWithClient(Func cb) {
+  typename std::result_of<Func(ThriftClientPtr)>::type runWithClient(Func cb) {
     ClientImpl* impl = checked_downcast<ClientImpl*>(client_.get());
     return run_on_worker(&(impl->getProcessor()), 0, [&]() {
       auto worker = Worker::onThisThread();
       node_index_t nid{0};
       auto thrift_client = worker->getThriftRouter()->getApiClient(nid);
-      return cb(*thrift_client);
+      return cb(std::move(thrift_client));
     });
   }
 

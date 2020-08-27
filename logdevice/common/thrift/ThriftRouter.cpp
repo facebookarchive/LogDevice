@@ -8,6 +8,7 @@
 
 #include "logdevice/common/thrift/ThriftRouter.h"
 
+#include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/nodes/ServerAddressRouter.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/if/gen-cpp2/LogDeviceAPIAsyncClient.h"
@@ -44,7 +45,8 @@ NcmThriftRouter::getApiClient(node_index_t nid) {
                     nid);
     return nullptr;
   }
+  auto callback_executor = Worker::onThisThread(/*enforce_worker*/ false);
   return client_factory_->createClient<LogDeviceAPIAsyncClient>(
-      maybe_address->getSocketAddress());
+      maybe_address->getSocketAddress(), callback_executor);
 }
 }} // namespace facebook::logdevice
