@@ -1126,10 +1126,10 @@ class Cluster {
           std::chrono::steady_clock::time_point::max());
 
   /**
-   * Waits until all live nodes have processed the NodesConfiguration with at
-   * least the version passed.
+   * Waits until all live nodes and clients have processed the
+   * NodesConfiguration with at least the version passed.
    */
-  void waitForServersToProcessNodesConfiguration(
+  void waitForServersAndClientsToProcessNodesConfiguration(
       membership::MembershipVersion::Type version);
 
   /**

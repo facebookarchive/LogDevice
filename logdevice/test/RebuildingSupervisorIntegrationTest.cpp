@@ -905,8 +905,9 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingHitThresholdAtOnce) {
     node.addStorageRole(/*num_shards*/ 1);
     nodes_config[i] = std::move(node);
   }
-  auto nodes_configuration =
-      NodesConfigurationTestUtil::provisionNodes(std::move(nodes_config));
+  auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
+      std::move(nodes_config),
+      ReplicationProperty{{NodeLocationScope::NODE, 3}});
 
   auto event_log_attrs =
       logsconfig::LogAttributes()
@@ -1034,8 +1035,9 @@ TEST_F(RebuildingSupervisorIntegrationTest,
     node.addStorageRole(/*num_shards*/ 1);
     nodes_config[i] = std::move(node);
   }
-  auto nodes_configuration =
-      NodesConfigurationTestUtil::provisionNodes(std::move(nodes_config));
+  auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
+      std::move(nodes_config),
+      ReplicationProperty{{NodeLocationScope::NODE, 3}});
 
   auto event_log_attrs =
       logsconfig::LogAttributes()

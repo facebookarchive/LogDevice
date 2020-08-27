@@ -1311,17 +1311,8 @@ int Cluster::updateNodesConfiguration(
   }
   store->updateConfigSync(
       std::move(serialized), NodesConfigurationStore::Condition::overwrite());
-  if (config_->getNodesConfiguration() != nullptr) {
-    wait_until(
-        folly::sformat("Cluster Config nodes config version processed >= {}",
-                       nodes_configuration.getVersion().val())
-            .c_str(),
-        [&]() {
-          return config_->getNodesConfiguration()->getVersion() >=
-              nodes_configuration.getVersion();
-        });
-  }
-  waitForServersToProcessNodesConfiguration(nodes_configuration.getVersion());
+  waitForServersAndClientsToProcessNodesConfiguration(
+      nodes_configuration.getVersion());
   return 0;
 }
 
@@ -3041,9 +3032,9 @@ int Cluster::updateNodeAttributes(node_index_t index,
   return 0;
 }
 
-void Cluster::waitForServersToProcessNodesConfiguration(
+void Cluster::waitForServersAndClientsToProcessNodesConfiguration(
     membership::MembershipVersion::Type version) {
-  auto check = [this, version]() {
+  auto server_check = [this, version]() {
     for (auto& [_, node] : nodes_) {
       if (node && !node->stopped_ && node->isRunning()) {
         auto stats = node->stats();
@@ -3061,10 +3052,33 @@ void Cluster::waitForServersToProcessNodesConfiguration(
     }
     return true;
   };
+
+  auto client_check = [this, version]() {
+    for (const auto& client_ptr : created_clients_) {
+      auto client = client_ptr.lock();
+      if (client == nullptr) {
+        continue;
+      }
+      auto client_impl = dynamic_cast<ClientImpl*>(client.get());
+      if (client_impl->getConfig()->getNodesConfiguration()->getVersion() <
+          version) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  auto config_check = [this, version]() {
+    if (config_->getNodesConfiguration() == nullptr) {
+      return true;
+    }
+    return config_->getNodesConfiguration()->getVersion() >= version;
+  };
+
   wait_until(
       folly::sformat("nodes config version procssed >= {}", version.val())
           .c_str(),
-      check);
+      [&]() { return server_check() && client_check() && config_check(); });
 }
 
 void Cluster::waitForServersToPartiallyProcessConfigUpdate() {
