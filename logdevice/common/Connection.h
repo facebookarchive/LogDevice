@@ -247,13 +247,6 @@ class Connection : public TrafficShappingSocket {
     return peer_sockaddr_;
   }
 
-  /**
-   * For Testing only!
-   */
-  void enableChecksumTampering(bool enable) {
-    tamper_ = enable;
-  }
-
   void setPeerNodeId(const NodeID node_id) {
     peer_node_id_ = node_id;
     if (peer_name_.isClientAddress() && !peer_node_id_.isNodeID()) {
@@ -1118,15 +1111,6 @@ class Connection : public TrafficShappingSocket {
 
   // used for num_connections counter
   folly::Optional<ConnectionKind> connection_kind_;
-
-  /**
-   * For Testing only!
-   */
-  bool shouldTamperChecksum() {
-    return tamper_;
-  }
-
-  bool tamper_{false};
 
   friend class ConnectionTest;
 };

@@ -900,7 +900,6 @@ std::unique_ptr<folly::IOBuf> Connection::serializeMessage(const Message& msg) {
 
   ProtocolHeader protohdr;
   protohdr.cksum = compute_checksum ? writer.computeChecksum() : 0;
-  protohdr.cksum += shouldTamperChecksum(); // For Tests only
   protohdr.type = msg.type_;
   io_buf->prepend(protohdr_bytes);
   protohdr.len = io_buf->computeChainDataLength();
