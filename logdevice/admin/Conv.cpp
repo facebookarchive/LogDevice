@@ -16,7 +16,6 @@ using TStorageState = facebook::logdevice::membership::thrift::StorageState;
 
 namespace facebook { namespace logdevice {
 
-
 // DEPRECATED
 template <>
 thrift::ShardStorageState

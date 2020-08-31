@@ -55,7 +55,6 @@ template <>
 membership::MetaDataStorageState
 toLogDevice(const membership::thrift::MetaDataStorageState& input);
 
-
 thrift::ShardDataHealth toShardDataHealth(AuthoritativeStatus auth_status,
                                           bool has_dirty_ranges);
 
