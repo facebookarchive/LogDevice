@@ -848,11 +848,6 @@ int Sender::connect(NodeID nid) {
 bool Sender::useSSLWith(NodeID nid,
                         bool* cross_boundary_out,
                         bool* authentication_out) {
-  if (nid.index() == my_node_index_) {
-    // Don't use SSL for connections to self
-    return false;
-  }
-
   // Determine whether we need to use SSL by comparing our location with the
   // location of the target node.
   bool cross_boundary = false;
