@@ -166,6 +166,7 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
     // nodes if the peer_node_id_ is set in the calling Connection object, and
     // the IP address of the connection matches the IP address of that node
     // in the configuration file.
+    // TODO: [T71494016] Deprecate server authentication by IP option
     if (Worker::getConfig()->serverConfig()->authenticateServersByIP()) {
       NodeID peer_nid = w->sender().getNodeID(from);
       if (peer_nid.isNodeID()) {
@@ -187,6 +188,7 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
         }
       }
     }
+
     // We have not authenticated by IP, use provided authentication data
     if (useAuthenticationData) {
       // obtain principal from authentication data
@@ -198,8 +200,74 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
           break;
         }
         case AuthenticationType::SSL: {
+          auto identityResult = w->sender().extractPeerIdentity(from);
           // The returned identity regardless of the result is good enough here.
-          principal = w->sender().extractPeerIdentity(from).second;
+          principal = identityResult.second;
+          // If the connection is from any node, make sure we validate SSL
+          // identity as configured.
+          // TODO: [T71494016] Deprecate server authentication by IP option
+          NodeID peer_nid = w->sender().getNodeID(from);
+          if (!Worker::getConfig()->serverConfig()->authenticateServersByIP() &&
+              peer_nid.isNodeID()) {
+            // `cluster_node_identity` is expected to be correctly configured at
+            // all time.
+            if (security_info->cluster_node_identity.empty()) {
+              ackhdr.status = E::INTERNAL;
+              RATELIMIT_CRITICAL(std::chrono::seconds(5),
+                                 1,
+                                 "INTERNAL ERROR: Invalid configuration, "
+                                 "cluster_node_identity not populated");
+              fill_out_client_info_in_principal();
+              return principal;
+            }
+
+            // `cluster_node_identity` should be in expected format of
+            // `type:identity`.
+            std::string idType;
+            std::string identity;
+            if (!folly::split(':',
+                              security_info->cluster_node_identity,
+                              idType,
+                              identity)) {
+              ackhdr.status = E::INTERNAL;
+              RATELIMIT_CRITICAL(std::chrono::seconds(5),
+                                 1,
+                                 "INTERNAL ERROR: Invalid configuration, "
+                                 "unable to parse cluster_node_identity=%s",
+                                 security_info->cluster_node_identity.c_str());
+              fill_out_client_info_in_principal();
+              return principal;
+            }
+
+            if ((identityResult.first !=
+                 Sender::ExtractPeerIdentityResult::SUCCESS) ||
+                !principal.match(idType, identity)) {
+              ackhdr.status = E::ACCESS;
+              RATELIMIT_ERROR(
+                  std::chrono::seconds(5),
+                  1,
+                  "ACCESS ERROR: Got a HELLO message from %s "
+                  "with an invalid identity (%s) from node ID (%s).",
+                  Sender::describeConnection(from).c_str(),
+                  principal.toString().c_str(),
+                  peer_nid.toString().c_str());
+              fill_out_client_info_in_principal();
+              return principal;
+            }
+
+            // Normalize current identity to a predefined value (i.e.
+            // CLUSTER_NODE) based on cluster-level node identity settings.
+            RATELIMIT_DEBUG(
+                std::chrono::seconds(60),
+                1,
+                "Normalized current certificate identity (%s) originating "
+                "from %s to CLUSTER_NODE as configured cluster node "
+                "identity (%s) matched",
+                principal.toString().c_str(),
+                Sender::describeConnection(from).c_str(),
+                security_info->cluster_node_identity.c_str());
+            principal = PrincipalIdentity(Principal::CLUSTER_NODE);
+          }
           break;
         }
         case AuthenticationType::NONE:
