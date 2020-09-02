@@ -9,6 +9,7 @@
 
 #include <folly/hash/Hash.h>
 
+#include "logdevice/admin/maintenance/MaintenanceManagerTracer.h"
 #include "logdevice/admin/maintenance/types.h"
 #include "logdevice/common/AdminCommandTable.h"
 #include "logdevice/common/AppendRequest.h"
@@ -247,7 +248,8 @@ RebuildingCoordinator::RebuildingCoordinator(
     RebuildingSupervisor* rebuilding_supervisor,
     UpdateableSettings<RebuildingSettings> rebuilding_settings,
     UpdateableSettings<AdminServerSettings> admin_settings,
-    ShardedLocalLogStore* sharded_store)
+    ShardedLocalLogStore* sharded_store,
+    std::unique_ptr<maintenance::MaintenanceManagerTracer> tracer)
     : config_(config),
       event_log_(event_log),
       processor_(processor),
@@ -255,7 +257,8 @@ RebuildingCoordinator::RebuildingCoordinator(
       rebuildingSettings_(rebuilding_settings),
       adminSettings_(admin_settings),
       direction_(rebuildingSettings_->new_to_old),
-      shardedStore_(sharded_store) {}
+      shardedStore_(sharded_store),
+      tracer_(std::move(tracer)) {}
 
 int RebuildingCoordinator::start() {
   writer_ = std::make_unique<EventLogWriter>(event_log_);
@@ -966,13 +969,8 @@ void RebuildingCoordinator::restartForShard(uint32_t shard_idx,
         // Since all data is lost, convert to a full shard rebuild.
         if (adminSettings_->enable_cluster_maintenance_state_machine) {
           // request an internal maintenance
-          auto delta = std::make_unique<maintenance::MaintenanceDelta>();
-          delta->set_apply_maintenances(
-              {maintenance::MaintenanceLogWriter::
-                   buildMaintenanceDefinitionForRebuilding(
-                       ShardID(myNodeId_, shard_idx), "Shard lost all data")});
-          maintenance_log_writer_->writeDelta(std::move(delta));
-
+          writeMaintenanceDefinitionForRebuilding(
+              ShardID(myNodeId_, shard_idx), "Shard lost all data");
         } else {
           restartForMyShard(shard_idx, 0);
         }
@@ -1032,11 +1030,54 @@ void RebuildingCoordinator::writeRemoveMaintenance(
     const std::string& reason_message) {
   // We should remove maintenance only for our own shard
   ld_check(shard.node() == myNodeId_);
-  auto delta = std::make_unique<maintenance::MaintenanceDelta>();
-  delta->set_remove_maintenances(
+
+  ld_info("Remove maintenance request for shard %hu, reason=%s",
+          shard.shard(),
+          reason_message.c_str());
+
+  thrift::RemoveMaintenancesRequest req =
       maintenance::MaintenanceLogWriter::buildRemoveMaintenancesRequest(
-          shard, reason_message));
+          shard, reason_message);
+
+  const auto& nodes_config = config_->getNodesConfiguration();
+
+  maintenance::MaintenanceManagerTracer::RemoveMaintenanceInternalSample sample;
+  sample.ncm_version = nodes_config->getVersion();
+  sample.nc_published_time = nodes_config->getLastChangeTimestamp();
+  sample.removed_maintenance = req.filter_ref()->group_ids_ref()->at(0);
+  sample.service_discovery = nodes_config->getServiceDiscovery();
+  sample.shard = shard;
+  sample.reason = reason_message;
+
+  auto delta = std::make_unique<maintenance::MaintenanceDelta>();
+  delta->set_remove_maintenances(std::move(req));
   maintenance_log_writer_->writeDelta(std::move(delta));
+  tracer_->trace(std::move(sample));
+}
+
+void RebuildingCoordinator::writeMaintenanceDefinitionForRebuilding(
+    ShardID shard,
+    const std::string& reason_message) {
+  ld_info("Apply maintenance request for shard %hu, reason=%s",
+          shard.shard(),
+          reason_message.c_str());
+
+  thrift::MaintenanceDefinition def = maintenance::MaintenanceLogWriter::
+      buildMaintenanceDefinitionForRebuilding(shard, reason_message);
+
+  const auto& nodes_config = config_->getNodesConfiguration();
+
+  maintenance::MaintenanceManagerTracer::ApplyMaintenanceInternalSample sample;
+  sample.ncm_version = nodes_config->getVersion();
+  sample.nc_published_time = nodes_config->getLastChangeTimestamp();
+  sample.added_maintenance = def;
+  sample.service_discovery = nodes_config->getServiceDiscovery();
+  sample.reason = reason_message;
+
+  auto delta = std::make_unique<maintenance::MaintenanceDelta>();
+  delta->set_apply_maintenances({std::move(def)});
+  maintenance_log_writer_->writeDelta(std::move(delta));
+  tracer_->trace(std::move(sample));
 }
 
 void RebuildingCoordinator::requestPlan(shard_index_t shard_idx,
@@ -1080,7 +1121,7 @@ void RebuildingCoordinator::executePlanningRequests() {
   auto rebuildingSets = std::move(requested_plans_->rebuildingSets);
   requested_plans_.reset();
 
-  if (params.size() == 0) {
+  if (params.empty()) {
     return; // nothing to do
   }
 
@@ -1731,14 +1772,9 @@ void RebuildingCoordinator::publishDirtyShards(
           // the donor SCD filter to understand dirty ranges.
           if (adminSettings_->enable_cluster_maintenance_state_machine) {
             // request an internal maintenance
-            auto delta = std::make_unique<maintenance::MaintenanceDelta>();
-            delta->set_apply_maintenances(
-                {maintenance::MaintenanceLogWriter::
-                     buildMaintenanceDefinitionForRebuilding(
-                         ShardID(myNodeId_, shard_idx),
-                         "Shard is missing (some) data, forcing RESTORE "
-                         "rebuilding")});
-            maintenance_log_writer_->writeDelta(std::move(delta));
+            writeMaintenanceDefinitionForRebuilding(
+                ShardID(myNodeId_, shard_idx),
+                "Shard is missing (some) data, forcing RESTORE rebuilding");
           } else {
             ld_info("Shard %u: Converting drain from RELOCATE to RESTORE",
                     shard_idx);

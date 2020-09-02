@@ -1507,7 +1507,9 @@ bool Server::initRebuildingCoordinator() {
           rebuilding_supervisor_.get(),
           params_->getRebuildingSettings(),
           params_->getAdminServerSettings(),
-          sharded_store_.get());
+          sharded_store_.get(),
+          std::make_unique<maintenance::MaintenanceManagerTracer>(
+              params_->getTraceLogger()));
       ld_info("Starting RebuildingCoordinator");
       if (rebuilding_coordinator_->start() != 0) {
         return false;

@@ -2041,7 +2041,7 @@ void MaintenanceManager::purgeExpiredMaintenances(
   STAT_INCR(deps_->getStats(), admin_server.mm_expired_maintenances_removed);
 
   thrift::MaintenancesFilter fltr;
-  fltr.set_group_ids(std::move(to_remove));
+  fltr.set_group_ids(to_remove);
 
   thrift::RemoveMaintenancesRequest req;
   req.set_filter(std::move(fltr));

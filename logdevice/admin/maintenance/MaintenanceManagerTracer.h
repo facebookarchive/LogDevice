@@ -9,8 +9,8 @@
 
 #include "logdevice/admin/if/gen-cpp2/maintenance_types.h"
 #include "logdevice/admin/maintenance/ClusterMaintenanceWrapper.h"
-#include "logdevice/common/NodeID.h"
 #include "logdevice/common/SampledTracer.h"
+#include "logdevice/common/ShardID.h"
 #include "logdevice/common/membership/types.h"
 
 namespace facebook { namespace logdevice { namespace maintenance {
@@ -91,7 +91,6 @@ class MaintenanceManagerTracer : public SampledTracer {
 
   struct PurgedMaintenanceSample : public SampleBase {
     MaintenanceIDs removed_maintenances;
-    std::string reason;
   };
 
   struct ApplyMaintenanceAPISample : public SampleBase {
@@ -105,7 +104,19 @@ class MaintenanceManagerTracer : public SampledTracer {
     std::shared_ptr<const configuration::nodes::ServiceDiscoveryConfig>
         service_discovery;
     std::string user;
-    std::string reason;
+  };
+
+  struct ApplyMaintenanceInternalSample : public SampleBase {
+    thrift::MaintenanceDefinition added_maintenance;
+    std::shared_ptr<const configuration::nodes::ServiceDiscoveryConfig>
+        service_discovery;
+  };
+
+  struct RemoveMaintenanceInternalSample : public SampleBase {
+    std::string removed_maintenance;
+    ShardID shard;
+    std::shared_ptr<const configuration::nodes::ServiceDiscoveryConfig>
+        service_discovery;
   };
 
   explicit MaintenanceManagerTracer(std::shared_ptr<TraceLogger> logger);
@@ -115,6 +126,8 @@ class MaintenanceManagerTracer : public SampledTracer {
   void trace(PurgedMaintenanceSample);
   void trace(ApplyMaintenanceAPISample);
   void trace(RemoveMaintenanceAPISample);
+  void trace(ApplyMaintenanceInternalSample);
+  void trace(RemoveMaintenanceInternalSample);
 
   /**
    * The local default for this is 100% of samples unless explicity overridden

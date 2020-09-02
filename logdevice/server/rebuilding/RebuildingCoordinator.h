@@ -13,6 +13,7 @@
 #include <folly/container/F14Map.h>
 
 #include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
+#include "logdevice/admin/maintenance/MaintenanceManagerTracer.h"
 #include "logdevice/common/AdminCommandTable-fwd.h"
 #include "logdevice/common/BackoffTimer.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
@@ -55,7 +56,8 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
       RebuildingSupervisor* rebuilding_supervisor,
       UpdateableSettings<RebuildingSettings> rebuilding_settings,
       UpdateableSettings<AdminServerSettings> admin_settings,
-      ShardedLocalLogStore* sharded_store);
+      ShardedLocalLogStore* sharded_store,
+      std::unique_ptr<maintenance::MaintenanceManagerTracer> tracer);
 
   /**
    * Do not rebuild the metadata logs. Used by tests.
@@ -466,6 +468,8 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
 
   ShardedLocalLogStore* shardedStore_;
 
+  std::unique_ptr<maintenance::MaintenanceManagerTracer> tracer_;
+
   struct RequestedPlans {
     RebuildingPlanner::ParametersPerShard params;
     RebuildingSets rebuildingSets;
@@ -739,9 +743,15 @@ class RebuildingCoordinator : public RebuildingPlanner::Listener,
   ShardState& getShardState(uint32_t shard_idx);
   const ShardState& getShardState(uint32_t shard_idx) const;
 
-  // A helper method to write a thrift:;RemoveMaintenanceRequest to
+  // A helper method to write a thrift::RemoveMaintenanceRequest to
   // maintenance log
   void writeRemoveMaintenance(ShardID shard, const std::string& reason_message);
+
+  // A helper method to write a thrift::MaintenanceDefinition to
+  // maintenance log
+  void
+  writeMaintenanceDefinitionForRebuilding(ShardID shard,
+                                          const std::string& reason_message);
 
   std::unique_ptr<NonAuthoritativeRebuildingChecker>
       nonAuthoratitiveRebuildingChecker_;

@@ -22,6 +22,7 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRecord.h"
 #include "logdevice/common/test/MockBackoffTimer.h"
+#include "logdevice/common/test/MockTraceLogger.h"
 #include "logdevice/common/test/NodesConfigurationTestUtil.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/server/rebuilding/RebuildingPlan.h"
@@ -45,7 +46,7 @@ namespace {
 
 using ms = std::chrono::milliseconds;
 
-static const NodeID my_node_id{0, 1};
+const NodeID my_node_id{0, 1};
 
 struct DonorProgress {
   uint32_t shard;
@@ -125,11 +126,11 @@ struct ReceivedMessages {
   }
 };
 
-static ReceivedMessages received;
-static std::unordered_set<uint32_t> restart_scheduled;
-static bool planning_timer_activated{false};
-static thrift::RemoveMaintenancesRequest remove_maintenance;
-static std::vector<thrift::MaintenanceDefinition> apply_maintenances;
+ReceivedMessages received;
+std::unordered_set<uint32_t> restart_scheduled;
+bool planning_timer_activated{false};
+thrift::RemoveMaintenancesRequest remove_maintenance;
+std::vector<thrift::MaintenanceDefinition> apply_maintenances;
 
 class MockedRebuildingCoordinator;
 
@@ -146,16 +147,16 @@ class MockedShardRebuilding : public ShardRebuildingInterface {
   void start(std::unordered_map<logid_t, std::unique_ptr<RebuildingPlan>> plan)
       override;
 
-  virtual void advanceGlobalWindow(RecordTimestamp new_window_end) override {
+  void advanceGlobalWindow(RecordTimestamp new_window_end) override {
     global_window = new_window_end;
   }
 
-  virtual void noteConfigurationChanged() override {}
-  virtual void noteRebuildingSettingsChanged() override {}
+  void noteConfigurationChanged() override {}
+  void noteRebuildingSettingsChanged() override {}
 
   // Fills the current row of @param table with debug information about the
   // state of rebuilding for this shard. Used by admin commands.
-  virtual void getDebugInfo(InfoRebuildingShardsTable& table) const override {}
+  void getDebugInfo(InfoRebuildingShardsTable& /* unused */) const override {}
 
   MockedRebuildingCoordinator* owner = nullptr;
   const shard_index_t shard;
@@ -169,21 +170,7 @@ class MockMaintenanceLogWriter : public MaintenanceLogWriter {
   explicit MockMaintenanceLogWriter(RebuildingCoordinatorTest* test)
       : MaintenanceLogWriter(nullptr), test_(test) {}
 
-  virtual void writeDelta(
-      const MaintenanceDelta& delta,
-      std::function<
-          void(Status st, lsn_t version, const std::string& failure_reason)> cb,
-      ClusterMaintenanceStateMachine::WriteMode mode =
-          ClusterMaintenanceStateMachine::WriteMode::CONFIRM_APPLIED,
-      folly::Optional<lsn_t> base_version = folly::none) override {
-    if (delta.getType() == MaintenanceDelta::Type::apply_maintenances) {
-      apply_maintenances = delta.get_apply_maintenances();
-    } else {
-      remove_maintenance = delta.get_remove_maintenances();
-    }
-  }
-
-  virtual void writeDelta(std::unique_ptr<MaintenanceDelta> delta) override {
+  void writeDelta(std::unique_ptr<MaintenanceDelta> delta) override {
     if (delta->getType() == MaintenanceDelta::Type::apply_maintenances) {
       apply_maintenances = delta->get_apply_maintenances();
     } else {
@@ -245,6 +232,7 @@ class MockedRebuildingCoordinator : public RebuildingCoordinator {
       shard_size_t num_shards,
       UpdateableSettings<RebuildingSettings> settings,
       UpdateableSettings<AdminServerSettings> admin_settings,
+      std::unique_ptr<MaintenanceManagerTracer> tracer,
       bool my_shard_has_data_intact,
       DirtyShardMap* dirty_shard_cache)
       : RebuildingCoordinator(config,
@@ -253,7 +241,8 @@ class MockedRebuildingCoordinator : public RebuildingCoordinator {
                               nullptr,
                               settings,
                               admin_settings,
-                              nullptr),
+                              nullptr,
+                              std::move(tracer)),
         num_shards_(num_shards),
         my_shard_has_data_intact_(my_shard_has_data_intact),
         dirty_shard_cache_(dirty_shard_cache) {}
@@ -436,6 +425,7 @@ class RebuildingCoordinatorTest : public ::testing::Test {
       : settings(create_default_settings<RebuildingSettings>()),
         admin_settings_(create_default_settings<AdminServerSettings>()),
         config_(std::make_shared<UpdateableConfig>()),
+        logger_(std::make_shared<MockTraceLogger>(config_)),
         rebuilding_set_(std::make_unique<EventLogRebuildingSet>(my_node_id)) {
     settings.global_window = std::chrono::milliseconds::max();
     settings.use_legacy_log_to_shard_mapping_in_rebuilding = false;
@@ -510,6 +500,7 @@ class RebuildingCoordinatorTest : public ::testing::Test {
         num_shards,
         UpdateableSettings<RebuildingSettings>(settings),
         UpdateableSettings<AdminServerSettings>(admin_settings_),
+        std::make_unique<MaintenanceManagerTracer>(logger_),
         my_shard_has_data_intact,
         &dirty_shard_cache);
 
@@ -721,6 +712,7 @@ class RebuildingCoordinatorTest : public ::testing::Test {
   RebuildingCoordinator::DirtyShardMap dirty_shard_cache;
 
   std::shared_ptr<UpdateableConfig> config_;
+  std::shared_ptr<MockTraceLogger> logger_;
   std::unique_ptr<EventLogRebuildingSet> rebuilding_set_;
   std::unique_ptr<MockedRebuildingCoordinator> coordinator_;
 };
