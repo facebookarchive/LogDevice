@@ -870,7 +870,7 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
 
   // Merge the provided server settings with the existing settings
   for (const auto& [key, value] : server_settings_) {
-    server_settings[key] = value;
+    server_settings.emplace(key, value);
   }
 
   ServerConfig::SettingsConfig client_settings =
