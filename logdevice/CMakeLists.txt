@@ -28,7 +28,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 project(${PACKAGE_NAME} CXX)
 
 option(PORTABLE "build a portable binary" OFF)
-option(thriftpy3 "Include Thriftpy3 in build (requires Cython 0.28)" OFF)
+option(thriftpy3 "Include Thriftpy3 in build (requires Cython 0.29)" OFF)
 
 # Use the Debug build profile as default unless -DCMAKE_BUILD_TYPE is passed in.
 if(NOT CMAKE_BUILD_TYPE)

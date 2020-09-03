@@ -28,7 +28,7 @@ Key dependencies that you need to build LogDevice:
 - CMake (minimum *3.4.0*)
 - C++ compiler that support *C++17* or higher (We will require C++20 soon!)
 - Python *3.6+* and virtualenv
-- Cython *0.28.6* (due to https://github.com/cython/cython/issues/2985)
+- Cython
 - Boost C++ Libraries (minimum *1.55.0*)
 - LibEvent
 - Zookeeper MT C++ client library
