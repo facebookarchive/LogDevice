@@ -40,6 +40,7 @@ class ResourceBudget {
     }
     Token const& operator=(Token&& rhs) {
       if (this != &rhs) {
+        release();
         budget_ = rhs.budget_;
         count_ = rhs.count_;
         rhs.budget_ = nullptr;
