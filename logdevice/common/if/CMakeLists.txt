@@ -58,6 +58,10 @@ thrift_library(
   THRIFT_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/.."
  )
 add_dependencies(api_model-cpp2-target fbthrift)
+set_target_properties(
+         api_model-cpp2-obj
+         PROPERTIES POSITION_INDEPENDENT_CODE True
+)
 target_link_libraries(api_model-cpp2 ${THRIFT_DEPS})
 
 # API Service thrift
@@ -74,6 +78,10 @@ thrift_library(
     "${FB303_INCLUDE_DIR}"
  )
 add_dependencies(api_service-cpp2-target fbthrift)
+set_target_properties(
+         api_service-cpp2-obj
+         PROPERTIES POSITION_INDEPENDENT_CODE True
+)
 target_link_libraries(
   api_service-cpp2
   api_model-cpp2
