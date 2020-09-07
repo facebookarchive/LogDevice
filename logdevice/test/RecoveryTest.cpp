@@ -3787,9 +3787,9 @@ TEST_P(RecoveryTest, BridgeRecordForEmptyEpochs) {
   }
 }
 
-// 1) digest should respect nodes in draining and include them into f-majority;
-// 2) mutation should not happen on draining nodes
-TEST_P(RecoveryTest, AuthoritativeRecoveryWithDrainingNodes) {
+// 1) digest should respect READ_ONLY nodes and include them into f-majority;
+// 2) mutation should not happen on READ_ONLY nodes
+TEST_P(RecoveryTest, AuthoritativeRecoveryWithReadOnlyNodes) {
   nodes_ = 6;
   replication_ = 2;
   extra_ = 0;
@@ -3959,17 +3959,18 @@ TEST_P(RecoveryTest, AuthoritativeRecoveryWithDrainingNodes) {
   // start N0, N1, and N5. These nodes are enough to operate
   // event log but not enough to let LOG_ID have f-majority
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 5}));
-  // request draining for N1 and N2
-  ld_info("Requesting draining for shard N1 and N2.");
-  auto client = cluster_->createClient();
-  auto flags =
-      SHARD_NEEDS_REBUILD_Header::RELOCATE | SHARD_NEEDS_REBUILD_Header::DRAIN;
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 1, SHARD_IDX, flags));
-  const lsn_t to_sync = requestShardRebuilding(*client, 2, SHARD_IDX, flags);
-  ASSERT_NE(LSN_INVALID, to_sync);
 
-  // wait for N0 and N1 to pick up the up-to-date event log version.
-  cluster_->waitUntilEventLogSynced(to_sync, {0, 1, 2});
+  {
+    // Mark N1 & N2 as READ_ONLY
+    ld_info("Marking N1 and N2 as READ_ONLY");
+    auto nc = cluster_->getConfig()->getNodesConfiguration();
+    nc = nc->applyUpdate(NodesConfigurationTestUtil::setStorageMembershipUpdate(
+        *nc,
+        {ShardID(1, SHARD_IDX), ShardID(2, SHARD_IDX)},
+        membership::StorageState::READ_ONLY,
+        folly::none));
+    cluster_->updateNodesConfiguration(*nc);
+  }
 
   // half of the time, kill sequencer so that it does not have up-to-date
   // event log and we may fallback to intersection check

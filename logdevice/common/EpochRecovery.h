@@ -63,12 +63,6 @@ class EpochRecoveryDependencies {
 
   virtual void onShardRemovedFromConfig(ShardID shard);
 
-  /**
-   * @return   if mutation can happen on _shard_; i.e., the shard is
-   *           writable (not in rebuilding set).
-   */
-  virtual bool canMutateShard(ShardID shard) const;
-
   virtual NodeID getMyNodeID() const;
 
   virtual read_stream_id_t issueReadStreamID();
@@ -160,7 +154,7 @@ class EpochRecovery {
       logid_t log_id,
       epoch_t epoch,
       const EpochMetaData& epoch_metadata,
-      const std::shared_ptr<const NodesConfiguration>& nodes_configuration,
+      std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration,
       std::unique_ptr<EpochRecoveryDependencies> deps,
       bool tail_optimized);
 
@@ -627,6 +621,11 @@ class EpochRecovery {
    */
   void startMutationAndCleaningTimer();
 
+  /**
+   * @return   if mutation can happen on _shard_; i.e., the shard is writable.
+   */
+  bool canMutateShard(ShardID shard) const;
+
   // true if the log is tail optimized according to the logs config
   const bool tail_optimized_;
 
@@ -737,6 +736,8 @@ class EpochRecovery {
 
   // Used for a paranoid consistency check.
   uint64_t last_timestamp_from_seals_ = 0;
+
+  std::shared_ptr<UpdateableNodesConfiguration> nodes_config_;
 
   // used for latency histograms
   std::chrono::steady_clock::time_point activation_time_{

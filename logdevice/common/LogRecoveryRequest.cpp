@@ -575,7 +575,9 @@ int LogRecoveryRequest::createEpochRecoveryMachines(
   ld_check(start <= until);
   ld_check(metadata.isValid());
   auto config = Worker::onThisThread()->getConfig();
-  const auto& nc = Worker::onThisThread()->getNodesConfiguration();
+  const auto& nc = Worker::onThisThread()
+                       ->getUpdateableConfig()
+                       ->updateableNodesConfiguration();
   auto log = config->getLogGroupByIDShared(log_id_);
   if (!log) {
     // config has changed since the time this Sequencer was activated

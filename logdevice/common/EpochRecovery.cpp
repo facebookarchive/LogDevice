@@ -35,7 +35,7 @@ EpochRecovery::EpochRecovery(
     logid_t log_id,
     epoch_t epoch,
     const EpochMetaData& epoch_metadata,
-    const std::shared_ptr<const NodesConfiguration>& nodes_configuration,
+    std::shared_ptr<UpdateableNodesConfiguration> nodes_configuration,
     std::unique_ptr<EpochRecoveryDependencies> deps,
     bool tail_optimized)
     : log_id_(log_id),
@@ -47,18 +47,19 @@ EpochRecovery::EpochRecovery(
       last_restart_timestamp_(creation_timestamp_),
       tail_optimized_(tail_optimized),
       state_(State::SEAL_OR_INACTIVE),
-      recovery_set_(epoch_metadata, nodes_configuration, this),
+      recovery_set_(epoch_metadata, nodes_configuration->get(), this),
       digest_(log_id,
               epoch,
               epoch_metadata,
               deps_->getSealEpoch(),
-              nodes_configuration,
+              nodes_configuration->get(),
               {// write bridge record even for empty epoch if
                // settings allow _and_ log id is not a metadata log
                !MetaDataLog::isMetaDataLog(log_id_) &&
                deps_->getSettings().bridge_record_in_empty_epoch}),
       grace_period_(deps_->createTimer([this] { onGracePeriodExpired(); })),
-      mutation_and_cleaning_(deps_->createTimer([this] { onTimeout(); })) {
+      mutation_and_cleaning_(deps_->createTimer([this] { onTimeout(); })),
+      nodes_config_(std::move(nodes_configuration)) {
   ld_check(log_id_ != LOGID_INVALID);
   ld_check(epoch_ != EPOCH_INVALID);
   ld_check(deps_ != nullptr);
@@ -375,7 +376,7 @@ bool EpochRecovery::onDigestComplete() {
   auto digested_shards =
       recovery_set_.getNodesInState(RecoveryNode::State::DIGESTED);
   for (const auto& digested_shard : digested_shards) {
-    if (deps_->canMutateShard(digested_shard)) {
+    if (canMutateShard(digested_shard)) {
       recovery_set_.transition(digested_shard, RecoveryNode::State::MUTATABLE);
     }
   }
@@ -1370,7 +1371,7 @@ void EpochRecovery::onDigestStreamEndReached(ShardID from) {
 
   recovery_set_.transition(from, RecoveryNode::State::DIGESTED);
 
-  if (deps_->canMutateShard(from)) {
+  if (canMutateShard(from)) {
     // If the node is considered as eligible for mutation at this point of time,
     // transition its state to State::MUTATABLE so that it will be included in
     // the mutation and cleaning set. If our local view is stale and the node
@@ -1874,6 +1875,11 @@ void EpochRecovery::getDebugInfo(InfoRecoveriesTable& table) const {
       .set<16>(num_restarts_);
 }
 
+bool EpochRecovery::canMutateShard(ShardID shard) const {
+  auto nc = nodes_config_->get();
+  return nc->getStorageMembership()->canWriteToShard(shard);
+}
+
 ////// Dependencies ////////////
 
 EpochRecoveryDependencies::EpochRecoveryDependencies(LogRecoveryRequest* driver)
@@ -1898,17 +1904,6 @@ void EpochRecoveryDependencies::onEpochRecovered(epoch_t epoch,
 
 void EpochRecoveryDependencies::onShardRemovedFromConfig(ShardID shard) {
   return driver_->onShardRemovedFromConfig(shard);
-}
-
-bool EpochRecoveryDependencies::canMutateShard(ShardID shard) const {
-  auto rebuilding_set =
-      Worker::onThisThread()->processor_->rebuilding_set_.get();
-
-  // the shard is not writable if it is in the current rebuilding set.
-  // (note: we do not count time-range rebuilding)
-  return !rebuilding_set ||
-      (rebuilding_set->isRebuildingFullShard(shard.node(), shard.shard()) ==
-       folly::none);
 }
 
 NodeID EpochRecoveryDependencies::getMyNodeID() const {
