@@ -211,8 +211,11 @@ int FileEpochStore::updateEpochStore(
       // Make sure that the LCE files exist
       {
         bool data_lce = true;
-        std::string data_lce_path = folly::sformat(
-            "{}/{}/{}", path_, logid.val_, LastCleanEpochZRQ::znodeNameDataLog);
+        std::string data_lce_path =
+            folly::sformat("{}/{}/{}",
+                           path_,
+                           MetaDataLog::dataLogID(logid).val(),
+                           LastCleanEpochZRQ::znodeNameDataLog);
 
         if (!boost::filesystem::exists(data_lce_path)) {
           data_lce = folly::writeFile(std::string(""), data_lce_path.c_str());
@@ -221,7 +224,7 @@ int FileEpochStore::updateEpochStore(
         std::string metadata_lce_path =
             folly::sformat("{}/{}/{}",
                            path_,
-                           logid.val_,
+                           MetaDataLog::dataLogID(logid).val(),
                            LastCleanEpochZRQ::znodeNameMetaDataLog);
         if (!boost::filesystem::exists(metadata_lce_path)) {
           metadata_lce =
