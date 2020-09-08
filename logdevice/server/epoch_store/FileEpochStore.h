@@ -14,6 +14,7 @@
 #include "logdevice/common/EpochStore.h"
 #include "logdevice/common/MetaDataTracer.h"
 #include "logdevice/common/RequestExecutor.h"
+#include "logdevice/server/epoch_store/ZookeeperEpochStoreRequest.h"
 
 /**
  * @file  FileEpochStore is an implementation of the EpochStore interface
@@ -75,64 +76,11 @@ class FileEpochStore : public EpochStore, boost::noncopyable {
   // TODO: calculate it based on MAX_NODESET_SIZE
   static const int FILE_LEN_MAX = 4096;
 
- protected:
-  /**
-   * Helper method used to post a request that will invoke a provided completion
-   * function.
-   */
-  virtual void postCompletionLCE(EpochStore::CompletionLCE cf,
-                                 Status status,
-                                 logid_t log_id,
-                                 epoch_t epoch,
-                                 TailRecord tail_record);
-
-  virtual void postCompletionMetaData(
-      EpochStore::CompletionMetaData cf,
-      Status status,
-      logid_t log_id,
-      std::unique_ptr<EpochMetaData> metadata,
-      std::unique_ptr<EpochStoreMetaProperties> meta_properties);
-
  private:
-  using epoch_func_t = std::function<
-      void(epoch_t epoch, epoch_t* out_epoch, TailRecord* out_tail_record)>;
-
-  // FileUpdater encapsulates operations to parse and update the epochstore
-  // record file, as well as the data returned as the result of the update.
-  class FileUpdater {
-   public:
-    /**
-     * Read the file content from @buf and write the updated content
-     * to @out buffer.
-     *
-     * @return: >0  size of data written
-     *           0  no need to change the record (e.g., get only request)
-     *          -1  error occured, err is set accordingly
-     */
-    virtual int update(const char* buf,
-                       size_t len,
-                       char* out,
-                       size_t out_len) = 0;
-    virtual ~FileUpdater() {}
-
-    std::unique_ptr<EpochMetaData> metadata_out_{nullptr};
-    std::unique_ptr<EpochStoreMetaProperties> meta_props_out_{nullptr};
-    epoch_t epoch_out_{EPOCH_INVALID};
-    TailRecord tail_record_out_;
-  };
-
-  class LCEUpdater;
-  class MetaDataUpdater;
-
   /**
-   * Atomically reads the content of epochstore file for (log_id, prefix) and
-   * updates it to a newer value using the file_updater@ provided.
+   * Atomically execute the passed epoch store request.
    *
-   * @param log_id       log for which to perform an update
-   * @param prefix       file prefix (e.g. "lce"), used in conjunction with
-   *                     log_id to determine which file to read from
-   * @param file_updater FileUpdater object to perform the update and store the
-   *                     results.
+   * @param zrq          The EpochStoreRequest to execute.
    *
    * @return           0 on file successfully updated
    *                  -1 if no update was performed, with err set to
@@ -145,9 +93,7 @@ class FileEpochStore : public EpochStore, boost::noncopyable {
    *                   TOOBIG         epoch number exhausted
    *                   BADMSG         malformed record format
    */
-  int updateEpochStore(logid_t log_id,
-                       std::string prefix,
-                       FileUpdater& file_updater);
+  int updateEpochStore(std::unique_ptr<ZookeeperEpochStoreRequest>& zrq);
 
   std::string path_;
 

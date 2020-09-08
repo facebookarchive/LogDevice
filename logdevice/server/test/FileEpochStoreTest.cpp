@@ -16,6 +16,7 @@
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
+#include "logdevice/common/test/InlineRequestPoster.h"
 #include "logdevice/common/test/TestNodeSetSelector.h"
 #include "logdevice/common/test/TestUtil.h"
 
@@ -27,31 +28,6 @@ using namespace facebook::logdevice;
 #define N2 ShardID(2, 1)
 #define N3 ShardID(3, 1)
 #define N4 ShardID(4, 1)
-
-class MockFileEpochStore : public FileEpochStore {
- public:
-  explicit MockFileEpochStore(
-      std::string path,
-      const std::shared_ptr<UpdateableNodesConfiguration>& config)
-      : FileEpochStore(path, RequestExecutor(nullptr), folly::none, config) {}
-
- protected:
-  void postCompletionMetaData(
-      EpochStore::CompletionMetaData cf,
-      Status status,
-      logid_t log_id,
-      std::unique_ptr<EpochMetaData> metadata = nullptr,
-      std::unique_ptr<EpochStoreMetaProperties> meta_prop = nullptr) override {
-    cf(status, log_id, std::move(metadata), std::move(meta_prop));
-  }
-  void postCompletionLCE(EpochStore::CompletionLCE cf,
-                         Status status,
-                         logid_t log_id,
-                         epoch_t epoch,
-                         TailRecord tail_record) override {
-    cf(status, log_id, epoch, tail_record);
-  }
-};
 
 class FileEpochStoreTest : public ::testing::Test {
  public:
@@ -68,8 +44,11 @@ class FileEpochStoreTest : public ::testing::Test {
     auto selector = NodeSetSelectorFactory::create(NodeSetSelectorType::RANDOM);
     auto config = cluster_config_->get();
 
-    store_ = std::make_unique<MockFileEpochStore>(
+    poster_ = std::make_unique<InlineRequestPoster>();
+    store_ = std::make_unique<FileEpochStore>(
         temp_dir_->path().string(),
+        RequestExecutor(poster_.get()),
+        folly::none,
         cluster_config_->updateableNodesConfiguration());
 
     int rv = store_->provisionMetaDataLogs(
@@ -88,8 +67,9 @@ class FileEpochStoreTest : public ::testing::Test {
   std::unique_ptr<TemporaryDirectory> temp_dir_;
 
  public:
+  std::unique_ptr<RequestPoster> poster_;
   std::shared_ptr<UpdateableConfig> cluster_config_;
-  std::unique_ptr<MockFileEpochStore> store_;
+  std::unique_ptr<FileEpochStore> store_;
 };
 
 TEST_F(FileEpochStoreTest, NextEpochWithMetaData) {

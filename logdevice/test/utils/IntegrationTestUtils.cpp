@@ -52,6 +52,7 @@
 #include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/common/plugin/SequencerLocatorFactory.h"
+#include "logdevice/common/test/InlineRequestPoster.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/include/Client.h"
 #include "logdevice/include/ClientSettings.h"
@@ -2771,39 +2772,13 @@ Cluster::createClient(std::chrono::milliseconds timeout,
   return client;
 }
 
-namespace {
-class IntegrationTestFileEpochStore : public FileEpochStore {
- public:
-  explicit IntegrationTestFileEpochStore(
-      std::string path,
-      const std::shared_ptr<UpdateableNodesConfiguration>& config)
-      : FileEpochStore(std::move(path),
-                       RequestExecutor(nullptr),
-                       folly::none,
-                       config) {}
-
- protected:
-  void postCompletionMetaData(
-      EpochStore::CompletionMetaData cf,
-      Status status,
-      logid_t log_id,
-      std::unique_ptr<EpochMetaData> metadata = nullptr,
-      std::unique_ptr<EpochStoreMetaProperties> meta_props = nullptr) override {
-    cf(status, log_id, std::move(metadata), std::move(meta_props));
-  }
-  void postCompletionLCE(EpochStore::CompletionLCE cf,
-                         Status status,
-                         logid_t log_id,
-                         epoch_t epoch,
-                         TailRecord tail_record) override {
-    cf(status, log_id, epoch, tail_record);
-  }
-};
-} // namespace
-
 std::unique_ptr<EpochStore> Cluster::createEpochStore() {
-  return std::make_unique<IntegrationTestFileEpochStore>(
-      epoch_store_path_, getConfig()->updateableNodesConfiguration());
+  static InlineRequestPoster inline_request_poster{};
+  return std::make_unique<FileEpochStore>(
+      epoch_store_path_,
+      RequestExecutor(&inline_request_poster),
+      folly::none,
+      getConfig()->updateableNodesConfiguration());
 }
 
 void Cluster::setStartingEpoch(logid_t log_id,
