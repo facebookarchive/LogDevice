@@ -33,6 +33,17 @@ namespace facebook { namespace logdevice {
  */
 struct EpochStoreMetaProperties {
   folly::Optional<NodeID> last_writer_node_id;
+
+  bool operator==(const EpochStoreMetaProperties& rhs) const {
+    return last_writer_node_id == rhs.last_writer_node_id;
+  }
+
+  std::string toString() const {
+    return folly::sformat("[WriterID: {}]",
+                          last_writer_node_id.has_value()
+                              ? last_writer_node_id->toString()
+                              : "none");
+  }
 };
 
 class EpochStore {
