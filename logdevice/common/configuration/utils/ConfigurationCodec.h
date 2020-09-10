@@ -97,12 +97,14 @@ class ConfigurationCodec {
   static_assert(sizeof(ConfigurationVersionType) == 8,
                 "ConfigurationVersionType must be 64 bit");
 
-  static_assert(sizeof(thrift::ConfigurationCodecHeader::config_version) ==
-                    sizeof(ConfigurationVersionType),
-                "");
-  static_assert(sizeof(thrift::ConfigurationCodecHeader::proto_version) ==
-                    sizeof(ProtocolVersion),
-                "");
+  static_assert(
+      sizeof(*thrift::ConfigurationCodecHeader().config_version_ref()) ==
+          sizeof(ConfigurationVersionType),
+      "");
+  static_assert(
+      sizeof(*thrift::ConfigurationCodecHeader().proto_version_ref()) ==
+          sizeof(ProtocolVersion),
+      "");
 };
 
 }}} // namespace facebook::logdevice::configuration
