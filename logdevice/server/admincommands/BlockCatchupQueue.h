@@ -96,7 +96,7 @@ class BlockCatchupQueue : public AdminCommand {
       }
     }
 
-    auto fn = [&](Connection& s) {
+    auto fn = [&](const Connection& s) {
       auto sockaddr = s.peerSockaddr();
       if (!sockaddr.getSocketAddress().isFamilyInet() ||
           !s.peer_name_.isClientAddress() || s.peer_node_id_.isNodeID()) {
@@ -110,11 +110,11 @@ class BlockCatchupQueue : public AdminCommand {
       w->serverReadStreams().blockUnblockClient(cid, type_ == "on");
     };
 
-    std::function<void(Connection&)> fn_ = fn;
+    std::function<void(const Connection&)> fn_ = fn;
 
     run_on_all_workers(server_->getProcessor(), [&]() {
       auto* worker = Worker::onThisThread();
-      worker->sender().forAllClientConnections(fn_);
+      worker->sender().forEachConnection(fn_);
       return true;
     });
 

@@ -1496,12 +1496,6 @@ Sender::getSocketToken(const ClientID cid) const {
   return pos->second->getSocketToken();
 }
 
-void Sender::forAllClientConnections(std::function<void(Connection&)> fn) {
-  for (auto& it : impl_->client_conns_) {
-    fn(*it.second);
-  }
-}
-
 void Sender::cleanupConnections() {
   size_t num_sockets = 0, sockets_closed = 0;
   size_t sock_stalled = 0, sock_active = 0;

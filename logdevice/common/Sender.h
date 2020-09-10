@@ -790,8 +790,6 @@ class Sender : public SenderBase {
 
   void setClientLocation(const ClientID& cid, const std::string& location);
 
-  void forAllClientConnections(std::function<void(Connection&)> fn);
-
  private:
   // Worker owning this Sender
   Worker* worker_;

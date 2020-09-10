@@ -761,7 +761,10 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled) {
     sem = Semaphore();
     srv_w->add([&]() {
       auto* worker = Worker::onThisThread();
-      worker->sender().forAllClientConnections([&](Connection& c) {
+      worker->sender().forEachConnection([&](const Connection& c) {
+        if (!c.peer_name_.isClientAddress()) {
+          return;
+        }
         ClientID cid = c.peer_name_.asClientID();
         bool h = c.isHandshaken();
         all_handshaken &= h;
