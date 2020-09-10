@@ -88,7 +88,7 @@ bool LDAdmin::run() {
       std::make_unique<thrift::AdminAPIAsyncClient>(std::move(channel));
 
   thrift::AdminCommandRequest req;
-  req.request = folly::join(" ", commands_);
+  *req.request_ref() = folly::join(" ", commands_);
 
   apache::thrift::RpcOptions rpc_options;
   rpc_options.setTimeout(std::chrono::seconds(timeout_sec_));
@@ -100,7 +100,7 @@ bool LDAdmin::run() {
     std::cerr << e.what() << std::endl;
     return false;
   }
-  std::cout << resp.response << std::endl;
+  std::cout << *resp.response_ref() << std::endl;
   return true;
 }
 

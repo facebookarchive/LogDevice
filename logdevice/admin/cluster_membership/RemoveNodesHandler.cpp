@@ -104,17 +104,17 @@ RemoveNodesHandler::checkPreconditions(
   thrift::ClusterMembershipOperationFailed failure;
   for (const auto& idx : node_idxs) {
     if (auto fail = check_is_dead(cluster_state, idx); fail.has_value()) {
-      failure.failed_nodes.push_back(std::move(fail).value());
+      failure.failed_nodes_ref()->push_back(std::move(fail).value());
       continue;
     }
 
     if (auto fail = check_is_disabled(nodes_configuration, idx);
         fail.has_value()) {
-      failure.failed_nodes.push_back(std::move(fail).value());
+      failure.failed_nodes_ref()->push_back(std::move(fail).value());
       continue;
     }
   }
-  if (failure.failed_nodes.empty()) {
+  if (failure.failed_nodes_ref()->empty()) {
     return folly::none;
   }
   return failure;

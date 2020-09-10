@@ -262,7 +262,7 @@ TEST(APIUtilsTest, ExpandMaintenances2) {
     auto output = APIUtils::expandMaintenances(request, nodes_config);
     ASSERT_TRUE(output.hasValue());
     ASSERT_EQ(output.value().size(), 1);
-    ASSERT_TRUE(output.value().front().sequencer_nodes.empty());
+    ASSERT_TRUE(output.value().front().sequencer_nodes_ref()->empty());
   }
   {
     // make sure we ignore a node with a wrong role (2)
@@ -271,7 +271,7 @@ TEST(APIUtilsTest, ExpandMaintenances2) {
     auto output = APIUtils::expandMaintenances(request, nodes_config);
     ASSERT_TRUE(output.hasValue());
     ASSERT_EQ(output.value().size(), 1);
-    ASSERT_TRUE(output.value().front().shards.empty());
+    ASSERT_TRUE(output.value().front().shards_ref()->empty());
   }
 }
 

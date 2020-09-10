@@ -614,7 +614,7 @@ thrift::MaintenanceProgress MaintenanceManager::getMaintenanceProgressInternal(
   // Let's check shards
   for (const auto& shard : def.get_shards()) {
     ShardID ld_shard{
-        shard.node.node_index_ref().value(), shard.get_shard_index()};
+        shard.node_ref()->node_index_ref().value(), shard.get_shard_index()};
     auto op_state = getShardOperationalStateInternal(ld_shard);
     if (op_state.hasError()) {
       // We cannot determine the current operational state of this shard, in

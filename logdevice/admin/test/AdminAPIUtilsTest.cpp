@@ -240,9 +240,9 @@ TEST(AdminAPIUtilsTest, FillNodeConfigPopulatesAllFields) {
   expected.set_location_per_scope(
       toThrift<thrift::Location>(folly::make_optional(kTestNodeLocation)));
 
-  expected.roles.emplace(thrift::Role::STORAGE);
-  expected.roles.emplace(thrift::Role::SEQUENCER);
-  expected.tags.insert(tagMap.begin(), tagMap.end());
+  expected.roles_ref()->emplace(thrift::Role::STORAGE);
+  expected.roles_ref()->emplace(thrift::Role::SEQUENCER);
+  expected.tags_ref()->insert(tagMap.begin(), tagMap.end());
 
   // Test
   thrift::NodeConfig actual;

@@ -32,13 +32,13 @@ UpdateNodesHandler::buildNodesConfigurationUpdates(
     auto maybe_update = buildUpdateFromNodeConfig(
         update_result.update, req, nodes_configuration);
     if (maybe_update.hasError()) {
-      failures.failed_nodes.push_back(std::move(maybe_update).error());
+      failures.failed_nodes_ref()->push_back(std::move(maybe_update).error());
     } else {
       update_result.to_be_updated.push_back(std::move(maybe_update).value());
     }
   }
 
-  if (!failures.failed_nodes.empty()) {
+  if (!failures.failed_nodes_ref()->empty()) {
     return folly::makeUnexpected(std::move(failures));
   }
 
@@ -51,29 +51,30 @@ UpdateNodesHandler::buildUpdateFromNodeConfig(
     const thrift::UpdateSingleNodeRequest& req,
     const NodesConfiguration& nodes_configuration) const {
   auto maybe_node_index =
-      findNodeIndex(req.node_to_be_updated, nodes_configuration);
+      findNodeIndex(*req.node_to_be_updated_ref(), nodes_configuration);
 
   if (!maybe_node_index.has_value()) {
     return folly::makeUnexpected(buildNodeFailure(
-        req.node_to_be_updated,
+        *req.node_to_be_updated_ref(),
         logdevice::thrift::ClusterMembershipFailureReason::NO_MATCH_IN_CONFIG,
         "Couldn't find matches in config"));
   }
 
   auto node_index = maybe_node_index.value();
 
-  if (node_index != req.new_config.node_index) {
+  if (node_index != *req.new_config_ref()->node_index_ref()) {
     return folly::makeUnexpected(buildNodeFailure(
-        req.node_to_be_updated,
+        *req.node_to_be_updated_ref(),
         logdevice::thrift::ClusterMembershipFailureReason::
             INVALID_REQUEST_NODES_CONFIG,
         folly::sformat("Matched node's index (N{}), doesn't match the index in "
                        "the update request: {}",
                        node_index,
-                       req.new_config.node_index)));
+                       *req.new_config_ref()->node_index_ref())));
   }
 
-  auto maybe_update_builder = nodeUpdateBuilderFromNodeConfig(req.new_config);
+  auto maybe_update_builder =
+      nodeUpdateBuilderFromNodeConfig(*req.new_config_ref());
   if (maybe_update_builder.hasError()) {
     return folly::makeUnexpected(std::move(maybe_update_builder).error());
   }

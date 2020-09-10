@@ -90,11 +90,11 @@ thrift::StorageMembership MembershipThriftConverter::toThrift(
 ShardState
 MembershipThriftConverter::fromThrift(const thrift::ShardState& shard_state) {
   StorageState storage_state =
-      static_cast<StorageState>(shard_state.storage_state);
-  StorageStateFlags::Type flags = shard_state.flags;
+      static_cast<StorageState>(*shard_state.storage_state_ref());
+  StorageStateFlags::Type flags = *shard_state.flags_ref();
   MetaDataStorageState metadata_state =
-      static_cast<MetaDataStorageState>(shard_state.metadata_state);
-  MembershipVersion::Type since_version{shard_state.since_version};
+      static_cast<MetaDataStorageState>(*shard_state.metadata_state_ref());
+  MembershipVersion::Type since_version{*shard_state.since_version_ref()};
   return ShardState{storage_state,
                     flags,
                     metadata_state,
@@ -106,7 +106,7 @@ MembershipThriftConverter::fromThrift(const thrift::ShardState& shard_state) {
 std::shared_ptr<StorageMembership> MembershipThriftConverter::fromThrift(
     const thrift::StorageMembership& storage_membership) {
   MembershipThriftConverter::ProtocolVersion pv =
-      storage_membership.proto_version;
+      *storage_membership.proto_version_ref();
   if (pv > CURRENT_PROTO_VERSION) {
     RATELIMIT_ERROR(
         std::chrono::seconds(10),
@@ -122,20 +122,20 @@ std::shared_ptr<StorageMembership> MembershipThriftConverter::fromThrift(
 
   auto result = std::make_shared<StorageMembership>();
   result->version_ =
-      MembershipVersion::Type(storage_membership.membership_version);
+      MembershipVersion::Type(*storage_membership.membership_version_ref());
 
-  for (const auto& state : storage_membership.node_states) {
+  for (const auto& state : *storage_membership.node_states_ref()) {
     node_index_t node = state.first;
     auto shard_states = state.second;
     for (const auto& shard_state : shard_states) {
       result->setShardState(
-          ShardID(node, shard_state.shard_idx), fromThrift(shard_state));
+          ShardID(node, *shard_state.shard_idx_ref()), fromThrift(shard_state));
     }
   }
 
-  for (const auto& meta_shard : storage_membership.metadata_shards) {
+  for (const auto& meta_shard : *storage_membership.metadata_shards_ref()) {
     result->metadata_shards_.insert(
-        ShardID(meta_shard.node_idx, meta_shard.shard_idx));
+        ShardID(*meta_shard.node_idx_ref(), *meta_shard.shard_idx_ref()));
   }
   result->bootstrapping_ = storage_membership.get_bootstrapping();
 
@@ -171,7 +171,7 @@ thrift::SequencerMembership MembershipThriftConverter::toThrift(
 std::shared_ptr<SequencerMembership> MembershipThriftConverter::fromThrift(
     const thrift::SequencerMembership& sequencer_membership) {
   MembershipThriftConverter::ProtocolVersion pv =
-      sequencer_membership.proto_version;
+      *sequencer_membership.proto_version_ref();
   if (pv > CURRENT_PROTO_VERSION) {
     RATELIMIT_ERROR(
         std::chrono::seconds(10),
@@ -187,14 +187,15 @@ std::shared_ptr<SequencerMembership> MembershipThriftConverter::fromThrift(
 
   auto result = std::make_shared<SequencerMembership>();
   result->version_ =
-      MembershipVersion::Type(sequencer_membership.membership_version);
+      MembershipVersion::Type(*sequencer_membership.membership_version_ref());
 
-  for (auto const& node_state : sequencer_membership.node_states) {
+  for (auto const& node_state : *sequencer_membership.node_states_ref()) {
     node_index_t node = node_state.first;
-    bool sequencer_enabled = node_state.second.sequencer_enabled;
-    double weight = node_state.second.weight;
+    bool sequencer_enabled = *node_state.second.sequencer_enabled_ref();
+    double weight = *node_state.second.weight_ref();
     result->setNodeState(
-        node, {sequencer_enabled, weight, node_state.second.manual_override});
+        node,
+        {sequencer_enabled, weight, *node_state.second.manual_override_ref()});
   }
   result->bootstrapping_ = sequencer_membership.get_bootstrapping();
 

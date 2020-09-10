@@ -101,24 +101,24 @@ ConfigurationCodec<ConfigurationType,
     return nullptr;
   }
 
-  if (wrapper_ptr->header.proto_version > CURRENT_PROTO_VERSION) {
+  if (*wrapper_ptr->header_ref()->proto_version_ref() > CURRENT_PROTO_VERSION) {
     RATELIMIT_ERROR(
         std::chrono::seconds(10),
         5,
         "Received codec protocol version %u is larger than current "
         "codec protocol version %u. There might be incompatible data, "
         "aborting deserialization",
-        wrapper_ptr->header.proto_version,
+        *wrapper_ptr->header_ref()->proto_version_ref(),
         CURRENT_PROTO_VERSION);
     err = E::NOTSUPPORTED;
     return nullptr;
   }
 
   std::unique_ptr<uint8_t[]> buffer;
-  const auto& serialized_config = wrapper_ptr->serialized_config;
+  const auto& serialized_config = *wrapper_ptr->serialized_config_ref();
   auto data_blob = Slice::fromString(serialized_config);
 
-  if (wrapper_ptr->header.is_compressed) {
+  if (*wrapper_ptr->header_ref()->is_compressed_ref()) {
     size_t uncompressed_size =
         ZSTD_getDecompressedSize(data_blob.data, data_blob.size);
     if (uncompressed_size == 0) {
@@ -214,7 +214,8 @@ folly::Optional<ConfigurationVersionType> ConfigurationCodec<
     return folly::none;
   }
 
-  return ConfigurationVersionType(wrapper_ptr->header.config_version);
+  return ConfigurationVersionType(
+      *wrapper_ptr->header_ref()->config_version_ref());
 }
 
 }}} // namespace facebook::logdevice::configuration

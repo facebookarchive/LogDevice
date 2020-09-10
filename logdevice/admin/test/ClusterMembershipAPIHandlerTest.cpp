@@ -65,7 +65,7 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
     for (auto idx : idxs) {
       thrift::NodesFilter filter;
       filter.set_node(mkNodeID(node_index_t(idx)));
-      req.node_filters.push_back(std::move(filter));
+      req.node_filters_ref()->push_back(std::move(filter));
     }
     return req;
   }
@@ -129,7 +129,7 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
 
       thrift::AddSingleNodeRequest single;
       single.set_new_config(std::move(cfg));
-      req.new_node_requests.push_back(std::move(single));
+      req.new_node_requests_ref()->push_back(std::move(single));
     }
     return req;
   }
@@ -156,7 +156,7 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
              return std::all_of(resp.get_maintenances().begin(),
                                 resp.get_maintenances().end(),
                                 [](const auto& m) {
-                                  return m.progress ==
+                                  return *m.progress_ref() ==
                                       thrift::MaintenanceProgress::COMPLETED;
                                 });
            }) == 0;
@@ -175,7 +175,7 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
 
                  thrift::NodesStateResponse nc;
                  admin_client->sync_getNodesState(nc, state_req);
-                 return nc.version >= version;
+                 return *nc.version_ref() >= version;
                }) == 0;
   }
 
@@ -196,11 +196,11 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveAliveNodes) {
     admin_client->sync_removeNodes(resp, buildRemoveNodesRequest({1}));
     FAIL() << "RemoveNodes call should fail, but it didn't";
   } catch (const thrift::ClusterMembershipOperationFailed& exception) {
-    ASSERT_EQ(1, exception.failed_nodes.size());
-    auto failed_node = exception.failed_nodes[0];
-    EXPECT_EQ(1, failed_node.node_id.node_index_ref().value_unchecked());
-    EXPECT_EQ(
-        thrift::ClusterMembershipFailureReason::NOT_DEAD, failed_node.reason);
+    ASSERT_EQ(1, exception.failed_nodes_ref()->size());
+    auto failed_node = exception.failed_nodes_ref()[0];
+    EXPECT_EQ(1, failed_node.node_id_ref()->node_index_ref().value_unchecked());
+    EXPECT_EQ(thrift::ClusterMembershipFailureReason::NOT_DEAD,
+              *failed_node.reason_ref());
   }
 }
 
@@ -213,14 +213,14 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveProvisioningNodes) {
     // Add two nodes with 2 shards each. They will get added as PROVISIONING.
     thrift::AddNodesResponse resp;
     admin_client->sync_addNodes(resp, buildAddNodesRequest({100, 101}));
-    ASSERT_EQ(2, resp.added_nodes.size());
+    ASSERT_EQ(2, resp.added_nodes_ref()->size());
     waitUntilMaintenanceManagerHasNCVersion(
-        admin_client, resp.new_nodes_configuration_version);
+        admin_client, *resp.new_nodes_configuration_version_ref());
   }
 
   thrift::RemoveNodesResponse resp;
   admin_client->sync_removeNodes(resp, buildRemoveNodesRequest({100, 101}));
-  EXPECT_EQ(2, resp.removed_nodes.size());
+  EXPECT_EQ(2, resp.removed_nodes_ref()->size());
 }
 
 TEST_F(ClusterMemebershipAPIIntegrationTest, TestApplyDrainOnProvisioning) {
@@ -232,10 +232,10 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestApplyDrainOnProvisioning) {
     // Add two nodes with 2 shards each. They will get added as PROVISIONING.
     thrift::AddNodesResponse resp;
     admin_client->sync_addNodes(resp, buildAddNodesRequest({100, 101}));
-    ASSERT_EQ(2, resp.added_nodes.size());
+    ASSERT_EQ(2, resp.added_nodes_ref()->size());
 
     waitUntilMaintenanceManagerHasNCVersion(
-        admin_client, resp.new_nodes_configuration_version);
+        admin_client, *resp.new_nodes_configuration_version_ref());
   }
 
   // We didn't provision the shared, let's apply a DRAINED maintenance
@@ -250,7 +250,7 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveNonExistentNode) {
 
   thrift::RemoveNodesResponse resp;
   admin_client->sync_removeNodes(resp, buildRemoveNodesRequest({10}));
-  EXPECT_EQ(0, resp.removed_nodes.size());
+  EXPECT_EQ(0, resp.removed_nodes_ref()->size());
 }
 
 TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveEnabledNodes) {
@@ -262,11 +262,11 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveEnabledNodes) {
     admin_client->sync_removeNodes(resp, buildRemoveNodesRequest({1}));
     FAIL() << "RemoveNodes call should fail, but it didn't";
   } catch (const thrift::ClusterMembershipOperationFailed& exception) {
-    ASSERT_EQ(1, exception.failed_nodes.size());
-    auto failed_node = exception.failed_nodes[0];
-    EXPECT_EQ(1, failed_node.node_id.node_index_ref().value_unchecked());
+    ASSERT_EQ(1, exception.failed_nodes_ref()->size());
+    auto failed_node = exception.failed_nodes_ref()[0];
+    EXPECT_EQ(1, failed_node.node_id_ref()->node_index_ref().value_unchecked());
     EXPECT_EQ(thrift::ClusterMembershipFailureReason::NOT_DISABLED,
-              failed_node.reason);
+              *failed_node.reason_ref());
   }
 }
 
@@ -280,28 +280,31 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveNodeSuccess) {
 
   thrift::RemoveNodesResponse resp;
   admin_client->sync_removeNodes(resp, buildRemoveNodesRequest({1}));
-  EXPECT_EQ(1, resp.removed_nodes.size());
-  EXPECT_EQ(1, resp.removed_nodes[0].node_index_ref().value_unchecked());
+  EXPECT_EQ(1, resp.removed_nodes_ref()->size());
+  EXPECT_EQ(1, resp.removed_nodes_ref()[0].node_index_ref().value_unchecked());
 
   waitUntilMaintenanceManagerHasNCVersion(
-      admin_client, resp.new_nodes_configuration_version);
+      admin_client, *resp.new_nodes_configuration_version_ref());
 
   thrift::NodesConfigResponse nodes_config;
   admin_client->sync_getNodesConfig(nodes_config, thrift::NodesFilter{});
-  EXPECT_EQ(3, nodes_config.nodes.size());
+  EXPECT_EQ(3, nodes_config.nodes_ref()->size());
 }
 
 MATCHER_P2(NodeConfigEq, expected_idx, req, "") {
-  return expected_idx == arg.node_index && req.name == arg.name &&
-      req.data_address == arg.data_address &&
+  return expected_idx == *arg.node_index_ref() &&
+      *req.name_ref() == *arg.name_ref() &&
+      *req.data_address_ref() == *arg.data_address_ref() &&
       req.other_addresses_ref() == arg.other_addresses_ref() &&
-      req.location_ref() == arg.location_ref() && req.roles == arg.roles &&
-      req.tags == arg.tags && req.sequencer_ref() == arg.sequencer_ref() &&
+      req.location_ref() == arg.location_ref() &&
+      *req.roles_ref() == *arg.roles_ref() &&
+      *req.tags_ref() == *arg.tags_ref() &&
+      req.sequencer_ref() == arg.sequencer_ref() &&
       req.storage_ref() == arg.storage_ref();
 };
 
 MATCHER_P2(SequencerStateEq, expected_idx, req, "") {
-  return expected_idx == arg.node_index && arg.sequencer_state_ref() &&
+  return expected_idx == *arg.node_index_ref() && arg.sequencer_state_ref() &&
       arg.sequencer_state_ref().value().get_state() == req;
 };
 
@@ -313,33 +316,34 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestAddNodeSuccess) {
 
   thrift::AddNodesRequest req = buildAddNodesRequest({10, 50});
   // Let the admin server allocate the NodeID for the second node for us
-  req.new_node_requests[1].new_config.set_node_index(
+  req.new_node_requests_ref()[1].new_config_ref()->set_node_index(
       thrift::cluster_membership_constants::ANY_NODE_IDX());
   thrift::AddNodesResponse resp;
 
   admin_client->sync_addNodes(resp, req);
-  EXPECT_EQ(2, resp.added_nodes.size());
-  EXPECT_THAT(resp.added_nodes,
+  EXPECT_EQ(2, resp.added_nodes_ref()->size());
+  EXPECT_THAT(*resp.added_nodes_ref(),
               UnorderedElementsAre(
-                  NodeConfigEq(10, req.new_node_requests[0].new_config),
-                  NodeConfigEq(4, req.new_node_requests[1].new_config)));
+                  NodeConfigEq(10, *req.new_node_requests[0].new_config_ref()),
+                  NodeConfigEq(4, *req.new_node_requests[1].new_config_ref())));
 
   waitUntilMaintenanceManagerHasNCVersion(
-      admin_client, resp.new_nodes_configuration_version);
+      admin_client, *resp.new_nodes_configuration_version_ref());
 
   thrift::NodesConfigResponse nodes_config;
   admin_client->sync_getNodesConfig(nodes_config, thrift::NodesFilter{});
-  EXPECT_EQ(6, nodes_config.nodes.size());
-  EXPECT_THAT(
-      nodes_config.nodes,
-      AllOf(Contains(NodeConfigEq(10, req.new_node_requests[0].new_config)),
-            Contains(NodeConfigEq(4, req.new_node_requests[1].new_config))));
+  EXPECT_EQ(6, nodes_config.nodes_ref()->size());
+  EXPECT_THAT(*nodes_config.nodes_ref(),
+              AllOf(Contains(NodeConfigEq(
+                        10, *req.new_node_requests[0].new_config_ref())),
+                    Contains(NodeConfigEq(
+                        4, *req.new_node_requests[1].new_config_ref()))));
 
   thrift::NodesStateResponse nodes_state;
   admin_client->sync_getNodesState(nodes_state, thrift::NodesStateRequest{});
-  EXPECT_EQ(6, nodes_state.states.size());
+  EXPECT_EQ(6, nodes_state.states_ref()->size());
   EXPECT_THAT(
-      nodes_state.states,
+      *nodes_state.states_ref(),
       AllOf(Contains(SequencerStateEq(10, thrift::SequencingState::DISABLED)),
             Contains(SequencerStateEq(4, thrift::SequencingState::DISABLED))));
 }
@@ -354,19 +358,20 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestAddAlreadyExists) {
 
   thrift::AddNodesRequest req = buildAddNodesRequest({100});
   // Copy the address of an existing node
-  req.new_node_requests[0].new_config.data_address =
-      nodes_config.nodes[0].data_address;
+  *req.new_node_requests[0].new_config_ref()->data_address_ref() =
+      *nodes_config.nodes[0].data_address_ref();
 
   try {
     thrift::AddNodesResponse resp;
     admin_client->sync_addNodes(resp, req);
     FAIL() << "AddNodes call should fail, but it didn't";
   } catch (const thrift::ClusterMembershipOperationFailed& exception) {
-    ASSERT_EQ(1, exception.failed_nodes.size());
-    auto failed_node = exception.failed_nodes[0];
-    EXPECT_EQ(100, failed_node.node_id.node_index_ref().value_unchecked());
+    ASSERT_EQ(1, exception.failed_nodes_ref()->size());
+    auto failed_node = exception.failed_nodes_ref()[0];
+    EXPECT_EQ(
+        100, failed_node.node_id_ref()->node_index_ref().value_unchecked());
     EXPECT_EQ(thrift::ClusterMembershipFailureReason::ALREADY_EXISTS,
-              failed_node.reason);
+              *failed_node.reason_ref());
   }
 }
 
@@ -380,19 +385,19 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestInvalidAddNodesRequest) {
 
   thrift::AddNodesRequest req = buildAddNodesRequest({4});
   // Let's reset the storage the storage config
-  req.new_node_requests[0].new_config.storage_ref().reset();
+  req.new_node_requests_ref()[0].new_config_ref()->storage_ref().reset();
 
   try {
     thrift::AddNodesResponse resp;
     admin_client->sync_addNodes(resp, req);
     FAIL() << "AddNodes call should fail, but it didn't";
   } catch (const thrift::ClusterMembershipOperationFailed& exception) {
-    ASSERT_EQ(1, exception.failed_nodes.size());
-    auto failed_node = exception.failed_nodes[0];
-    EXPECT_EQ(4, failed_node.node_id.node_index_ref().value_unchecked());
+    ASSERT_EQ(1, exception.failed_nodes_ref()->size());
+    auto failed_node = exception.failed_nodes_ref()[0];
+    EXPECT_EQ(4, failed_node.node_id_ref()->node_index_ref().value_unchecked());
     EXPECT_EQ(
         thrift::ClusterMembershipFailureReason::INVALID_REQUEST_NODES_CONFIG,
-        failed_node.reason);
+        *failed_node.reason_ref());
   }
 }
 
@@ -405,12 +410,12 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateRequest) {
   filter.set_node(mkNodeID(node_index_t(3)));
   thrift::NodesConfigResponse nodes_config;
   admin_client->sync_getNodesConfig(nodes_config, filter);
-  ASSERT_EQ(1, nodes_config.nodes.size());
+  ASSERT_EQ(1, nodes_config.nodes_ref()->size());
 
   // Update N3
-  auto cfg = nodes_config.nodes[0];
+  auto cfg = nodes_config.nodes_ref()[0];
   cfg.set_name("updatedName");
-  cfg.data_address.set_address("/test1");
+  cfg.data_address_ref()->set_address("/test1");
   cfg.other_addresses_ref()->gossip_ref()->set_address("/test2");
   cfg.other_addresses_ref()->ssl_ref()->set_address("/test3");
   cfg.other_addresses_ref()->server_to_server_ref()->set_address("/test4");
@@ -430,15 +435,16 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateRequest) {
 
   thrift::UpdateNodesResponse uresp;
   admin_client->sync_updateNodes(uresp, req);
-  EXPECT_EQ(1, uresp.updated_nodes.size());
-  EXPECT_THAT(uresp.updated_nodes, UnorderedElementsAre(NodeConfigEq(3, cfg)));
+  EXPECT_EQ(1, uresp.updated_nodes_ref()->size());
+  EXPECT_THAT(
+      *uresp.updated_nodes_ref(), UnorderedElementsAre(NodeConfigEq(3, cfg)));
 
   waitUntilMaintenanceManagerHasNCVersion(
-      admin_client, uresp.new_nodes_configuration_version);
+      admin_client, *uresp.new_nodes_configuration_version_ref());
 
   admin_client->sync_getNodesConfig(nodes_config, filter);
-  ASSERT_EQ(1, nodes_config.nodes.size());
-  ASSERT_THAT(nodes_config.nodes[0], NodeConfigEq(3, cfg));
+  ASSERT_EQ(1, nodes_config.nodes_ref()->size());
+  ASSERT_THAT(nodes_config.nodes_ref()[0], NodeConfigEq(3, cfg));
 }
 
 TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateFailure) {
@@ -449,9 +455,9 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateFailure) {
   filter.set_node(mkNodeID(node_index_t(3)));
   thrift::NodesConfigResponse nodes_config;
   admin_client->sync_getNodesConfig(nodes_config, filter);
-  ASSERT_EQ(1, nodes_config.nodes.size());
+  ASSERT_EQ(1, nodes_config.nodes_ref()->size());
 
-  auto cfg = nodes_config.nodes[0];
+  auto cfg = nodes_config.nodes_ref()[0];
   thrift::UpdateSingleNodeRequest updt;
   updt.set_node_to_be_updated(mkNodeID(3));
   updt.set_new_config(cfg);
@@ -464,37 +470,39 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateFailure) {
   {
     // A mismatch in the node's index should fail.
     auto req = request_tpl;
-    req.node_requests[0].set_node_to_be_updated(mkNodeID(2));
+    req.node_requests_ref()[0].set_node_to_be_updated(mkNodeID(2));
 
     try {
       thrift::UpdateNodesResponse resp;
       admin_client->sync_updateNodes(resp, req);
       FAIL() << "UpdateNodes call should fail, but it didn't";
     } catch (const thrift::ClusterMembershipOperationFailed& exception) {
-      ASSERT_EQ(1, exception.failed_nodes.size());
-      auto failed_node = exception.failed_nodes[0];
-      EXPECT_EQ(2, failed_node.node_id.node_index_ref().value_unchecked());
+      ASSERT_EQ(1, exception.failed_nodes_ref()->size());
+      auto failed_node = exception.failed_nodes_ref()[0];
+      EXPECT_EQ(
+          2, failed_node.node_id_ref()->node_index_ref().value_unchecked());
       EXPECT_EQ(
           thrift::ClusterMembershipFailureReason::INVALID_REQUEST_NODES_CONFIG,
-          failed_node.reason);
+          *failed_node.reason_ref());
     }
   }
 
   {
     // Trying to update a node that doesn't exist should fail
     auto req = request_tpl;
-    req.node_requests[0].set_node_to_be_updated(mkNodeID(20));
+    req.node_requests_ref()[0].set_node_to_be_updated(mkNodeID(20));
 
     try {
       thrift::UpdateNodesResponse resp;
       admin_client->sync_updateNodes(resp, req);
       FAIL() << "UpdateNodes call should fail, but it didn't";
     } catch (const thrift::ClusterMembershipOperationFailed& exception) {
-      ASSERT_EQ(1, exception.failed_nodes.size());
-      auto failed_node = exception.failed_nodes[0];
-      EXPECT_EQ(20, failed_node.node_id.node_index_ref().value_unchecked());
+      ASSERT_EQ(1, exception.failed_nodes_ref()->size());
+      auto failed_node = exception.failed_nodes_ref()[0];
+      EXPECT_EQ(
+          20, failed_node.node_id_ref()->node_index_ref().value_unchecked());
       EXPECT_EQ(thrift::ClusterMembershipFailureReason::NO_MATCH_IN_CONFIG,
-                failed_node.reason);
+                *failed_node.reason_ref());
     }
   }
 
@@ -502,7 +510,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateFailure) {
     // Trying to update an immutable attribute (e.g location) will fail with an
     // NCM error.
     auto req = request_tpl;
-    req.node_requests[0].new_config.set_location("FRC.FRC.FRC.FRC.FRC");
+    req.node_requests_ref()[0].new_config_ref()->set_location(
+        "FRC.FRC.FRC.FRC.FRC");
 
     try {
       thrift::UpdateNodesResponse resp;
@@ -524,10 +533,10 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, MarkShardsAsProvisionedSuccess) {
     // Add two nodes with 2 shards each. They will get added as PROVISIONING.
     thrift::AddNodesResponse resp;
     admin_client->sync_addNodes(resp, buildAddNodesRequest({100, 101}));
-    ASSERT_EQ(2, resp.added_nodes.size());
+    ASSERT_EQ(2, resp.added_nodes_ref()->size());
 
     waitUntilMaintenanceManagerHasNCVersion(
-        admin_client, resp.new_nodes_configuration_version);
+        admin_client, *resp.new_nodes_configuration_version_ref());
   }
 
   // Mark all N100 shards, and only N101:S0 as provisioned
@@ -541,7 +550,7 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, MarkShardsAsProvisionedSuccess) {
                   mkShardID(100, 0), mkShardID(100, 1), mkShardID(101, 0)));
 
   waitUntilMaintenanceManagerHasNCVersion(
-      admin_client, resp.new_nodes_configuration_version);
+      admin_client, *resp.new_nodes_configuration_version_ref());
 
   auto get_shard_state = [&](const thrift::NodesState& state,
                              thrift::ShardID shard) {
@@ -589,8 +598,9 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, BumpNodeGeneration) {
   thrift::BumpGenerationResponse resp;
   admin_client->sync_bumpNodeGeneration(resp, std::move(req));
 
-  EXPECT_EQ((std::vector<thrift::NodeID>{mkNodeID(1)}), resp.bumped_nodes);
-  auto new_version = resp.new_nodes_configuration_version;
+  EXPECT_EQ(
+      (std::vector<thrift::NodeID>{mkNodeID(1)}), *resp.bumped_nodes_ref());
+  auto new_version = *resp.new_nodes_configuration_version_ref();
 
   // Admin server doesn't expose an API to check node's generation. Let's read
   // it from from the NC directly.

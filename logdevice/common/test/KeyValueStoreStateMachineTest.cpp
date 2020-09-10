@@ -56,9 +56,9 @@ TEST_F(KeyValueStoreStateMachineTest, SerializeDeserializeState) {
   std::string value_1 = "abc";
   std::string value_2 = "cde";
   KeyValueStoreState state;
-  state.store = std::map<std::string, std::string>(
+  *state.store_ref() = std::map<std::string, std::string>(
       {{"customer1", value_1}, {"customer2", value_2}});
-  state.version = 5;
+  *state.version_ref() = 5;
   size_t len = state_machine_->serializeState(state, nullptr, 0);
   void* buf = malloc(len);
   int rv = state_machine_->serializeState(state, buf, len);
@@ -73,8 +73,8 @@ TEST_F(KeyValueStoreStateMachineTest, SerializeDeserializeState) {
 
 TEST_F(KeyValueStoreStateMachineTest, DeserializeDeltaUpdate) {
   UpdateValue update;
-  update.key = "customer1";
-  update.value = "abc";
+  *update.key_ref() = "customer1";
+  *update.value_ref() = "abc";
   KeyValueStoreDelta delta;
   delta.set_update_value(update);
 
@@ -89,7 +89,7 @@ TEST_F(KeyValueStoreStateMachineTest, DeserializeDeltaUpdate) {
 
 TEST_F(KeyValueStoreStateMachineTest, DeserializeDeltaRemove) {
   RemoveValue remove_value;
-  remove_value.key = "customer1";
+  *remove_value.key_ref() = "customer1";
   KeyValueStoreDelta delta;
   delta.set_remove_value(remove_value);
 
@@ -106,14 +106,14 @@ TEST_F(KeyValueStoreStateMachineTest, AppliesDeltaForUpdate) {
   std::string value_1 = "abc";
   std::string value_2 = "def";
   KeyValueStoreState state;
-  state.store = std::map<std::string, std::string>(
+  *state.store_ref() = std::map<std::string, std::string>(
       {{"customer1", value_1}, {"customer2", value_2}});
-  state.version = 5;
+  *state.version_ref() = 5;
 
   std::string value_3 = "ghi";
   UpdateValue update;
-  update.key = "customer1";
-  update.value = value_3;
+  *update.key_ref() = "customer1";
+  *update.value_ref() = value_3;
   KeyValueStoreDelta delta;
   delta.set_update_value(update);
 
@@ -123,19 +123,19 @@ TEST_F(KeyValueStoreStateMachineTest, AppliesDeltaForUpdate) {
   EXPECT_EQ(0, rv);
   EXPECT_EQ("", failure_reason);
 
-  EXPECT_EQ(2, state.store.size());
-  EXPECT_EQ(value_3, state.store["customer1"]);
-  EXPECT_EQ(value_2, state.store["customer2"]);
-  EXPECT_EQ(60, state.version);
+  EXPECT_EQ(2, state.store_ref()->size());
+  EXPECT_EQ(value_3, state.store_ref()["customer1"]);
+  EXPECT_EQ(value_2, state.store_ref()["customer2"]);
+  EXPECT_EQ(60, *state.version_ref());
 }
 
 TEST_F(KeyValueStoreStateMachineTest, AppliesDeltaWrongDeltaType) {
   std::string value_1 = "abc";
   std::string value_2 = "def";
   KeyValueStoreState state;
-  state.store = std::map<std::string, std::string>(
+  *state.store_ref() = std::map<std::string, std::string>(
       {{"customer1", value_1}, {"customer2", value_2}});
-  state.version = 5;
+  *state.version_ref() = 5;
 
   KeyValueStoreDelta delta;
 
@@ -148,6 +148,6 @@ TEST_F(KeyValueStoreStateMachineTest, AppliesDeltaWrongDeltaType) {
 
 TEST_F(KeyValueStoreStateMachineTest, DefaultStateHasVersion) {
   auto default_state = state_machine_->makeDefaultState(50);
-  EXPECT_TRUE(default_state->store.empty());
-  EXPECT_EQ(50, default_state->version);
+  EXPECT_TRUE(default_state->store_ref()->empty());
+  EXPECT_EQ(50, *default_state->version_ref());
 }

@@ -34,9 +34,9 @@ RSMBasedVersionedConfigStore::RSMBasedVersionedConfigStore(
     {
       // It should probably always override the state.
       auto locked_state = state_.wlock();
-      if (version > locked_state->version) {
-        locked_state->store = state.store;
-        locked_state->version = version;
+      if (version > *locked_state->version_ref()) {
+        *locked_state->store_ref() = *state.store_ref();
+        *locked_state->version_ref() = version;
       }
     }
     ready_.store(true);
@@ -84,8 +84,8 @@ void RSMBasedVersionedConfigStore::getConfig(
   std::string value;
   {
     auto locked_state = state_.rlock();
-    auto it = locked_state->store.find(key);
-    if (it == locked_state->store.end()) {
+    auto it = locked_state->store_ref()->find(key);
+    if (it == locked_state->store_ref()->end()) {
       cb(Status::NOTFOUND, "");
       return;
     }
@@ -180,8 +180,8 @@ void RSMBasedVersionedConfigStore::readModifyWriteConfig(
     };
 
     UpdateValue update_value;
-    update_value.key = key;
-    update_value.value = write_value;
+    *update_value.key_ref() = key;
+    *update_value.value_ref() = write_value;
     KeyValueStoreDelta delta;
     delta.set_update_value(update_value);
 
@@ -207,9 +207,9 @@ void RSMBasedVersionedConfigStore::updateStateEntry(const std::string& key,
                                                     lsn_t version) {
   // It should probably always override the state.
   auto locked_state = state_.wlock();
-  if (version > locked_state->version) {
-    locked_state->store[key] = value;
-    locked_state->version = version;
+  if (version > *locked_state->version_ref()) {
+    locked_state->store_ref()[key] = value;
+    *locked_state->version_ref() = version;
   }
 }
 }} // namespace facebook::logdevice

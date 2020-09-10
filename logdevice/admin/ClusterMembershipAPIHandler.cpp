@@ -84,7 +84,7 @@ ClusterMembershipAPIHandler::semifuture_removeNodes(
 
         RemoveNodesHandler handler{};
         auto res = handler.buildNodesConfigurationUpdates(
-            req->node_filters, *nodes_configuration, *cluster_state);
+            *req->node_filters_ref(), *nodes_configuration, *cluster_state);
 
         if (res.hasError()) {
           return folly::makeSemiFuture<
@@ -127,10 +127,10 @@ ClusterMembershipAPIHandler::semifuture_addNodes(
         auto nodes_configuration = processor->getNodesConfiguration();
 
         AddNodesHandler handler{};
-        auto res =
-            handler.buildNodesConfigurationUpdates(req->new_node_requests,
-                                                   *nodes_configuration,
-                                                   NodeIndicesAllocator{});
+        auto res = handler.buildNodesConfigurationUpdates(
+            *req->new_node_requests_ref(),
+            *nodes_configuration,
+            NodeIndicesAllocator{});
 
         if (res.hasError()) {
           return folly::makeSemiFuture<
@@ -150,7 +150,7 @@ ClusterMembershipAPIHandler::semifuture_addNodes(
                   for (const auto& added : added_nodes) {
                     thrift::NodeConfig node_cfg;
                     fillNodeConfig(node_cfg, added, *new_cfg);
-                    resp->added_nodes.push_back(std::move(node_cfg));
+                    resp->added_nodes_ref()->push_back(std::move(node_cfg));
                     resp->set_new_nodes_configuration_version(
                         new_cfg->getVersion().val());
                   }
@@ -199,7 +199,7 @@ ClusterMembershipAPIHandler::semifuture_updateNodes(
                   for (auto updated : updated_nodes) {
                     thrift::NodeConfig node_cfg;
                     fillNodeConfig(node_cfg, updated, *new_cfg);
-                    resp->updated_nodes.push_back(std::move(node_cfg));
+                    resp->updated_nodes_ref()->push_back(std::move(node_cfg));
                     resp->set_new_nodes_configuration_version(
                         new_cfg->getVersion().val());
                   }
@@ -267,7 +267,7 @@ ClusterMembershipAPIHandler::semifuture_bumpNodeGeneration(
 
         BumpNodeGenerationHandler handler{};
         auto bump_result = handler.buildNodesConfigurationUpdates(
-            req->node_filters, *nodes_configuration);
+            *req->node_filters_ref(), *nodes_configuration);
 
         return applyNodesConfigurationUpdates(
                    processor, std::move(bump_result.update))

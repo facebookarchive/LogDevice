@@ -44,7 +44,7 @@ validateDefinition(const MaintenanceDefinition& definition) {
 
   // sequencer_target_state must be set if sequencer_nodes is non-empty
   if (!definition.get_sequencer_nodes().empty() &&
-      definition.sequencer_target_state != SequencingState::DISABLED) {
+      *definition.sequencer_target_state_ref() != SequencingState::DISABLED) {
     return InvalidRequest(
         "sequencer_target_state must be DISABLED if sequencer_nodes is set");
   }
@@ -379,23 +379,23 @@ bool doesMaintenanceMatchFilter(const thrift::MaintenancesFilter& filter,
 void removeNonExistentNodesFromMaintenance(
     thrift::MaintenanceDefinition& maintenance,
     const configuration::nodes::NodesConfiguration& nodes_configuration) {
-  maintenance.shards.erase(
-      std::remove_if(maintenance.shards.begin(),
-                     maintenance.shards.end(),
+  maintenance.shards_ref()->erase(
+      std::remove_if(maintenance.shards_ref()->begin(),
+                     maintenance.shards_ref()->end(),
                      [&](const auto& shard) {
                        return !findNodeIndex(
                                    shard.get_node(), nodes_configuration)
                                    .hasValue();
                      }),
-      maintenance.shards.end());
-  maintenance.sequencer_nodes.erase(
+      maintenance.shards_ref()->end());
+  maintenance.sequencer_nodes_ref()->erase(
       std::remove_if(
-          maintenance.sequencer_nodes.begin(),
-          maintenance.sequencer_nodes.end(),
+          maintenance.sequencer_nodes_ref()->begin(),
+          maintenance.sequencer_nodes_ref()->end(),
           [&](const auto& node) {
             return !findNodeIndex(node, nodes_configuration).hasValue();
           }),
-      maintenance.sequencer_nodes.end());
+      maintenance.sequencer_nodes_ref()->end());
 }
 
 bool isEmptyMaintenance(const thrift::MaintenanceDefinition& maintenance) {

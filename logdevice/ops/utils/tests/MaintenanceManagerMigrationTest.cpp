@@ -111,11 +111,11 @@ TEST_F(MaintenanceManagerMigrationTest, Migration) {
     admin_client->sync_getMaintenances(resp, filter);
     auto output = resp.get_maintenances();
     ASSERT_EQ(2, output.size());
-    ASSERT_EQ(output[0].user, maintenance::INTERNAL_USER);
-    ASSERT_EQ(output[1].user, maintenance::INTERNAL_USER);
+    ASSERT_EQ(*output[0].user_ref(), maintenance::INTERNAL_USER);
+    ASSERT_EQ(*output[1].user_ref(), maintenance::INTERNAL_USER);
     thrift::ShardSet res;
-    res.push_back(std::move(output[0].shards[0]));
-    res.push_back(std::move(output[1].shards[0]));
+    res.push_back(std::move(output[0].shards_ref()[0]));
+    res.push_back(std::move(output[1].shards_ref()[0]));
     ASSERT_THAT(res, UnorderedElementsAre(mkShardID(1, 0), mkShardID(1, 1)));
   }
 
@@ -156,8 +156,8 @@ TEST_F(MaintenanceManagerMigrationTest, Migration) {
     auto output = resp.get_maintenances();
     ASSERT_EQ(2, output.size());
     thrift::ShardSet res;
-    res.push_back(std::move(output[0].shards[0]));
-    res.push_back(std::move(output[1].shards[0]));
+    res.push_back(std::move(output[0].shards_ref()[0]));
+    res.push_back(std::move(output[1].shards_ref()[0]));
     ASSERT_THAT(res, UnorderedElementsAre(mkShardID(2, 0), mkShardID(2, 1)));
   }
 }

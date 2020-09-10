@@ -103,24 +103,26 @@ void AdminAPIHandler::getSettings(
           .value_or("");
     };
     thrift::Setting s;
-    s.currentValue = get(SettingsUpdater::Source::CURRENT);
-    s.defaultValue = folly::join(" ", setting.second.descriptor.default_value);
+    *s.currentValue_ref() = get(SettingsUpdater::Source::CURRENT);
+    *s.defaultValue_ref() =
+        folly::join(" ", setting.second.descriptor.default_value);
 
     std::string cli = get(SettingsUpdater::Source::CLI);
     std::string config = get(SettingsUpdater::Source::CONFIG);
     std::string admin_cmd = get(SettingsUpdater::Source::ADMIN_OVERRIDE);
 
     if (!cli.empty()) {
-      s.sources[thrift::SettingSource::CLI] = std::move(cli);
+      s.sources_ref()[thrift::SettingSource::CLI] = std::move(cli);
     }
     if (!config.empty()) {
-      s.sources[thrift::SettingSource::CONFIG] = std::move(config);
+      s.sources_ref()[thrift::SettingSource::CONFIG] = std::move(config);
     }
     if (!admin_cmd.empty()) {
-      s.sources[thrift::SettingSource::ADMIN_OVERRIDE] = std::move(admin_cmd);
+      s.sources_ref()[thrift::SettingSource::ADMIN_OVERRIDE] =
+          std::move(admin_cmd);
     }
 
-    response.settings[setting.first] = std::move(s);
+    response.settings_ref()[setting.first] = std::move(s);
   }
 }
 
@@ -131,20 +133,21 @@ logdevice::AdminAPIHandler::semifuture_applySettingOverride(
   auto future = p.getSemiFuture();
 
   // Validate request
-  if (request->ttl_seconds <= 0) {
+  if (*request->ttl_seconds_ref() <= 0) {
     p.setException(thrift::InvalidRequest("TTL must be > 0 seconds"));
     return future;
   }
 
   try {
     // Apply the temporary setting
-    settings_updater_->setFromAdminCmd(request->name, request->value);
+    settings_updater_->setFromAdminCmd(
+        *request->name_ref(), *request->value_ref());
 
     // Post a request to unset the setting after ttl expires.
     // If the request fails, do nothing
-    auto ttl = std::chrono::seconds(request->ttl_seconds);
+    auto ttl = std::chrono::seconds(*request->ttl_seconds_ref());
     std::unique_ptr<Request> req = std::make_unique<SettingOverrideTTLRequest>(
-        ttl, request->name, settings_updater_);
+        ttl, *request->name_ref(), settings_updater_);
 
     if (processor_->postImportant(req) != 0) {
       ld_error("Failed to post SettingOverrideTTLRequest, error: %s.",
@@ -152,7 +155,7 @@ logdevice::AdminAPIHandler::semifuture_applySettingOverride(
 
       // We have a problem. Roll back the temporary setting since it will
       // otherwise never get removed.
-      settings_updater_->unsetFromAdminCmd(request->name);
+      settings_updater_->unsetFromAdminCmd(*request->name_ref());
 
       p.setException(thrift::OperationError(
           folly::format("Failed to post SettingOverrideTTLRequest, error: {}",
@@ -177,7 +180,7 @@ AdminAPIHandler::semifuture_removeSettingOverride(
   auto future = p.getSemiFuture();
 
   try {
-    settings_updater_->unsetFromAdminCmd(request->name);
+    settings_updater_->unsetFromAdminCmd(*request->name_ref());
   } catch (const boost::program_options::error& ex) {
     p.setException(
         thrift::InvalidRequest(folly::format("Error: {}", ex.what()).str()));
@@ -371,12 +374,12 @@ void setLogGroupCustomCountersResponse(
       }
     }
     thrift::LogGroupCustomCounter counter;
-    counter.key = static_cast<int16_t>(result.first);
-    counter.val = static_cast<int64_t>(result.second);
+    *counter.key_ref() = static_cast<int16_t>(result.first);
+    *counter.val_ref() = static_cast<int64_t>(result.second);
     results.push_back(counter);
   }
 
-  response.counters[log_group_name] = std::move(results);
+  response.counters_ref()[log_group_name] = std::move(results);
 }
 
 void AdminAPIHandler::getLogGroupCustomCounters(
@@ -391,17 +394,17 @@ void AdminAPIHandler::getLogGroupCustomCounters(
   }
 
   Duration query_interval = std::chrono::seconds(60);
-  if (request->time_period != 0) {
-    query_interval = std::chrono::seconds(request->time_period);
+  if (*request->time_period_ref() != 0) {
+    query_interval = std::chrono::seconds(*request->time_period_ref());
   }
 
   CustomCountersAggregateMap agg =
       doAggregateCustomCounters(stats_holder_, query_interval);
 
-  std::string req_log_group = request->log_group_path;
+  std::string req_log_group = *request->log_group_path_ref();
 
   std::vector<u_int16_t> keys_filter;
-  for (const uint8_t& key : request->keys) {
+  for (const uint8_t& key : *request->keys_ref()) {
     if (key > std::numeric_limits<uint8_t>::max() || key < 0) {
       thrift::InvalidRequest err;
       std::ostringstream error_message;
@@ -496,15 +499,15 @@ void AdminAPIHandler::getLogGroupThroughput(
     }
 
     thrift::LogGroupThroughput lg_throughput;
-    lg_throughput.operation = operation;
+    *lg_throughput.operation_ref() = operation;
 
     const OneGroupResults& results = entry.second;
     std::vector<int64_t> log_results;
     for (auto result : results) {
       log_results.push_back(int64_t(result));
     }
-    lg_throughput.results = std::move(log_results);
-    response.throughput[log_group_name] = std::move(lg_throughput);
+    *lg_throughput.results_ref() = std::move(log_results);
+    response.throughput_ref()[log_group_name] = std::move(lg_throughput);
   }
 }
 }} // namespace facebook::logdevice

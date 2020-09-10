@@ -124,28 +124,28 @@ TEST_F(AdminAPICheckImpactTest, DisableReads) {
   for (auto impact_on_epoch : *response.get_logs_affected()) {
     thrift::ReplicationProperty repl;
     repl[thrift::LocationScope::NODE] = 3;
-    if (impact_on_epoch.log_id == 0) {
+    if (*impact_on_epoch.log_id_ref() == 0) {
       // Metadata Logs.
-      ASSERT_EQ(0, impact_on_epoch.epoch);
-      ASSERT_EQ(repl, impact_on_epoch.replication);
+      ASSERT_EQ(0, *impact_on_epoch.epoch_ref());
+      ASSERT_EQ(repl, *impact_on_epoch.replication_ref());
       ASSERT_THAT(impact_on_epoch.get_impact(),
                   UnorderedElementsAre(
                       thrift::OperationImpact::READ_AVAILABILITY_LOSS,
                       thrift::OperationImpact::WRITE_AVAILABILITY_LOSS));
 
-    } else if (impact_on_epoch.log_id == 4611686018427387903) {
-      ASSERT_EQ(4611686018427387903, impact_on_epoch.log_id);
-      ASSERT_EQ(1, impact_on_epoch.epoch);
-      ASSERT_EQ(repl, impact_on_epoch.replication);
-      ASSERT_EQ(shards, impact_on_epoch.storage_set);
+    } else if (*impact_on_epoch.log_id_ref() == 4611686018427387903) {
+      ASSERT_EQ(4611686018427387903, *impact_on_epoch.log_id_ref());
+      ASSERT_EQ(1, *impact_on_epoch.epoch_ref());
+      ASSERT_EQ(repl, *impact_on_epoch.replication_ref());
+      ASSERT_EQ(shards, *impact_on_epoch.storage_set_ref());
       ASSERT_THAT(
           impact_on_epoch.get_impact(),
           UnorderedElementsAre(thrift::OperationImpact::READ_AVAILABILITY_LOSS,
                                thrift::OperationImpact::REBUILDING_STALL));
-    } else if (impact_on_epoch.log_id == 4611686018427387900) {
-      ASSERT_EQ(1, impact_on_epoch.epoch);
-      ASSERT_EQ(shards, impact_on_epoch.storage_set);
-      ASSERT_EQ(repl, impact_on_epoch.replication);
+    } else if (*impact_on_epoch.log_id_ref() == 4611686018427387900) {
+      ASSERT_EQ(1, *impact_on_epoch.epoch_ref());
+      ASSERT_EQ(shards, *impact_on_epoch.storage_set_ref());
+      ASSERT_EQ(repl, *impact_on_epoch.replication_ref());
       ASSERT_THAT(
           impact_on_epoch.get_impact(),
           UnorderedElementsAre(thrift::OperationImpact::READ_AVAILABILITY_LOSS,

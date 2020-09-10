@@ -33,13 +33,14 @@ AddNodesHandler::buildNodesConfigurationUpdates(
   auto allocated_indices = allocator.allocate(
       *nodes_configuration.getServiceDiscovery(), add_requests.size());
   for (auto& req : add_requests) {
-    if (req.new_config.node_index ==
+    if (*req.new_config_ref()->node_index_ref() ==
         thrift::cluster_membership_constants::ANY_NODE_IDX()) {
       ld_assert(!allocated_indices.empty());
-      req.new_config.set_node_index(allocated_indices.front());
+      req.new_config_ref()->set_node_index(allocated_indices.front());
       allocated_indices.pop_front();
     }
-    addition_result.to_be_added.push_back(req.new_config.node_index);
+    addition_result.to_be_added.push_back(
+        *req.new_config_ref()->node_index_ref());
   }
 
   // Validate the uniquness of the new requests
@@ -52,14 +53,14 @@ AddNodesHandler::buildNodesConfigurationUpdates(
   thrift::ClusterMembershipOperationFailed failures;
   for (const auto& req : add_requests) {
     auto update_error = buildUpdateFromNodeConfig(
-        addition_result.update, req.new_config, nodes_configuration);
+        addition_result.update, *req.new_config_ref(), nodes_configuration);
     if (update_error.has_value()) {
-      failures.failed_nodes.push_back(std::move(update_error).value());
+      failures.failed_nodes_ref()->push_back(std::move(update_error).value());
     } else {
     }
   }
 
-  if (!failures.failed_nodes.empty()) {
+  if (!failures.failed_nodes_ref()->empty()) {
     return folly::makeUnexpected(std::move(failures));
   }
 
@@ -98,33 +99,35 @@ AddNodesHandler::validateUniquness(
 
   thrift::ClusterMembershipOperationFailed failures;
   for (const auto& req : add_requests) {
-    const auto& cfg = req.new_config;
+    const auto& cfg = *req.new_config_ref();
 
-    ld_assert(cfg.node_index >= 0);
-    if (node_idxs.count(cfg.node_index) > 0) {
-      failures.failed_nodes.push_back(make_failure(
-          cfg.node_index, "NodeIndex", std::to_string(cfg.node_index)));
+    ld_assert(*cfg.node_index_ref() >= 0);
+    if (node_idxs.count(*cfg.node_index_ref()) > 0) {
+      failures.failed_nodes_ref()->push_back(
+          make_failure(*cfg.node_index_ref(),
+                       "NodeIndex",
+                       std::to_string(*cfg.node_index_ref())));
       continue;
     }
 
-    if (names.count(cfg.name) > 0) {
-      failures.failed_nodes.push_back(
-          make_failure(cfg.node_index, "Name", cfg.name));
+    if (names.count(*cfg.name_ref()) > 0) {
+      failures.failed_nodes_ref()->push_back(
+          make_failure(*cfg.node_index_ref(), "Name", *cfg.name_ref()));
       continue;
     }
 
-    if (addresses.count(toString(cfg.data_address)) > 0) {
-      failures.failed_nodes.push_back(
-          make_failure(cfg.node_index, "Address", toString(cfg.data_address)));
+    if (addresses.count(toString(*cfg.data_address_ref())) > 0) {
+      failures.failed_nodes_ref()->push_back(make_failure(
+          *cfg.node_index_ref(), "Address", toString(*cfg.data_address_ref())));
       continue;
     }
 
-    node_idxs.insert(cfg.node_index);
-    names.insert(cfg.name);
-    addresses.insert(toString(cfg.data_address));
+    node_idxs.insert(*cfg.node_index_ref());
+    names.insert(*cfg.name_ref());
+    addresses.insert(toString(*cfg.data_address_ref()));
   }
 
-  if (failures.failed_nodes.empty()) {
+  if (failures.failed_nodes_ref()->empty()) {
     return folly::none;
   }
 

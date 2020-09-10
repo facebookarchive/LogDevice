@@ -997,7 +997,7 @@ TEST_F(MaintenanceAPITest, RemoveNodesInMaintenance) {
       return std::all_of(m1_def.get_maintenances().begin(),
                          m1_def.get_maintenances().end(),
                          [](const auto& m) {
-                           return m.progress ==
+                           return *m.progress_ref() ==
                                thrift::MaintenanceProgress::COMPLETED;
                          });
     });
@@ -1036,7 +1036,8 @@ TEST_F(MaintenanceAPITest, RemoveNodesInMaintenance) {
     wait_until("AdminServer's NC picks the removal", [&]() {
       thrift::NodesConfigResponse nodes_config;
       admin_client->sync_getNodesConfig(nodes_config, thrift::NodesFilter{});
-      return nodes_config.version >= resp.new_nodes_configuration_version;
+      return *nodes_config.version_ref() >=
+          *resp.new_nodes_configuration_version_ref();
     });
   }
 

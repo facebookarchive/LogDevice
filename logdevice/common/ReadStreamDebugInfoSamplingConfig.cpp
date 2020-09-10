@@ -92,9 +92,9 @@ bool ReadStreamDebugInfoSamplingConfig::isReadStreamDebugInfoSamplingAllowed(
     return false;
   }
 
-  for (const auto& config : (*locked_configs)->configs) {
-    if (config.csid != csid ||
-        isDeadlineExpired(config.deadline, current_time)) {
+  for (const auto& config : *(*locked_configs)->configs_ref()) {
+    if (*config.csid_ref() != csid ||
+        isDeadlineExpired(*config.deadline_ref(), current_time)) {
       continue;
     }
     return true;

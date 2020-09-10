@@ -1731,7 +1731,7 @@ std::string Node::sendCommand(const std::string& command,
   rpc_options.setTimeout(command_timeout);
 
   thrift::AdminCommandRequest req;
-  req.request = command;
+  *req.request_ref() = command;
 
   thrift::AdminCommandResponse resp;
   try {
@@ -1749,7 +1749,7 @@ std::string Node::sendCommand(const std::string& command,
              e.what());
     return "";
   }
-  std::string response = resp.response;
+  std::string response = *resp.response_ref();
 
   // Strip the trailing END
   if (folly::StringPiece(response).endsWith("END\r\n")) {

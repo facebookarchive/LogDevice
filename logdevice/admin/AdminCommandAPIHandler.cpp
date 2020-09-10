@@ -21,12 +21,13 @@ AdminCommandAPIHandler::semifuture_executeAdminCommand(
   }
 
   return admin_command_handler_(
-             request->request, *getConnectionContext()->getPeerAddress())
+             *request->request_ref(), *getConnectionContext()->getPeerAddress())
       .via(folly::getCPUExecutor().get())
       .thenValue([](auto&& buf) {
         auto response = std::make_unique<thrift::AdminCommandResponse>();
-        response->response = folly::io::Cursor(buf.get()).readFixedString(
-            buf->computeChainDataLength());
+        *response->response_ref() =
+            folly::io::Cursor(buf.get()).readFixedString(
+                buf->computeChainDataLength());
         return response;
       });
 }

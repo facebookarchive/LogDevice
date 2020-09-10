@@ -26,8 +26,8 @@ namespace {
 
 AllReadStreamsDebugConfig buildConfig(std::string csid, int64_t deadline) {
   AllReadStreamsDebugConfig config;
-  config.csid = csid;
-  config.deadline = deadline;
+  *config.csid_ref() = csid;
+  *config.deadline_ref() = deadline;
   return config;
 }
 
@@ -47,7 +47,7 @@ TEST(ReadStreamDebugInfoSamplingConfigTest, Construction) {
   std::shared_ptr<PluginRegistry> plugin_registry = make_test_plugin_registry();
 
   AllReadStreamsDebugConfigs configs;
-  configs.configs.push_back(buildConfig("test-csid", 123));
+  configs.configs_ref()->push_back(buildConfig("test-csid", 123));
   std::string serialized_configs = "data: " +
       ThriftCodec::serialize<apache::thrift::SimpleJSONSerializer>(configs);
 
@@ -66,7 +66,7 @@ TEST(ReadStreamDebugInfoSamplingConfigTest, ExpiredDeadline) {
   std::shared_ptr<PluginRegistry> plugin_registry = make_test_plugin_registry();
 
   AllReadStreamsDebugConfigs configs;
-  configs.configs.push_back(buildConfig("test-csid", 1));
+  configs.configs_ref()->push_back(buildConfig("test-csid", 1));
   std::string serialized_configs = "data: " +
       ThriftCodec::serialize<apache::thrift::SimpleJSONSerializer>(configs);
 
@@ -83,9 +83,9 @@ TEST(ReadStreamDebugInfoSamplingConfigTest, MultipleConfigs) {
   std::shared_ptr<PluginRegistry> plugin_registry = make_test_plugin_registry();
 
   AllReadStreamsDebugConfigs configs;
-  configs.configs.push_back(buildConfig("test-csid", 1));
+  configs.configs_ref()->push_back(buildConfig("test-csid", 1));
 
-  configs.configs.push_back(buildConfig("test-csid1", 123));
+  configs.configs_ref()->push_back(buildConfig("test-csid1", 123));
   std::string serialized_configs = "data: " +
       ThriftCodec::serialize<apache::thrift::SimpleJSONSerializer>(configs);
 

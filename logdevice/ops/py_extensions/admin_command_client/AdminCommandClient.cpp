@@ -60,7 +60,7 @@ AdminCommandClient::asyncSend(
               rpc_options.setTimeout(command_timeout);
 
               thrift::AdminCommandRequest req;
-              req.request = command;
+              *req.request_ref() = command;
 
               return client
                   ->semifuture_executeAdminCommand(rpc_options, std::move(req))
@@ -70,7 +70,7 @@ AdminCommandClient::asyncSend(
                       return AdminCommandClient::Response{
                           "", false, response.exception().what().toStdString()};
                     }
-                    std::string result = response->response;
+                    std::string result = *response->response_ref();
                     // Strip the trailing END
                     if (folly::StringPiece(result).endsWith("END\r\n")) {
                       result.resize(result.size() - 5);

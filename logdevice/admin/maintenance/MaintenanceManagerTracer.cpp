@@ -284,7 +284,7 @@ void MaintenanceManagerTracer::trace(ApplyMaintenanceAPISample sample) {
       trace_sample->addNormalValue(
           "priority", getPriorityStr(sample.added_maintenances.at(0)));
       trace_sample->addIntValue(
-          "ttl_seconds", sample.added_maintenances.at(0).ttl_seconds);
+          "ttl_seconds", *sample.added_maintenances.at(0).ttl_seconds_ref());
     }
 
     trace_sample->addIntValue("error", sample.error ? 1 : 0);

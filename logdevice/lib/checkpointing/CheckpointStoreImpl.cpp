@@ -86,8 +86,8 @@ void CheckpointStoreImpl::getLSN(const std::string& customer_id,
           gcb(Status::BADMSG, LSN_INVALID);
           return;
         }
-        if (value_thrift->log_lsn_map.count(log_id.val())) {
-          auto lsn = value_thrift->log_lsn_map[log_id.val()];
+        if (value_thrift->log_lsn_map_ref()->count(log_id.val())) {
+          auto lsn = value_thrift->log_lsn_map_ref()[log_id.val()];
           gcb(Status::OK, lsn);
         } else {
           gcb(Status::NOTFOUND, lsn_t());
@@ -130,7 +130,7 @@ void CheckpointStoreImpl::updateLSN(const std::string& customer_id,
                                     StatusCallback cb) {
   auto modify_checkpoint = [checkpoints](Checkpoint& checkpoint) {
     for (auto [log_id, lsn] : checkpoints) {
-      checkpoint.log_lsn_map[log_id.val()] = lsn;
+      checkpoint.log_lsn_map_ref()[log_id.val()] = lsn;
     }
   };
   updateCheckpoints(customer_id, std::move(modify_checkpoint), std::move(cb));
@@ -153,7 +153,7 @@ void CheckpointStoreImpl::removeCheckpoints(
     StatusCallback cb) {
   auto modify_checkpoint = [checkpoints](Checkpoint& checkpoint) {
     for (auto log_id : checkpoints) {
-      checkpoint.log_lsn_map.erase(log_id.val());
+      checkpoint.log_lsn_map_ref()->erase(log_id.val());
     }
   };
   updateCheckpoints(customer_id, std::move(modify_checkpoint), std::move(cb));
@@ -162,7 +162,7 @@ void CheckpointStoreImpl::removeCheckpoints(
 void CheckpointStoreImpl::removeAllCheckpoints(const std::string& customer_id,
                                                StatusCallback cb) {
   auto modify_checkpoint = [](Checkpoint& checkpoint) {
-    checkpoint.log_lsn_map.clear();
+    checkpoint.log_lsn_map_ref()->clear();
   };
   // TODO: Remove the whole checkpoint from the VCS.
   updateCheckpoints(customer_id, std::move(modify_checkpoint), std::move(cb));
@@ -204,7 +204,7 @@ void CheckpointStoreImpl::updateCheckpoints(
       }
     }
     modify_checkpoint(*value_thrift);
-    value_thrift->version++;
+    (*value_thrift->version_ref())++;
     auto serialized_thrift =
         ThriftCodec::serialize<BinarySerializer>(*value_thrift);
     return std::make_pair(Status::OK, std::move(serialized_thrift));
@@ -236,7 +236,7 @@ CheckpointStoreImpl::extractVersion(folly::StringPiece value) {
   if (value_thrift == nullptr) {
     return folly::none;
   }
-  return CheckpointStore::Version(value_thrift->version);
+  return CheckpointStore::Version(*value_thrift->version_ref());
 }
 
 std::string

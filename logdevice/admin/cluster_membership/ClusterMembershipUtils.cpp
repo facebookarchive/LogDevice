@@ -17,7 +17,7 @@ namespace cluster_membership {
 
 namespace {
 Sockaddr convert_thrift_address(const logdevice::thrift::SocketAddress& addr) {
-  switch (addr.address_family) {
+  switch (*addr.address_family_ref()) {
     case logdevice::thrift::SocketAddressFamily::INET:
       try {
         return Sockaddr(addr.address_ref().value(), addr.port_ref().value());
@@ -51,8 +51,8 @@ folly::Expected<NodeUpdateBuilder,
 nodeUpdateBuilderFromNodeConfig(const logdevice::thrift::NodeConfig& cfg) {
   NodeUpdateBuilder update_builder;
 
-  update_builder.setNodeIndex(cfg.node_index)
-      .setName(cfg.name)
+  update_builder.setNodeIndex(*cfg.node_index_ref())
+      .setName(*cfg.name_ref())
       .setDefaultDataAddress(
           convert_thrift_address(cfg.data_address_ref().value()));
 
@@ -97,34 +97,35 @@ nodeUpdateBuilderFromNodeConfig(const logdevice::thrift::NodeConfig& cfg) {
     update_builder.setLocation(loc);
   }
 
-  if (cfg.roles.count(logdevice::thrift::Role::SEQUENCER) > 0) {
+  if (cfg.roles_ref()->count(logdevice::thrift::Role::SEQUENCER) > 0) {
     if (!cfg.sequencer_ref().has_value()) {
       return folly::makeUnexpected(make_invalid_nodes_config_request(
-          cfg.node_index, "Missing sequencer config for a sequencer node."));
+          *cfg.node_index_ref(),
+          "Missing sequencer config for a sequencer node."));
     }
     auto seq_cfg = cfg.sequencer_ref().value();
-    update_builder.isSequencerNode().setSequencerWeight(seq_cfg.weight);
+    update_builder.isSequencerNode().setSequencerWeight(*seq_cfg.weight_ref());
   }
 
-  if (cfg.roles.count(logdevice::thrift::Role::STORAGE) > 0) {
+  if (cfg.roles_ref()->count(logdevice::thrift::Role::STORAGE) > 0) {
     if (!cfg.storage_ref().has_value()) {
       return folly::makeUnexpected(make_invalid_nodes_config_request(
-          cfg.node_index, "Missing storage config for a storage node."));
+          *cfg.node_index_ref(), "Missing storage config for a storage node."));
     }
     const auto& storage_cfg = cfg.storage_ref().value();
     update_builder.isStorageNode()
-        .setStorageCapacity(storage_cfg.weight)
-        .setNumShards(storage_cfg.num_shards);
+        .setStorageCapacity(*storage_cfg.weight_ref())
+        .setNumShards(*storage_cfg.num_shards_ref());
   }
 
-  for (const auto& tag : cfg.tags) {
+  for (const auto& tag : *cfg.tags_ref()) {
     update_builder.setTag(tag.first, tag.second);
   }
 
   if (auto validation_result = update_builder.validate();
       validation_result.status != Status::OK) {
     return folly::makeUnexpected(make_invalid_nodes_config_request(
-        cfg.node_index, validation_result.message));
+        *cfg.node_index_ref(), validation_result.message));
   }
 
   return std::move(update_builder);

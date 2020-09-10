@@ -29,7 +29,7 @@ KeyValueStoreStateMachine::KeyValueStoreStateMachine(logid_t delta_log_id,
 std::unique_ptr<KeyValueStoreState>
 KeyValueStoreStateMachine::makeDefaultState(lsn_t version) const {
   auto state = std::make_unique<KeyValueStoreState>();
-  state->version = version;
+  *state->version_ref() = version;
   return state;
 }
 
@@ -66,8 +66,8 @@ int KeyValueStoreStateMachine::applyDelta(const KeyValueStoreDelta& delta,
   auto type = delta.getType();
   switch (type) {
     case KeyValueStoreDelta::Type::update_value: {
-      state.store[delta.get_update_value().key] =
-          delta.get_update_value().value;
+      state.store_ref()[*delta.get_update_value().key_ref()] =
+          *delta.get_update_value().value_ref();
       state.set_version(version);
       return 0;
     }

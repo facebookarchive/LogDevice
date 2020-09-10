@@ -27,7 +27,7 @@ bool match_by_address(const configuration::nodes::NodeServiceDiscovery& node_sd,
   // UNIX
   // Match address on exact path for unix sockets
   if (node_sd.default_client_data_address.isUnixAddress() &&
-      address.address_family == thrift::SocketAddressFamily::UNIX) {
+      *address.address_family_ref() == thrift::SocketAddressFamily::UNIX) {
     if (address.address_ref().has_value()) {
       // match by the address value if it's set.
       return node_sd.default_client_data_address.getPath() ==
@@ -44,7 +44,7 @@ bool match_by_address(const configuration::nodes::NodeServiceDiscovery& node_sd,
   // 1. Address
   // 2. Port
   if (!node_sd.default_client_data_address.isUnixAddress() &&
-      address.address_family == thrift::SocketAddressFamily::INET) {
+      *address.address_family_ref() == thrift::SocketAddressFamily::INET) {
     if (!address.address_ref().has_value()) {
       if (address.port_ref().has_value()) {
         return node_sd.default_client_data_address.port() ==
@@ -210,7 +210,7 @@ void fillNodeConfig(
   out.set_roles(std::move(roles));
   out.set_location(node_sd->locationStr());
   out.set_location_per_scope(toThrift<thrift::Location>(node_sd->location));
-  out.tags.insert(node_sd->tags.begin(), node_sd->tags.end());
+  out.tags_ref()->insert(node_sd->tags.begin(), node_sd->tags.end());
 
   thrift::SocketAddress data_address;
   fillSocketAddress(data_address, node_sd->default_client_data_address);
@@ -393,7 +393,8 @@ ShardSet resolveShardOrNode(
   ShardSet output;
 
   const auto& serv_disc = nodes_configuration.getServiceDiscovery();
-  shard_index_t shard_index = (shard.shard_index < 0) ? -1 : shard.shard_index;
+  shard_index_t shard_index =
+      (*shard.shard_index_ref() < 0) ? -1 : *shard.shard_index_ref();
   shard_size_t num_shards = 1;
   if (!isNodeIDSet(shard.get_node())) {
     throw thrift::InvalidRequest(

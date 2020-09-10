@@ -343,11 +343,11 @@ SafetyCheckScheduler::buildExecutionPlanPerPriority(
       }
     }
 
-    if (maintenance->shard_target_state ==
+    if (*maintenance->shard_target_state_ref() ==
         ShardOperationalState::MAY_DISAPPEAR) {
       may_disappear.push_back(std::move(manifest));
     } else {
-      ld_check(maintenance->shard_target_state ==
+      ld_check(*maintenance->shard_target_state_ref() ==
                ShardOperationalState::DRAINED);
       drained.push_back(std::move(manifest));
     }
