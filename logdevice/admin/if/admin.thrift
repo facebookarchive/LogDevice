@@ -249,7 +249,7 @@ service AdminAPI extends fb303.FacebookService {
        4: exceptions.NotSupported notsupported) (cpp.coroutine);
 
   // *** LogTree specific APIs
-  logtree.LogTreeInfo getLogTreeInfo() (cpp.corotuine);
+  logtree.LogTreeInfo getLogTreeInfo() (cpp.coroutine);
   logtree.ReplicationInfo getReplicationInfo() (cpp.coroutine);
 
   /**
