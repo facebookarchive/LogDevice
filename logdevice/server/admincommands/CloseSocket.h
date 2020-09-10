@@ -96,21 +96,30 @@ class CloseSocket : public AdminCommand {
   void run() override {
     auto cb = [&] {
       Sender& sender = Worker::onThisThread()->sender();
-      int rv;
+      int closed = 0;
+      std::vector<Address> addresses;
       if (all_clients_) {
-        return sender.closeAllClientSockets(E::PEER_CLOSED);
-      }
-      if (address_.isClientAddress()) {
-        rv = sender.closeClientSocket(address_.asClientID(), E::PEER_CLOSED);
+        sender.forEachConnection([&addresses](const Connection& c) {
+          if (c.peer_name_.isClientAddress()) {
+            addresses.push_back(c.peer_name_);
+          }
+        });
       } else {
-        rv = sender.closeServerSocket(address_.asNodeID(), E::PEER_CLOSED);
+        if (address_.valid()) {
+          addresses.push_back(address_);
+        }
       }
-      if (rv == 0) {
-        return 1;
-      } else {
-        ld_check(err == E::NOTFOUND);
-        return 0;
+      for (const auto& address : addresses) {
+        int rv = sender.closeSocket(address, E::PEER_CLOSED);
+        if (rv != 0) {
+          ld_error("Failed to close connection %s due to %s",
+                   address.toString().c_str(),
+                   error_name(err));
+        } else {
+          closed++;
+        }
       }
+      return closed;
     };
 
     int count = 0;

@@ -675,19 +675,6 @@ std::pair<uint32_t, uint32_t> Sender::closeAllSockets() {
   return sockets_closed;
 }
 
-int Sender::closeAllClientSockets(Status reason) {
-  int sockets_closed = 0;
-
-  for (auto& it : impl_->client_conns_) {
-    if (!it.second->isClosed()) {
-      sockets_closed++;
-      it.second->close(reason);
-    }
-  }
-
-  return sockets_closed;
-}
-
 void Sender::shutdownSockets(folly::Executor* executor) {
   Semaphore sem;
   executor->add([&] {

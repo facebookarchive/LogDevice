@@ -413,15 +413,6 @@ class Sender : public SenderBase {
   int closeClientSocket(ClientID cid, Status reason);
 
   /**
-   * Close all client Connections. Used for TESTING.
-   *
-   * @param reason Reason for closing the Connections
-   *
-   * @return number of Connections closed
-   */
-  int closeAllClientSockets(Status reason);
-
-  /**
    * Close all server and clients Connections. Called in
    * case of shutdown as part of force abort procedure if Connections are taking
    * too long to drain all the messages in the output buffer.
