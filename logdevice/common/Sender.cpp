@@ -307,9 +307,9 @@ void Sender::eraseDisconnectedClients() {
     ld_assert(pos != impl_->client_conns_.end());
     ld_assert(pos->second->isClosed());
     ++it;
-    // Check if there are users that still have reference to the Connection. If
-    // yes, wait for the clients to drop the Connection instead of reclaiming it
-    // here.
+    // Check if there are users that still have reference to the Connection.
+    // If yes, wait for the clients to drop the Connection instead of
+    // reclaiming it here.
     if (!pos->second->isZombie()) {
       impl_->client_conns_.erase(pos);
       impl_->client_id_allocator_->releaseClientIdx(cid);
@@ -411,8 +411,8 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
   }
 
   if (!isHandshakeMessage(msg->type_) &&
-      // Return ENOBUFS error Sender's outbuf limit and the Connection's minimum
-      // out buf limit is reached.
+      // Return ENOBUFS error Sender's outbuf limit and the Connection's
+      // minimum out buf limit is reached.
       bytesPendingLimitReached(conn.getPeerType()) &&
       conn.minOutBufLimitReached()) {
     RATELIMIT_WARNING(std::chrono::seconds(1),
@@ -892,8 +892,8 @@ Connection* Sender::initServerConnection(NodeID nid, SocketType sock_type) {
     //     should be.
     // for GOSSIP connection:
     //     create new connection if the existing connection is not SSL but
-    //     ssl_on_gossip_port is true or the existing connection is SSL but the
-    //     ssl_on_gossip_port is false.
+    //     ssl_on_gossip_port is true or the existing connection is SSL but
+    //     the ssl_on_gossip_port is false.
     const bool should_create_new = it->second->isClosed() ||
         (sock_type != SocketType::GOSSIP && !it->second->isSSL() &&
          useSSLWith(nid)) ||
@@ -1253,12 +1253,6 @@ Sender::extractPeerIdentity(const Address& addr) {
 }
 
 /* static */
-Sockaddr Sender::thisThreadSockaddr(const Address& addr) {
-  Worker* w = Worker::onThisThread();
-  return w->sender().getSockaddr(addr);
-}
-
-/* static */
 Sockaddr Sender::sockaddrOrInvalid(const Address& addr) {
   Worker* w = Worker::onThisThread(false);
   if (!w) {
@@ -1369,6 +1363,11 @@ void DisconnectedClientCallback::operator()(Status st, const Address& name) {
 void Sender::noteConfigurationChanged(
     std::shared_ptr<const NodesConfiguration> nodes_configuration) {
   nodes_ = std::move(nodes_configuration);
+  disconnectFromNodesThatChangedAddressOrGeneration();
+}
+
+void Sender::onSettingsUpdated(std::shared_ptr<const Settings> new_settings) {
+  settings_.swap(new_settings);
   disconnectFromNodesThatChangedAddressOrGeneration();
 }
 

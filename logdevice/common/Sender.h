@@ -380,13 +380,6 @@ class Sender : public SenderBase {
   int registerOnSocketClosed(const Address& addr, SocketCallback& cb);
 
   /**
-   * Tells all open Connections to flush output and close, asynchronously.
-   * isClosed() can be used to find out when this operation completes.
-   * Used during shutdown.
-   */
-  void flushOutputAndClose(Status reason);
-
-  /**
    * Close the Connection for this server
    *
    * @param peer   Address for which to close the Connection.
@@ -590,12 +583,6 @@ class Sender : public SenderBase {
   void setPeerNodeID(const Address& addr, NodeID node_id);
 
   /**
-   * @return  getSockaddr() for this thread's Worker.Sender. The calling
-   *          thread must be a Worker thread.
-   */
-  static Sockaddr thisThreadSockaddr(const Address& addr);
-
-  /**
    * @return getSockaddr()  for this thread's worker (if exists), otherwise it
    * returns an INVALID Sockaddr instance. Useful for trace loggers.
    */
@@ -693,7 +680,7 @@ class Sender : public SenderBase {
    *              all Connections managed by this Sender exceeds the limit set
    *              in this Processor's configuration
    */
-  bool bytesPendingLimitReached(const PeerType peer_type) const;
+  bool bytesPendingLimitReached(PeerType peer_type) const;
 
   /**
    * Queue a message for a deferred completion. Used from contexts that
@@ -702,7 +689,7 @@ class Sender : public SenderBase {
   void queueMessageCompletion(std::unique_ptr<Message>,
                               const Address&,
                               Status,
-                              const SteadyTimestamp t);
+                              SteadyTimestamp t);
 
   /**
    * Proxy for Connection::getTcpSendBufSize() for a client Connection.  Returns
@@ -752,12 +739,7 @@ class Sender : public SenderBase {
   void noteConfigurationChanged(
       std::shared_ptr<const configuration::nodes::NodesConfiguration>);
 
-  void onSettingsUpdated(std::shared_ptr<const Settings> new_settings) {
-    settings_.swap(new_settings);
-    disconnectFromNodesThatChangedAddressOrGeneration();
-  }
-
-  void disconnectFromNodesThatChangedAddressOrGeneration();
+  void onSettingsUpdated(std::shared_ptr<const Settings> new_settings);
 
   /**
    * Add a client id to the list of Connections to be erased from
@@ -858,6 +840,15 @@ class Sender : public SenderBase {
   // The location of this node (or client). Used to determine whether to use
   // SSL when connecting.
   const folly::Optional<NodeLocation> my_location_;
+
+  void disconnectFromNodesThatChangedAddressOrGeneration();
+
+  /**
+   * Tells all open Connections to flush output and close, asynchronously.
+   * isClosed() can be used to find out when this operation completes.
+   * Used during shutdown.
+   */
+  void flushOutputAndClose(Status reason);
 
   /**
    * A helper method for sending a message to a connected Connection.
