@@ -7,6 +7,10 @@
  */
 #include "logdevice/common/protocol/Message.h"
 
+#include <memory>
+
+#include <folly/io/IOBuf.h>
+
 #include "logdevice/common/Address.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
@@ -35,6 +39,45 @@ size_t Message::size(uint16_t proto) const {
   ssize_t size = writer.result();
   ld_check(size >= 0);
   return ProtocolHeader::bytesNeeded(type_, proto) + size;
+}
+
+std::unique_ptr<folly::IOBuf> Message::serialize(uint16_t protocol,
+                                                 bool checksum_enabled) const {
+  const bool compute_checksum =
+      ProtocolHeader::needChecksumInHeader(type_, protocol) && checksum_enabled;
+
+  const size_t protohdr_bytes = ProtocolHeader::bytesNeeded(type_, protocol);
+  auto io_buf = folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
+  if (protohdr_bytes > IOBUF_ALLOCATION_UNIT) {
+    ld_check(0);
+    err = E::INTERNAL;
+    return nullptr;
+  }
+  io_buf->advance(protohdr_bytes);
+
+  ProtocolWriter writer(type_, io_buf.get(), protocol);
+
+  serialize(writer);
+  ssize_t bodylen = writer.result();
+  if (bodylen <= 0) { // unlikely
+    RATELIMIT_CRITICAL(std::chrono::seconds(1),
+                       2,
+                       "INTERNAL ERROR: Failed to serialize a message of "
+                       "type %s",
+                       messageTypeNames()[type_].c_str());
+    ld_check(0);
+    err = E::INTERNAL;
+    return nullptr;
+  }
+
+  ProtocolHeader protohdr;
+  protohdr.cksum = compute_checksum ? writer.computeChecksum() : 0;
+  protohdr.type = type_;
+  io_buf->prepend(protohdr_bytes);
+  protohdr.len = io_buf->computeChainDataLength();
+
+  memcpy(static_cast<void*>(io_buf->writableData()), &protohdr, protohdr_bytes);
+  return io_buf;
 }
 
 }} // namespace facebook::logdevice

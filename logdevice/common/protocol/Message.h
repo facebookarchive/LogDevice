@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <limits>
+#include <memory>
 
 #include <folly/Executor.h>
 #include <folly/dynamic.h>
@@ -53,6 +54,21 @@ struct Message {
    * deserialize() will read.
    */
   virtual void serialize(ProtocolWriter&) const = 0;
+  /**
+   * Serializes message to IOBuf with respect to given protocol version.
+   *
+   * @param protocol         Protocol version to comply
+   * @param checksum_enabled Whether checksum should be calculated and attached
+   *                         to message. Passing true does not guarantee
+   *                         checksum (it also depends on protocol version and
+   *                         message type) but passing false will prevent
+   *                         checksumming regaradless of other settings.
+   *
+   * @return pointer to IOBuf containing result or nullptr if serialization
+   *         failed. In case of failure caller should check global error code.
+   */
+  std::unique_ptr<folly::IOBuf> serialize(uint16_t protocol,
+                                          bool checksum_enabled) const;
 
   /**
    * The type of a static factory that constructs a Message from a

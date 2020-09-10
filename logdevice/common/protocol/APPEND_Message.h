@@ -153,6 +153,7 @@ class APPEND_Message : public Message {
   friend class MessageSerializationTest;
   friend class E2ETracingSerializationTest;
   friend class MockStreamAppendRequest;
+  friend class ThriftMessageSerializerTest;
 };
 
 /**

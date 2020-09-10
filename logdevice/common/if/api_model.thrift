@@ -9,7 +9,7 @@
 namespace cpp2 facebook.logdevice.thrift
 
 // Define alias for zero-copy field types
-typedef binary (cpp2.type = "folly::IOBuf") Bytes
+typedef binary (cpp2.type = "std::unique_ptr<folly::IOBuf>") IOBufPtr
 
 /**
  * Wraps message not supporting Thrift serialization into Thrift structure
@@ -18,7 +18,7 @@ struct LegacyMessageWrapper {
   /**
    * Serialized message in folly::IOBuf
    */
-  1: Bytes payload;
+  1: IOBufPtr payload;
 }
 
 /**
@@ -27,14 +27,14 @@ struct LegacyMessageWrapper {
  * as a separate structure and add to the union.
  */
 union Message {
-   1: LegacyMessageWrapper legacyMessage;
+  1: LegacyMessageWrapper legacyMessage;
 }
 
 /**
  * Sent by server as reply to RPC message.
  */
 struct MessageReceipt {
-  // Not used at the moment, reserved for the future use
+// Not used at the moment, reserved for the future use
 }
 
 /**

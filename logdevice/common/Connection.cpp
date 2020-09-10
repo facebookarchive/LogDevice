@@ -873,39 +873,13 @@ bool Connection::isChecksummingEnabled(MessageType msgtype) {
 }
 
 std::unique_ptr<folly::IOBuf> Connection::serializeMessage(const Message& msg) {
-  const bool compute_checksum =
-      ProtocolHeader::needChecksumInHeader(msg.type_, proto_) &&
-      isChecksummingEnabled(msg.type_);
-
-  const size_t protohdr_bytes = ProtocolHeader::bytesNeeded(msg.type_, proto_);
-  auto io_buf = folly::IOBuf::create(IOBUF_ALLOCATION_UNIT);
-  ld_check(protohdr_bytes <= IOBUF_ALLOCATION_UNIT);
-  io_buf->advance(protohdr_bytes);
-
-  ProtocolWriter writer(msg.type_, io_buf.get(), proto_);
-
-  msg.serialize(writer);
-  ssize_t bodylen = writer.result();
-  if (bodylen <= 0) { // unlikely
-    RATELIMIT_CRITICAL(std::chrono::seconds(1),
-                       2,
-                       "INTERNAL ERROR: Failed to serialize a message of "
-                       "type %s into evbuffer",
-                       messageTypeNames()[msg.type_].c_str());
-    ld_check(0);
-    err = E::INTERNAL;
+  auto result = msg.serialize(proto_, isChecksummingEnabled(msg.type_));
+  if (!result) {
+    // The error code is set by serialize
     close(err);
     return nullptr;
   }
-
-  ProtocolHeader protohdr;
-  protohdr.cksum = compute_checksum ? writer.computeChecksum() : 0;
-  protohdr.type = msg.type_;
-  io_buf->prepend(protohdr_bytes);
-  protohdr.len = io_buf->computeChainDataLength();
-
-  memcpy(static_cast<void*>(io_buf->writableData()), &protohdr, protohdr_bytes);
-  return io_buf;
+  return result;
 }
 
 Connection::SendStatus
