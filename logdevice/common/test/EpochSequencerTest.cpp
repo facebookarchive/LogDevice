@@ -29,6 +29,7 @@
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/Stats.h"
+#include "logdevice/common/test/SenderTestProxy.h"
 #include "logdevice/common/test/TestUtil.h"
 
 using namespace facebook::logdevice;

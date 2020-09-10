@@ -10,6 +10,7 @@
 #include <gtest/gtest.h>
 
 #include "logdevice/common/settings/Settings.h"
+#include "logdevice/common/test/SenderTestProxy.h"
 #include "logdevice/common/test/TestUtil.h"
 
 #define N1 ShardID(1, 0)

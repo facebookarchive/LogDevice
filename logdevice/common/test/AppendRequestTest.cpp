@@ -12,13 +12,13 @@
 #include <folly/Memory.h>
 #include <gtest/gtest.h>
 
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/SequencerRouter.h"
 #include "logdevice/common/StaticSequencerLocator.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/APPENDED_Message.h"
 #include "logdevice/common/test/MockSequencerRouter.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"
+#include "logdevice/common/test/SenderTestProxy.h"
 #include "logdevice/common/test/TestUtil.h"
 
 namespace facebook { namespace logdevice {

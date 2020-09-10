@@ -28,6 +28,7 @@
 #include "logdevice/common/protocol/STARTED_Message.h"
 #include "logdevice/common/test/MockBackoffTimer.h"
 #include "logdevice/common/test/MockTimer.h"
+#include "logdevice/common/test/SenderTestProxy.h"
 #include "logdevice/server/EpochRecordCache.h"
 #include "logdevice/server/EpochRecordCacheEntry.h"
 #include "logdevice/server/RecordCacheDependencies.h"

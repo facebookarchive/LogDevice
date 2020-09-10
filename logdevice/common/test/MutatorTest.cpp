@@ -20,6 +20,7 @@
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/test/MockBackoffTimer.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"
+#include "logdevice/common/test/SenderTestProxy.h"
 #include "logdevice/include/Record.h"
 
 namespace facebook { namespace logdevice {

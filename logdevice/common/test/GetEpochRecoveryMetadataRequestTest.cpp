@@ -15,6 +15,7 @@
 #include "logdevice/common/test/MockBackoffTimer.h"
 #include "logdevice/common/test/MockTimer.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"
+#include "logdevice/common/test/SenderTestProxy.h"
 #include "logdevice/common/test/TestUtil.h"
 
 namespace facebook { namespace logdevice {

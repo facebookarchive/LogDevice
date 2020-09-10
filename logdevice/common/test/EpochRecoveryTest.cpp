@@ -22,6 +22,7 @@
 #include "logdevice/common/test/MockBackoffTimer.h"
 #include "logdevice/common/test/MockTimer.h"
 #include "logdevice/common/test/NodesConfigurationTestUtil.h"
+#include "logdevice/common/test/SenderTestProxy.h"
 #include "logdevice/common/test/TestUtil.h"
 
 #define N0 ShardID(0, 0)

@@ -13,6 +13,7 @@
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/protocol/STORE_Message.h"
+#include "logdevice/common/test/SenderTestProxy.h"
 #include "logdevice/common/test/TestUtil.h"
 
 // Shortcuts for writing ShardIDs

@@ -16,7 +16,6 @@
 #include "logdevice/common/LinearCopySetSelector.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/PassThroughCopySetManager.h"
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
@@ -29,6 +28,7 @@
 #include "logdevice/common/protocol/STORE_Message.h"
 #include "logdevice/common/test/CopySetSelectorTestUtil.h"
 #include "logdevice/common/test/NodesConfigurationTestUtil.h"
+#include "logdevice/common/test/SenderTestProxy.h"
 #include "logdevice/common/test/TestUtil.h"
 
 namespace facebook { namespace logdevice {

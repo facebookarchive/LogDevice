@@ -18,13 +18,13 @@
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Semaphore.h"
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/Sequencer.h"
 #include "logdevice/common/SequencerBatching.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/test/SenderTestProxy.h"
 #include "logdevice/common/test/TestUtil.h"
 
 using namespace facebook::logdevice;

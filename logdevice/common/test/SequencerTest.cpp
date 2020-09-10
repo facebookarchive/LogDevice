@@ -20,7 +20,6 @@
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/Processor.h"
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
@@ -28,6 +27,7 @@
 #include "logdevice/common/request_util.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/Stats.h"
+#include "logdevice/common/test/SenderTestProxy.h"
 #include "logdevice/common/test/TestUtil.h"
 
 using namespace facebook::logdevice;

@@ -11,6 +11,7 @@
 
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/test/NodeSetTestUtil.h"
+#include "logdevice/common/test/SenderTestProxy.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/common/types_internal.h"
 

@@ -12,6 +12,7 @@
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
 #include "logdevice/common/NodeSetState.h"
 #include "logdevice/common/protocol/STORE_Message.h"
+#include "logdevice/common/test/SenderTestProxy.h"
 #include "logdevice/common/test/TestUtil.h"
 #include "logdevice/server/rebuilding/RecordRebuildingStore.h"
 
