@@ -8,6 +8,8 @@
 
 #include "logdevice/admin/maintenance/MaintenanceManagerTracer.h"
 
+#include "logdevice/common/MetaDataTracer.h"
+
 using namespace facebook::logdevice::configuration::nodes;
 
 namespace facebook { namespace logdevice { namespace maintenance {
@@ -23,6 +25,25 @@ std::string getNodeNameByIdx(const ServiceDiscoveryConfig& svd,
   auto node_svd = svd.getNodeAttributesPtr(idx);
   return node_svd != nullptr ? node_svd->name
                              : folly::sformat("UNKNOWN({})", idx);
+}
+
+// Helper function to determine the log string for a maintenance operation
+std::string getPriorityStr(const MaintenanceDefinition& maintenance) {
+  if (maintenance.priority_ref().has_value()) {
+    auto priority = maintenance.priority_ref().value();
+    switch (priority) {
+      case MaintenancePriority::IMMINENT:
+        return "imminent";
+      case MaintenancePriority::HIGH:
+        return "high";
+      case MaintenancePriority::MEDIUM:
+        return "medium";
+      case MaintenancePriority::LOW:
+        return "low";
+    }
+  } else {
+    return {};
+  }
 }
 
 // A helper function to convert container of items that have a toString
@@ -258,8 +279,10 @@ void MaintenanceManagerTracer::trace(ApplyMaintenanceAPISample sample) {
 
     // Extra fields for this request
     if (!sample.added_maintenances.empty()) {
-      // Pick the TTL of any of them, they all originated from the same
+      // Pick the TTL/priority of any of them, they all originated from the same
       // maintenance.
+      trace_sample->addNormalValue(
+          "priority", getPriorityStr(sample.added_maintenances.at(0)));
       trace_sample->addIntValue(
           "ttl_seconds", sample.added_maintenances.at(0).ttl_seconds);
     }
@@ -329,6 +352,10 @@ void MaintenanceManagerTracer::trace(ApplyMaintenanceInternalSample sample) {
     // Added maintenances
     populateSampleFromMaintenances(
         *trace_sample, {sample.added_maintenance}, *sample.service_discovery);
+
+    // Add priority
+    trace_sample->addNormalValue(
+        "priority", getPriorityStr(sample.added_maintenance));
 
     // Add reason
     trace_sample->addNormalValue(
