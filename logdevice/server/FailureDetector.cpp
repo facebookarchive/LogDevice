@@ -613,6 +613,7 @@ void FailureDetector::gossip() {
                              now - last_gossip_received_ts_) /
                          settings_->gossip_interval));
       flags |= GOSSIP_Message::LONG_TIME_SINCE_LAST_GOSSIP;
+      STAT_INCR(getStats(), gossips_failed_to_process);
     }
   }
 

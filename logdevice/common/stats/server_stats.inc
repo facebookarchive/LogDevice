@@ -1018,6 +1018,9 @@ STAT_DEFINE(gossips_failed_to_send, SUM)
 // How many times the failure detector failed to send gossip messages to an alive node
 STAT_DEFINE(gossips_failed_to_send_to_alive_nodes, SUM)
 
+// How many times a node didn't process gossips for
+// 'gossip_intervals_without_processing_threshold' intervals.
+STAT_DEFINE(gossips_failed_to_process, SUM)
 
 // Total number of nodes expected to be seen (including self)
 STAT_DEFINE(num_nodes, SUM)
