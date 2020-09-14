@@ -847,7 +847,7 @@ class Appender : public IntrusiveUnorderedMapHook {
   // with non-zero STORE timeout, used for diagnosing append failures
   bool store_timeout_set_{false};
 
-  // Set to NONE or PER_EPOCH if at some point it is decided that this Appender
+  // Set to NONE if at some point it is decided that this Appender
   // should not send a global RELEASE message. This can happen if the Appender
   // is aborted because we called retire() before the record was fully
   // replicated, or if noteAppenderReaped returns false, meaning the Sequencer
@@ -1066,8 +1066,7 @@ class Appender : public IntrusiveUnorderedMapHook {
   virtual bool noteAppenderReaped(FullyReplicated replicated,
                                   lsn_t reaped_lsn,
                                   std::shared_ptr<TailRecord> tail_record,
-                                  epoch_t* last_released_epoch_out,
-                                  bool* lng_changed_out);
+                                  epoch_t* last_released_epoch_out);
   virtual bool epochMetaDataAvailable(epoch_t epoch) const;
 
   virtual void

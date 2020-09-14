@@ -237,7 +237,6 @@ class MockAppender : public Appender {
 
   void onReaped() override {
     epoch_t last_released_epoch;
-    bool lng_changed;
     MockEpochSequencer* mseq =
         dynamic_cast<MockEpochSequencer*>(epoch_sequencer_.get());
     mseq->noteAppenderReaped(
@@ -254,8 +253,7 @@ class MockAppender : public Appender {
                 {}},
             OffsetMap::fromLegacy(0),
             PayloadHolder()),
-        &last_released_epoch,
-        &lng_changed);
+        &last_released_epoch);
   }
 
  private:

@@ -1525,15 +1525,6 @@ int Sequencer::sendReleases(lsn_t lsn,
           release_type_to_string(release_type).c_str(),
           rid.toString().c_str());
 
-  if (release_type == ReleaseType::PER_EPOCH &&
-      !epochMetaDataAvailable(epoch)) {
-    ld_debug("Trying to send per-epoch RELEASE messages, but epoch metadata "
-             "not yet available for record %s",
-             rid.toString().c_str());
-    err = E::AGAIN;
-    return -1;
-  }
-
   auto metadata_map = getMetaDataMap();
   if (metadata_map == nullptr) {
     RATELIMIT_INFO(std::chrono::seconds(10),
@@ -1582,31 +1573,12 @@ int Sequencer::sendReleases(lsn_t lsn,
 }
 
 void Sequencer::sendReleases() {
-  // Load lng_ first to avoid case where lng_ and last_released_ are
-  // concurrently updated to the same lsn, but we could see
-  // last_released_ < lng_ if last_released_ was loaded first. It is okay to
-  // see last_released_ > lng_. In this case, we can safely assume there has
-  // been a concurrent update, and we will want to send a single, global
-  // release message.
-  lsn_t lng = getLastKnownGood();
-  lsn_t last_released = last_released_.load();
-
-  // First send global release message, then possibly send per-epoch release
-  // message. No need to send per-epoch release message if ESN is invalid (no
-  // released records in epoch yet), or global last_released is caught up to
-  // per-epoch lng.
-  bool send_failed = false;
+  auto last_released = last_released_.load();
   if (last_released != LSN_INVALID) {
-    send_failed = (sendReleases(last_released, ReleaseType::GLOBAL) != 0);
-  }
-
-  if (lsn_to_esn(lng) != ESN_INVALID && lng > last_released) {
-    send_failed |= sendReleases(lng, ReleaseType::PER_EPOCH) != 0;
-  }
-
-  if (send_failed) {
-    // At least one send failed. Use PeriodicReleases to resend the message(s).
-    schedulePeriodicReleases();
+    if (!sendReleases(last_released, ReleaseType::GLOBAL)) {
+      // Send failed. Use PeriodicReleases to resend the message(s).
+      schedulePeriodicReleases();
+    }
   }
 }
 
@@ -1635,8 +1607,7 @@ bool Sequencer::epochMetaDataAvailable(epoch_t epoch) const {
   epoch_t metadata_effective_since = metadata->h.effective_since;
   ld_check(metadata_effective_since <= metadata_effective_until);
 
-  // An epoch is safe to read from (and it is thus safe to send per-epoch
-  // RELEASE message for this epoch), if its metadata has been written and the
+  // An epoch is safe to read from, if its metadata has been written and the
   // metadata is available for reads. The "metadata of epoch e" is the unique
   // metadata such that e falls in between the metadata's effective_since and
   // its effective_until.

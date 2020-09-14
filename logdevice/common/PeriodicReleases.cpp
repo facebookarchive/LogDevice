@@ -55,14 +55,7 @@ int PeriodicReleases::sendReleases(Type type) {
 
   ld_spew("Sending Releases for log %lu, Type %d.", getLogID().val_, (int)type);
 
-  // Load lng first to avoid the case where lng and last_released are
-  // concurrently updated to the same lsn, but we could see last_released < lng
-  // if last_released was loaded first. It is okay to see last_released > lng.
-  // In this case, we can safely assume there has been a concurrent update, and
-  // we will want to send a single, global release message.
-  lsn_t lng = getLastKnownGood();
   lsn_t last_released = getLastReleased();
-
   Sequencer::SendReleasesPred pred = nullptr;
   switch (type) {
     case PeriodicReleases::Type::BROADCAST: {
@@ -107,20 +100,11 @@ int PeriodicReleases::sendReleases(Type type) {
 
   ld_check(pred != nullptr);
 
-  // First send global release message to shards that haven't caught up,
-  // then possibly send per-epoch release message to shards that haven't
-  // caught up with per-epoch release. No need to send per-epoch release
-  // message if ESN is invalid (no released records in epoch yet, or feature
-  // disabled), or global last_released is caught up to per-epoch lng.
-
+  // Send global release message to shards that haven't caught up.
   bool send_failed = false;
   if (last_released != LSN_INVALID) {
     send_failed = (sendReleaseToStorageSets(
                        last_released, ReleaseType::GLOBAL, pred) != 0);
-  }
-  if (lsn_to_esn(lng) != ESN_INVALID && lng > last_released) {
-    send_failed |=
-        sendReleaseToStorageSets(lng, ReleaseType::PER_EPOCH, pred) != 0;
   }
 
   return send_failed ? -1 : 0;
@@ -256,9 +240,6 @@ void PeriodicReleases::noteReleaseSuccessful(ShardID shard,
   switch (release_type) {
     case ReleaseType::GLOBAL:
       update_lsn(shard_state->last_released_lsn, released_lsn);
-      break;
-    case ReleaseType::PER_EPOCH:
-      update_lsn(shard_state->lng, released_lsn);
       break;
     default:
       ld_check(false);

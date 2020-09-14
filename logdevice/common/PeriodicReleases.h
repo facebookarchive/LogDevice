@@ -196,12 +196,12 @@ class PeriodicReleases
     const PeriodicReleases::Type type_;
   };
 
-  // Keep track of the highest LSN(s) of both global and per-epoch RELEASEs
-  // successfully sent to a storage shard in the current storage set.
+  // Keep track of the highest LSN of global RELEASE successfully sent
+  // to a storage shard in the current storage set.
   struct PerShardState {
     // global last released lsn
     std::atomic<lsn_t> last_released_lsn;
-    // per-epoch released lsn
+    // last know good lsn
     std::atomic<lsn_t> lng;
 
     explicit PerShardState();

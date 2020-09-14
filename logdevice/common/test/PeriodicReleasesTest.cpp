@@ -218,7 +218,7 @@ TEST_F(PeriodicReleasesTest, Basic) {
   pr_->schedule();
   pr_->timerCallback(nullptr, PeriodicReleases::Type::RETRY);
   CHECK_RELEASE(ReleaseType::GLOBAL, N1, N2);
-  CHECK_RELEASE(ReleaseType::PER_EPOCH, N1, N2);
+  CHECK_NO_RELEASE(ReleaseType::PER_EPOCH);
 }
 
 TEST_F(PeriodicReleasesTest, Reactivation) {

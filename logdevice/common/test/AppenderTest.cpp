@@ -604,22 +604,18 @@ class AppenderTest::MockAppender : public Appender {
   bool noteAppenderReaped(Appender::FullyReplicated replicated,
                           lsn_t reaped_lsn,
                           std::shared_ptr<TailRecord> tail_record,
-                          epoch_t* last_released_epoch_out,
-                          bool* lng_changed_out) override {
+                          epoch_t* last_released_epoch_out) override {
     if (lsn_to_epoch(reaped_lsn) <= test_->preempted_epoch_) {
       err = E::PREEMPTED;
-      *lng_changed_out = false;
       return false;
     }
 
     if (replicated != Appender::FullyReplicated::YES) {
       err = E::ABORTED;
-      *lng_changed_out = false;
       return false;
     }
 
     *last_released_epoch_out = test_->last_released_epoch_;
-    *lng_changed_out = true;
     return true;
   }
 

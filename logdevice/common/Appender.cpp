@@ -1982,13 +1982,12 @@ void Appender::onReaped() {
   auto release_type = static_cast<ReleaseType>(release_type_.load());
   lsn_t lsn = getLSN();
   epoch_t last_released_epoch;
-  bool lng_changed;
   FullyReplicated replicated =
       (release_type == ReleaseType::INVALID ? FullyReplicated::NO
                                             : FullyReplicated::YES);
-  // Check whether last-released LSN and/or LNG changed.
-  bool last_release_changed = noteAppenderReaped(
-      replicated, lsn, tail_record_, &last_released_epoch, &lng_changed);
+  // Check whether last-released LSN changed.
+  bool last_release_changed =
+      noteAppenderReaped(replicated, lsn, tail_record_, &last_released_epoch);
 
   if (last_release_changed) {
     // Last-released LSN changed. Send a global RELEASE message.
@@ -2026,26 +2025,6 @@ void Appender::onReaped() {
                  error_description(err));
         break;
     }
-
-    if (lng_changed) {
-      // we might still be to send per-epoch release messages
-      // Only the LNG changed. Consider sending a per-epoch RELEASE message.
-      if (epochMetaDataAvailable(lsn_to_epoch(lsn))) {
-        // Safe to read epoch. Safe to send per-epoch RELEASE message.
-        ld_spew("Only the LNG changed. Sending per-epoch RELEASE message for "
-                "%s",
-                store_hdr_.rid.toString().c_str());
-
-        // this is the only case we set ReleaseType to be PER_EPOCH;
-        release_type = ReleaseType::PER_EPOCH;
-      } else {
-        // Not safe to read epoch. Do not send a RELEASE message.
-        ld_debug("Not sending RELEASE message for %s because only the LNG "
-                 "changed and epoch does not have metadata available",
-                 store_hdr_.rid.toString().c_str());
-      }
-    }
-
     release_type_.store(static_cast<ReleaseTypeRaw>(release_type));
   }
 
@@ -2182,13 +2161,9 @@ bool Appender::checkNodeSet() const {
 bool Appender::noteAppenderReaped(FullyReplicated replicated,
                                   lsn_t reaped_lsn,
                                   std::shared_ptr<TailRecord> tail_record,
-                                  epoch_t* last_released_epoch_out,
-                                  bool* lng_changed_out) {
-  return epoch_sequencer_->noteAppenderReaped(replicated,
-                                              reaped_lsn,
-                                              std::move(tail_record),
-                                              last_released_epoch_out,
-                                              lng_changed_out);
+                                  epoch_t* last_released_epoch_out) {
+  return epoch_sequencer_->noteAppenderReaped(
+      replicated, reaped_lsn, std::move(tail_record), last_released_epoch_out);
 }
 
 bool Appender::epochMetaDataAvailable(epoch_t epoch) const {
