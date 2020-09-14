@@ -129,9 +129,13 @@ class LDShellContext(context.Context):
 
     async def _fetch_config(self) -> None:
         config = await self.get_config_contents()
+        # pyre-fixme[8]: Attribute has type `None`; used as `IO[bytes]`.
         self._config_file = tempfile.NamedTemporaryFile()
+        # pyre-fixme[16]: `None` has no attribute `write`.
         self._config_file.write(config)
+        # pyre-fixme[16]: `None` has no attribute `flush`.
         self._config_file.flush()
+        # pyre-fixme[16]: `None` has no attribute `name`.
         self._temp_config_path = self._config_file.name
         logging.info("Config downloaded and stored in %s", self._temp_config_path)
 
