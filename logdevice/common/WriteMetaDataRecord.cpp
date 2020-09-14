@@ -213,11 +213,10 @@ void WriteMetaDataRecord::onAppenderRetired(Status st, lsn_t lsn) {
 void WriteMetaDataRecord::onReleaseSentSuccessful(node_index_t node,
                                                   lsn_t released_lsn,
                                                   ReleaseType release_type) {
-  if (release_type == ReleaseType::PER_EPOCH) {
+  if (release_type == ReleaseType::PER_EPOCH_DEPRECATED) {
     // Per-epoch releases currently have no effect here.
     return;
   }
-
   ld_check(Worker::onThisThread()->idx_ == created_on_);
   if (state_ != State::STORED) {
     // we are not expecting releases or have already collected enough releases

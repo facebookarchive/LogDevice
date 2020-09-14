@@ -479,7 +479,7 @@ void StoreStateMachine::execute() {
             seq.toString().c_str());
 
         log_state->purge_coordinator_->onReleaseMessage(
-            message_->header_.rid.lsn(), seq, ReleaseType::GLOBAL, true);
+            message_->header_.rid.lsn(), seq, ReleaseType::GLOBAL);
         message_->sendReply(E::DISABLED);
       } else if (MetaDataLog::isMetaDataLog(message_->header_.rid.logid)) {
         RATELIMIT_INFO(

@@ -75,19 +75,10 @@ class PurgeCoordinator : public LogStorageState_PurgeCoordinator_Bridge {
    * Otherwise, we kick off a PurgeUncleanEpochs task to clean older epochs and
    * buffer the RELEASE internally.
    *
-   * @param do_broadcast  Whether or not to call
-   *                      ReleaseRequest::broadcastReleaseRequest(). May be
-   *                      `false' in case there is already a pending
-   *                      MergeMutablePerEpochLogMetadataTask that will do
-   *                      the broadcast on termination. (The intention is to
-   *                      broadcast the release request exactly once, after
-   *                      the record cache or, if necessary, the metadata in
-   *                      storage have been updated by that task.)
    */
   void onReleaseMessage(lsn_t lsn,
                         NodeID from,
                         ReleaseType release_type,
-                        bool do_broadcast,
                         OffsetMap epoch_offsets = OffsetMap()) override;
 
   /**
@@ -184,10 +175,7 @@ class PurgeCoordinator : public LogStorageState_PurgeCoordinator_Bridge {
   // onReleaseMessage() has ascertained that all earlier epochs are clean and
   // we can process the RELEASE.  Updates the LogStorageStateMap and
   // broadcasts to workers.
-  void doRelease(lsn_t lsn,
-                 ReleaseType release_type,
-                 bool do_broadcast,
-                 OffsetMap epoch_offsets);
+  void doRelease(lsn_t lsn, ReleaseType release_type, OffsetMap epoch_offsets);
 
   // Check if the CLEAN message sent by a sequencer with @param sequencer_epoch
   // is preempted by existing Seals for the log on the storage node

@@ -16,7 +16,7 @@
 
 namespace facebook { namespace logdevice {
 
-enum class ReleaseType : uint8_t { GLOBAL, PER_EPOCH, INVALID };
+enum class ReleaseType : uint8_t { GLOBAL, PER_EPOCH_DEPRECATED, INVALID };
 
 struct RELEASE_Header {
   // All records in epoch rid.epoch of log rid.logid with ESNs up to and

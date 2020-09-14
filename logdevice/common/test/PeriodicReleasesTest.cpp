@@ -212,13 +212,13 @@ TEST_F(PeriodicReleasesTest, Basic) {
   pr_->timerCallback(nullptr, PeriodicReleases::Type::RETRY);
   // should only send global release since it covers lng
   CHECK_RELEASE(ReleaseType::GLOBAL, N1, N2);
-  CHECK_NO_RELEASE(ReleaseType::PER_EPOCH);
+  CHECK_NO_RELEASE(ReleaseType::PER_EPOCH_DEPRECATED);
   lng_ = lsn(5, 1);
   last_released_ = lsn(5, 0);
   pr_->schedule();
   pr_->timerCallback(nullptr, PeriodicReleases::Type::RETRY);
   CHECK_RELEASE(ReleaseType::GLOBAL, N1, N2);
-  CHECK_NO_RELEASE(ReleaseType::PER_EPOCH);
+  CHECK_NO_RELEASE(ReleaseType::PER_EPOCH_DEPRECATED);
 }
 
 TEST_F(PeriodicReleasesTest, Reactivation) {

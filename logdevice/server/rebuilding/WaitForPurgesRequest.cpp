@@ -112,7 +112,7 @@ bool WaitForPurgesRequest::checkShardHasPurged(shard_index_t shard_idx) const {
   // Make sure purging is triggered by simulating the sequencer sending a
   // RELEASE.
   log_state->purge_coordinator_->onReleaseMessage(
-      upTo_, seq_, ReleaseType::GLOBAL, true /* do_release */);
+      upTo_, seq_, ReleaseType::GLOBAL);
   return false;
 }
 

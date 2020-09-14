@@ -41,21 +41,6 @@ MessageReadResult RELEASE_Message::deserialize(ProtocolReader& reader) {
 }
 
 void RELEASE_Message::onSent(Status st, const Address& to) const {
-  if (st == Status::PROTONOSUPPORT) {
-    // We get here if we attempt to send a per-epoch RELEASE message to a node
-    // running an older version. This is fine. Per-epoch RELEASE messages are
-    // best effort and only affect the ability of readers to read past the
-    // global last-released LSN.
-    ld_check(header_.release_type == ReleaseType::PER_EPOCH);
-    RATELIMIT_INFO(std::chrono::seconds(10),
-                   1,
-                   "Failed to send a per-epoch RELEASE for record %s to %s "
-                   "because of old protocol",
-                   header_.rid.toString().c_str(),
-                   Sender::describeConnection(to).c_str());
-    return;
-  }
-
   std::shared_ptr<Sequencer> sequencer =
       Worker::onThisThread()->processor_->allSequencers().findSequencer(
           header_.rid.logid);
@@ -101,13 +86,13 @@ bool RELEASE_Message::warnAboutOldProtocol() const {
 
 const std::string& release_type_to_string(ReleaseType release_type) {
   static const std::string GLOBAL("GLOBAL");
-  static const std::string PER_EPOCH("PER_EPOCH");
+  static const std::string PER_EPOCH_DEPRECATED("PER_EPOCH_DEPRECATED");
   static const std::string INVALID("INVALID");
   switch (release_type) {
     case ReleaseType::GLOBAL:
       return GLOBAL;
-    case ReleaseType::PER_EPOCH:
-      return PER_EPOCH;
+    case ReleaseType::PER_EPOCH_DEPRECATED:
+      return PER_EPOCH_DEPRECATED;
     default:
       return INVALID;
   }

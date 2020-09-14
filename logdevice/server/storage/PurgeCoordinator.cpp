@@ -37,10 +37,10 @@ namespace facebook { namespace logdevice {
 
 namespace {
 
-static void broadcastReleaseRequest(LogStorageState* parent,
-                                    const RecordID& rid,
-                                    shard_index_t shard,
-                                    bool force = false) {
+void broadcastReleaseRequest(LogStorageState* parent,
+                             const RecordID& rid,
+                             shard_index_t shard,
+                             bool force = false) {
   ReleaseRequest::broadcastReleaseRequest(
       ServerWorker::onThisThread()->processor_,
       rid,
@@ -48,62 +48,6 @@ static void broadcastReleaseRequest(LogStorageState* parent,
       [parent](worker_id_t idx) { return parent->isWorkerSubscribed(idx); },
       force);
 }
-
-/**
- * Storage task for updating the mutable per-epoch log metadata after receiving
- * a per-epoch RELEASE message. Will broadcast a release request on
- * termination if a parent LogStorageState is set.
- */
-class MergeMutablePerEpochLogMetadataTask final : public WriteStorageTask {
- public:
-  MergeMutablePerEpochLogMetadataTask(LogStorageState* parent,
-                                      const RecordID& rid,
-                                      uint16_t flags)
-      : WriteStorageTask(StorageTask::Type::MERGE_PER_EPOCH_METADATA),
-        parent_(parent),
-        rid_(rid),
-        metadata_(flags,
-                  rid.esn,
-                  OffsetMap::fromLegacy(0) /* unknown epoch_size_map */),
-        write_op_(rid.logid, rid.epoch, &metadata_) {}
-
-  Principal getPrincipal() const override {
-    return Principal::METADATA;
-  }
-
-  void onDone() override {
-    if (status_ == E::OK) {
-      WORKER_STAT_INCR(mutable_per_epoch_log_metadata_writes);
-    }
-    if (parent_ != nullptr) {
-      broadcastReleaseRequest(parent_, rid_, storageThreadPool_->getShardIdx());
-    }
-  }
-
-  void onDropped() override {
-    this->onDone();
-  }
-
-  size_t getNumWriteOps() const override {
-    return 1;
-  }
-
-  size_t getWriteOps(const WriteOp** write_ops,
-                     size_t write_ops_len) const override {
-    if (write_ops_len > 0) {
-      write_ops[0] = &write_op_;
-      return 1;
-    } else {
-      return 0;
-    }
-  }
-
- private:
-  LogStorageState* const parent_;
-  const RecordID rid_;
-  const MutablePerEpochLogMetadata metadata_;
-  const MergeMutablePerEpochLogMetadataWriteOp write_op_;
-};
 
 } // namespace
 
@@ -336,49 +280,6 @@ Message::Disposition PurgeCoordinator::onReceived(RELEASE_Message* msg,
 
   RecordCache* cache = log_state->record_cache_.get();
 
-  // Decide whether to update the mutable per-epoch log metadata, and whether
-  // or not to broadcast the release request immediately.
-  // getLogGroupByIDShared() may be nullptr in case the log is unknown or the
-  // config is not yet available (may happen during startup). In that case, we
-  // assume that mutable per-epoch log metadata is disabled (the default).
-  // Nothing bad can come from that except a brief and unlikely loss of read
-  // availability.
-  bool update_metadata;
-  bool do_broadcast;
-  const LogsConfig::LogGroupNodePtr log =
-      header.release_type == ReleaseType::PER_EPOCH
-      ? w->getConfiguration()->getLogGroupByIDShared(header.rid.logid)
-      : nullptr;
-  if (log && log->attrs().mutablePerEpochLogMetadataEnabled().value()) {
-    // Config available, per-epoch release, and mutable per-epoch log metadata
-    // is enabled. We want to update (merge) the metadata, unless the
-    // EpochRecordCache already contains a greater-or-equal LNG. (This would
-    // indicate that we have previously received a RELEASE with a higher LNG
-    // and thus have already written out metadata with that higher LNG.)
-    if (cache != nullptr) {
-      // Have record cache. Even if we decide to update the metadata, we are
-      // allowed to broadcast the release request immediately, because any
-      // CatchupOneStream will be able to read the LNG from the record cache.
-      const auto cache_result = cache->getEpochRecordCache(header.rid.epoch);
-      update_metadata = cache_result.first != RecordCache::Result::HIT ||
-          !cache_result.second->isConsistent() ||
-          cache_result.second->getLNG() < header.rid.esn;
-      do_broadcast = true;
-    } else {
-      // No record cache. Must update the metadata and must not broadcast the
-      // release request yet, because there may be CatchupOneStreams that need
-      // to read the metadata in order to make progress.
-      update_metadata = true;
-      do_broadcast = false;
-    }
-  } else {
-    // Config unavailable, or not a per-epoch release, or metadata disabled.
-    // In any case, nothing to update, and no need to delay the release request
-    // broadcast.
-    update_metadata = false;
-    do_broadcast = true;
-  }
-
   if (cache != nullptr) {
     // Update RecordCache on release in the hope of evicting some records
     // and/or epochs. May bump up the LNG of the epoch record cache (hence we
@@ -386,29 +287,8 @@ Message::Disposition PurgeCoordinator::onReceived(RELEASE_Message* msg,
     cache->onRelease(header.rid.lsn());
   }
 
-  if (update_metadata) {
-    ld_debug(
-        "Updating mutable per-epoch log metadata after per-epoch "
-        "release: logid=%" PRIu64 ", shard=%u lsn=%s",
-        header.rid.logid.val_,
-        shard,
-        lsn_to_string(compose_lsn(header.rid.epoch, header.rid.esn)).c_str());
-
-    // Create storage task which will asynchronously update the metadata and
-    // broadcast the release request on termination.
-    uint16_t flags = 0;
-    // TODO (T35832374) : remove if condition when all servers support OffsetMap
-    if (w->settings().enable_offset_map) {
-      flags |= MutablePerEpochLogMetadata::Data::SUPPORT_OFFSET_MAP;
-    }
-    w->getStorageTaskQueueForShard(shard)->putTask(
-        std::make_unique<MergeMutablePerEpochLogMetadataTask>(
-            do_broadcast ? log_state : nullptr, header.rid, flags));
-  }
-
   checked_downcast<PurgeCoordinator&>(*log_state->purge_coordinator_)
-      .onReleaseMessage(
-          header.rid.lsn(), peer_node_id, header.release_type, do_broadcast);
+      .onReleaseMessage(header.rid.lsn(), peer_node_id, header.release_type);
 
   return Message::Disposition::NORMAL;
 }
@@ -416,7 +296,6 @@ Message::Disposition PurgeCoordinator::onReceived(RELEASE_Message* msg,
 void PurgeCoordinator::onReleaseMessage(lsn_t lsn,
                                         NodeID from,
                                         ReleaseType release_type,
-                                        bool do_broadcast,
                                         OffsetMap epoch_offsets) {
   // During rebuilding, don't purge, don't persist last released LSN and
   // don't broadcast the release.
@@ -424,12 +303,9 @@ void PurgeCoordinator::onReleaseMessage(lsn_t lsn,
 
   bool release_now;
   epoch_t release_epoch = lsn_to_epoch(lsn);
-  if (release_type == ReleaseType::PER_EPOCH || release_epoch.val_ == 0) {
+  if (release_epoch.val_ == 0) {
     // We shouldn't receive a RELEASE in epoch 0 but if we do, we can process
-    // it immediately (there is nothing to clean). Also, per-epoch releases can
-    // always be processed immediately, since we do not care about the last
-    // clean epoch (LCE), in fact, reading ahead past the LCE is the whole
-    // motivation behind per-epoch releases.
+    // it immediately (there is nothing to clean).
     release_now = true;
   } else {
     epoch_t last_clean = parent_->getLastCleanEpoch();
@@ -439,7 +315,7 @@ void PurgeCoordinator::onReleaseMessage(lsn_t lsn,
     release_now = release_epoch <= max_epoch_immediate;
   }
   if (release_now) {
-    this->doRelease(lsn, release_type, do_broadcast, std::move(epoch_offsets));
+    this->doRelease(lsn, release_type, std::move(epoch_offsets));
     return;
   }
   if (parent_->hasPermanentError()) {
@@ -467,8 +343,7 @@ void PurgeCoordinator::onReleaseMessage(lsn_t lsn,
   }
 
   // We need to purge (or just load the last clean epoch) before we can
-  // process this RELEASE. Does not apply to per-epoch RELEASE messages (which
-  // do not purge and are always processed immediately).
+  // process this RELEASE.
   ld_check(release_type == ReleaseType::GLOBAL);
   std::unique_lock<std::mutex> guard(mutex_);
 
@@ -619,10 +494,8 @@ void PurgeCoordinator::startBufferedMessages(
   }
 
   if (buffered_release.has_value()) {
-    onReleaseMessage(buffered_release->lsn,
-                     buffered_release->from,
-                     ReleaseType::GLOBAL, // we never buffer per-epoch releases
-                     true); // not a per-epoch release, always broadcast
+    onReleaseMessage(
+        buffered_release->lsn, buffered_release->from, ReleaseType::GLOBAL);
   }
 }
 
@@ -687,7 +560,6 @@ void PurgeCoordinator::shutdown() {
 
 void PurgeCoordinator::doRelease(lsn_t lsn,
                                  ReleaseType release_type,
-                                 bool do_broadcast,
                                  OffsetMap epoch_offsets) {
   ld_spew("log %lu releasing %s, release_type=%s",
           log_id_.val_,
@@ -730,25 +602,17 @@ void PurgeCoordinator::doRelease(lsn_t lsn,
         return;
       }
       break;
-    case ReleaseType::PER_EPOCH:
-      if (parent_->updateLastPerEpochReleasedLSN(lsn) != 0) {
-        ld_check(err == E::UPTODATE);
-        return;
-      }
+    case ReleaseType::PER_EPOCH_DEPRECATED:
+      RATELIMIT_CRITICAL(
+          std::chrono::seconds(1), 10, "sending PER_EPOCH_DEPRECATED releases");
       break;
     case ReleaseType::INVALID:
       ld_check(false);
       break;
   }
 
-  if (do_broadcast) {
-    // Broadcast release request now. If `do_broadcast' is false, it means
-    // there is a MergeMutablePerEpochLogMetadataTask pending that will
-    // broadcast the release request when it terminates. This solves the race
-    // condition where a CatchupOneStream may need to read the metadata.
-    RecordID rid = {lsn_to_esn(lsn), lsn_to_epoch(lsn), log_id_};
-    broadcastReleaseRequest(parent_, rid, shard_);
-  }
+  RecordID rid = {lsn_to_esn(lsn), lsn_to_epoch(lsn), log_id_};
+  broadcastReleaseRequest(parent_, rid, shard_);
 }
 
 void PurgeCoordinator::updateLastCleanEpochInRecordCache(epoch_t lce) {

@@ -28,7 +28,6 @@ class LogStorageState_PurgeCoordinator_Bridge {
   virtual void onReleaseMessage(lsn_t,
                                 NodeID from,
                                 ReleaseType,
-                                bool do_broadcast,
                                 OffsetMap epoch_offsets = OffsetMap()) = 0;
   virtual void updateLastCleanInMemory(epoch_t epoch) = 0;
 };

@@ -87,7 +87,7 @@ int PeriodicReleases::sendReleases(Type type) {
         switch (release_type) {
           case ReleaseType::GLOBAL:
             return shard_state->last_released_lsn.load() < lsn;
-          case ReleaseType::PER_EPOCH:
+          case ReleaseType::PER_EPOCH_DEPRECATED:
             return shard_state->lng.load() < lsn;
           case ReleaseType::INVALID:
             break;
