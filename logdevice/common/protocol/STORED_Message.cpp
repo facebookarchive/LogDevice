@@ -226,7 +226,7 @@ class SendSTOREDRequest : public Request {
     // restarted, it'll just reject our message based on epoch number and wave.
     ld_check(to.valid());
     Sender& sender = Worker::onThisThread()->sender();
-    int rv = sender.checkConnection(to, true /* check_if_peer_is_node */);
+    int rv = sender.checkClientConnection(to, true /* check_if_peer_is_node */);
     if (rv != 0 && err == E::NOTFOUND) {
       RATELIMIT_WARNING(
           std::chrono::seconds(10),

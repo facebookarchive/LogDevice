@@ -438,9 +438,7 @@ class Sender : public SenderBase {
   bool isClosed(const Address& addr) const;
 
   /**
-   * Check if a working connection to a given node exists. Returns through
-   * @param our_name_at_peer the ClientID that the other end can use to send
-   * replies to that Connection.
+   * Check if a working connection to a given node exists.
    *
    * If connection to nid is currently in progress, this method will report
    * either ALREADY or NOTCONN, depending on whether this is the first attempt
@@ -448,19 +446,22 @@ class Sender : public SenderBase {
    *
    * @return  0 if a connection to nid is already established and handshake
    *          completed, -1 otherwise with err set to
-   *
-   *          NOTFOUND       nid does not identify a server Connection managed
-   * by this Sender ALREADY        initial connection attempt to nid is in
-   * progress NOTCONN        no active connection to nid is available NOBUFS
-   * Connection to destination is valid but reaches its buffer limit DISABLED
-   * connection is currently marked down after an unsuccessful connection
-   * attempt INVALID_PARAM  nid is invalid (debug build asserts)
+   *          NOTFOUND   nid does not identify a server Connection managed
+   *                     by this Sender
+   *          ALREADY    Initial connection attempt to nid is in progress
+   *          NOTCONN    No active connection to nid is available
+   *          NOBUFS     Connection to destination is valid but reaches its
+   *                     buffer limit
+   *          DISABLED   Connection is currently marked down after an
+   *                     unsuccessful connection attempt INVALID_PARAM  nid is
+   *                     invalid (debug build asserts)
    */
-  int checkConnection(NodeID nid, ClientID* our_name_at_peer);
+  int checkServerConnection(NodeID nid) const;
 
   /**
    * Check if a working connection to a give client exists. If peer_is_client is
    * set extra checks is made to make sure peer is logdevice client.
+   *
    * @return   0 if a connection to nid is already established and handshake
    *          completed, -1 otherwise with err set to
    *          NOTFOUND     cid does not exist the socket must be closed.
@@ -468,7 +469,7 @@ class Sender : public SenderBase {
    *          NOTANODE     If check_peer_is_node is set, peer is not a
    *                       logdevice node.
    */
-  int checkConnection(ClientID cid, bool check_peer_is_node = false);
+  int checkClientConnection(ClientID cid, bool check_peer_is_node);
 
   /**
    * Initiate an asynchronous attempt to connect to a given node unless a
@@ -960,7 +961,7 @@ class Sender : public SenderBase {
    */
   bool useSSLWith(NodeID nid,
                   bool* cross_boundary = nullptr,
-                  bool* authentication = nullptr);
+                  bool* authentication = nullptr) const;
 
   /**
    * Closes all Connections in sockets_to_close_ with the specified error codes

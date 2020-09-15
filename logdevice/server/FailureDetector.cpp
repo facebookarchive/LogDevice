@@ -1338,7 +1338,7 @@ bool FailureDetector::isValidDestination(node_index_t node_idx) {
     return true;
   }
 
-  int rv = conn->checkConnection(nullptr);
+  int rv = conn->checkServerConnection();
   if (rv != 0) {
     if (err == E::DISABLED || err == E::NOBUFS) {
       ld_spew("Can't gossip to N%u: %s", node_idx, error_description(err));

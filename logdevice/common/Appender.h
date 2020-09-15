@@ -257,8 +257,9 @@ class Appender : public IntrusiveUnorderedMapHook {
    * Send a single STORE message to the specified destination. Log and triage
    * errors.
    *
-   * Pre-condition: Sender::checkConnection() was called on this worker thread
-   * in this event loop iteration, and returned AVAILABLE or AVAILABLE_NOCHAIN.
+   * Pre-condition: Sender::checkServerConnection() was called on this worker
+   * thread in this event loop iteration, and returned AVAILABLE or
+   * AVAILABLE_NOCHAIN.
    *
    * @param  copyset  copyset to put in message header. Its size is in
    *                  store_hdr_.copyset_size. If the message is

@@ -488,10 +488,10 @@ class Connection : public TrafficShappingSocket {
    * If a working connection exists, this method returns 0 and stores the
    * ClientID that the destination has assigned to its end of the connection
    * in our_name_at_peer. Otherwise, -1 is returned with err set to DISABLED,
-   * INVALID_PARAM, ALREADY or NOTCONN (see Sender::checkConnection for the
-   * description of these error codes).
+   * INVALID_PARAM, ALREADY or NOTCONN (see Sender::checkServerConnection for
+   * the description of these error codes).
    */
-  int checkConnection(ClientID* our_name_at_peer);
+  int checkServerConnection();
 
   /**
    * Check if we reached any of the buffer size limits.

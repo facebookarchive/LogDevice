@@ -127,9 +127,18 @@ NodeAvailabilityChecker::checkNode(NodeSetState* nodeset_state,
 
 int NodeAvailabilityChecker::checkConnection(NodeID nid,
                                              ClientID* our_name_at_peer) const {
-  return Worker::onThisThread()->sender().checkConnection(
-      nid, our_name_at_peer);
-}
+  auto& sender = Worker::onThisThread()->sender();
+  int rv = sender.checkServerConnection(nid);
+  if (rv != 0) {
+    return rv;
+  }
+  if (our_name_at_peer) {
+    const auto* info = sender.getConnectionInfo(Address(NodeID(nid)));
+    ld_check(info);
+    *our_name_at_peer = info->our_name_at_peer.value_or(ClientID::INVALID);
+  }
+  return 0;
+} // namespace logdevice
 
 // `nodeset_state` is nullptr in tests.
 std::chrono::steady_clock::time_point

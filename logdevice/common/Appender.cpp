@@ -275,7 +275,7 @@ int Appender::sendSTORE(const StoreChainLink copyset[],
     default:
       // Any other error code (including DISABLED) is an internal error.
       // DISABLED is unexpected because sendSTORE() is always called right after
-      // Sender::checkConnection() said that the target node is available.
+      // Sender::checkServerConnection() said that the target node is available.
       RATELIMIT_CRITICAL(std::chrono::seconds(1),
                          10,
                          "INTERNAL ERROR: got an unexpected error code %s "

@@ -772,7 +772,7 @@ bool Sender::isClosed(const Address& addr) const {
   return false;
 }
 
-int Sender::checkConnection(NodeID nid, ClientID* our_name_at_peer) {
+int Sender::checkServerConnection(NodeID nid) const {
   if (!nid.isNodeID()) {
     ld_check(false);
     err = E::INVALID_PARAM;
@@ -797,10 +797,10 @@ int Sender::checkConnection(NodeID nid, ClientID* our_name_at_peer) {
     return -1;
   }
 
-  return c->checkConnection(our_name_at_peer);
+  return c->checkServerConnection();
 }
 
-int Sender::checkConnection(ClientID cid, bool check_peer_is_node) {
+int Sender::checkClientConnection(ClientID cid, bool check_peer_is_node) {
   ld_check(cid.valid());
   auto pos = impl_->client_conns_.find(cid);
   if (pos == impl_->client_conns_.end() || pos->second->isClosed()) {
@@ -837,7 +837,7 @@ int Sender::connect(NodeID nid) {
 
 bool Sender::useSSLWith(NodeID nid,
                         bool* cross_boundary_out,
-                        bool* authentication_out) {
+                        bool* authentication_out) const {
   // Determine whether we need to use SSL by comparing our location with the
   // location of the target node.
   bool cross_boundary = false;

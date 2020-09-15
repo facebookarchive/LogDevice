@@ -1772,7 +1772,7 @@ void Connection::handshakeTimeoutCallback(void* arg, short) {
   reinterpret_cast<Connection*>(arg)->onHandshakeTimeout();
 }
 
-int Connection::checkConnection(ClientID* our_name_at_peer) {
+int Connection::checkServerConnection() {
   if (!info_.our_name_at_peer.hasValue()) {
     // socket is either not connected or we're still waiting for a handshake
     // to complete
@@ -1796,10 +1796,6 @@ int Connection::checkConnection(ClientID* our_name_at_peer) {
     }
 
     return -1;
-  }
-
-  if (our_name_at_peer) {
-    *our_name_at_peer = info_.our_name_at_peer.value();
   }
 
   return 0;
