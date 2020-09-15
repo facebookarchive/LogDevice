@@ -22,6 +22,7 @@
 #include <folly/ssl/OpenSSLPtrTypes.h>
 
 #include "logdevice/common/Address.h"
+#include "logdevice/common/AdminCommandTable-fwd.h"
 #include "logdevice/common/ConnectionInfo.h"
 #include "logdevice/common/ConnectionKind.h"
 #include "logdevice/common/PrincipalIdentity.h"
@@ -55,6 +56,8 @@ class ClientIdxAllocator;
 class Connection;
 class FlowGroup;
 class FlowGroupsUpdate;
+class IConnectionFactory;
+class Processor;
 class SenderImpl;
 class ShapingContainer;
 class Sockaddr;
@@ -62,10 +65,8 @@ class Socket;
 class SocketCallback;
 class SocketProxy;
 class StatsHolder;
-struct Settings;
-class IConnectionFactory;
 class Worker;
-class Processor;
+struct Settings;
 
 /**
  * @file a Sender sends Messages to Addresses by mapping an Address to a
@@ -743,6 +744,12 @@ class Sender : public SenderBase {
    * Invokes a callback for each Connection.  Used to gather debug info.
    */
   void forEachConnection(std::function<void(const Connection&)> cb) const;
+
+  /**
+   * Fills give table with debug information about all connections managed by
+   * this sender.
+   */
+  void fillDebugInfo(InfoSocketsTable& table) const;
 
   /**
    * @param addr    peer name of a client or server Connection expected to be

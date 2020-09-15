@@ -1459,4 +1459,9 @@ void Sender::cleanupConnections() {
   impl_->cleanup_connections_timer_.activate(
       Worker::settings().socket_health_check_period);
 }
+
+void Sender::fillDebugInfo(InfoSocketsTable& table) const {
+  forEachConnection(
+      [&table](const Connection& conn) { conn.getDebugInfo(table); });
+}
 }} // namespace facebook::logdevice

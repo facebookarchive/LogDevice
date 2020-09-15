@@ -54,7 +54,7 @@ class InfoSockets : public AdminCommand {
 
     auto tables = run_on_all_workers(server_->getProcessor(), [&]() {
       InfoSocketsTable t(table);
-      getSocketsDebugInfo(Worker::onThisThread()->sender(), t);
+      Worker::onThisThread()->sender().fillDebugInfo(t);
       return t;
     });
 
@@ -63,12 +63,6 @@ class InfoSockets : public AdminCommand {
     }
 
     json_ ? table.printJson(out_) : table.print(out_);
-  }
-
- private:
-  void getSocketsDebugInfo(Sender& sender, InfoSocketsTable& table) {
-    sender.forEachConnection(
-        [&table](const Connection& conn) { conn.getDebugInfo(table); });
   }
 };
 
