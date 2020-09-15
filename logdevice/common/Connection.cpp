@@ -106,7 +106,6 @@ Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
       drain_pos_(0),
       connected_(false),
       handshaken_(false),
-      proto_(getSettings().max_protocol),
       our_name_at_peer_(ClientID::INVALID),
       outbuf_overflow_(getSettings().outbuf_overflow_kb * 1024),
       outbufs_min_budget_(getSettings().outbuf_socket_min_kb * 1024),
@@ -121,7 +120,8 @@ Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
       end_stream_rewind_event_(deps_->getEvBase()),
       retry_receipt_of_message_(deps_->getEvBase()),
       sched_write_chain_(deps_->getEvBase()),
-      last_used_time_(SteadyTimestamp::now()) {
+      last_used_time_(SteadyTimestamp::now()),
+      pre_handshake_proto_(getSettings().max_protocol) {
   if (!peer_sockaddr.valid()) {
     ld_check(!peer_name.isClientAddress());
     if (info_.connection_type == ConnectionType::SSL) {
@@ -242,7 +242,7 @@ Connection::Connection(int fd,
   sock_write_cb_ = SocketWriteCallback(proto_handler_.get());
   proto_handler_->getSentEvent()->attachCallback([this] { drainSendQueue(); });
   // Set the read callback.
-  read_cb_.reset(new MessageReader(*proto_handler_, proto_));
+  read_cb_.reset(new MessageReader(*proto_handler_, getProto()));
   proto_handler_->sock()->setReadCB(read_cb_.get());
 }
 
@@ -538,7 +538,7 @@ int Connection::connect() {
     auto g = folly::makeGuard(deps_->setupContextGuard());
     if (st == E::ISCONN) {
       transitionToConnected();
-      read_cb_.reset(new MessageReader(*proto_handler_, proto_));
+      read_cb_.reset(new MessageReader(*proto_handler_, getProto()));
       proto_handler_->sock()->setReadCB(read_cb_.get());
     }
   };
@@ -868,7 +868,7 @@ bool Connection::isChecksummingEnabled(MessageType msgtype) {
 }
 
 std::unique_ptr<folly::IOBuf> Connection::serializeMessage(const Message& msg) {
-  auto result = msg.serialize(proto_, isChecksummingEnabled(msg.type_));
+  auto result = msg.serialize(getProto(), isChecksummingEnabled(msg.type_));
   if (!result) {
     // The error code is set by serialize
     close(err);
@@ -1016,7 +1016,7 @@ int Connection::preSendCheck(const Message& msg) {
       err = E::UNREACHABLE;
       return -1;
     }
-  } else if (msg.getMinProtocolVersion() > proto_) {
+  } else if (msg.getMinProtocolVersion() > getProto()) {
     if (msg.warnAboutOldProtocol()) {
       RATELIMIT_WARNING(
           std::chrono::seconds(1),
@@ -1027,14 +1027,14 @@ int Connection::preSendCheck(const Message& msg) {
           messageTypeNames()[msg.type_].c_str(),
           conn_description_.c_str(),
           msg.getMinProtocolVersion(),
-          proto_);
+          getProto());
     }
 
     if (isHandshakeMessage(msg.type_)) {
       ld_critical("INTERNAL ERROR: getMinProtocolVersion() is expected to "
                   "return a protocol version <= %hu for a message of type %s,"
                   " but it returns %hu instead.",
-                  proto_,
+                  getProto(),
                   messageTypeNames()[msg.type_].c_str(),
                   msg.getMinProtocolVersion());
       close(E::INTERNAL);
@@ -1070,7 +1070,7 @@ void Connection::send(std::unique_ptr<Envelope> envelope) {
     // compute the message length only when 1) handshaken is completed and
     // negotiaged proto_ is known; or 2) message is a handshaken message
     // therefore its size does not depend on the protocol
-    const auto msglen = msg.size(proto_);
+    const auto msglen = msg.size(getProto());
     if (msglen > Message::MAX_LEN + sizeof(ProtocolHeader)) {
       RATELIMIT_ERROR(
           std::chrono::seconds(10),
@@ -1322,10 +1322,11 @@ void Connection::endStreamRewind() {
 
 bool Connection::verifyChecksum(ProtocolHeader ph, ProtocolReader& reader) {
   size_t protocol_bytes_already_read =
-      ProtocolHeader::bytesNeeded(ph.type, proto_);
+      ProtocolHeader::bytesNeeded(ph.type, getProto());
 
   auto enabled = isChecksummingEnabled(ph.type) &&
-      ProtocolHeader::needChecksumInHeader(ph.type, proto_) && ph.cksum != 0;
+      ProtocolHeader::needChecksumInHeader(ph.type, getProto()) &&
+      ph.cksum != 0;
 
   if (!enabled) {
     return true;
@@ -1343,7 +1344,7 @@ bool Connection::verifyChecksum(ProtocolHeader ph, ProtocolReader& reader) {
                   cksum_recvd,
                   cksum_computed,
                   ph.len,
-                  proto_,
+                  getProto(),
                   protocol_bytes_already_read);
 
   if (cksum_recvd != cksum_computed) {
@@ -1395,9 +1396,10 @@ bool Connection::validateReceivedMessage(const Message* msg) const {
 }
 
 bool Connection::processHandshakeMessage(const Message* msg) {
+  uint16_t protocol;
   switch (msg->type_) {
     case MessageType::ACK: {
-      deps_->processACKMessage(msg, &our_name_at_peer_, &proto_);
+      deps_->processACKMessage(msg, &our_name_at_peer_, &protocol);
       if (connect_throttle_) {
         connect_throttle_->connectSucceeded();
       } else {
@@ -1426,16 +1428,17 @@ bool Connection::processHandshakeMessage(const Message* msg) {
         err = E::TOOMANY;
         return false;
       }
-      proto_ = deps_->processHelloMessage(msg);
+      protocol = deps_->processHelloMessage(msg);
       break;
     default:
       ld_check(false); // unreachable.
   };
 
-  ld_check(proto_ >= Compatibility::MIN_PROTOCOL_SUPPORTED);
-  ld_check(proto_ <= Compatibility::MAX_PROTOCOL_SUPPORTED);
-  ld_assert(proto_ <= getSettings().max_protocol);
-  ld_spew("%s negotiated protocol %d", conn_description_.c_str(), proto_);
+  info_.protocol = protocol;
+  ld_check(protocol >= Compatibility::MIN_PROTOCOL_SUPPORTED);
+  ld_check(protocol <= Compatibility::MAX_PROTOCOL_SUPPORTED);
+  ld_assert(protocol <= getSettings().max_protocol);
+  ld_spew("%s negotiated protocol %d", conn_description_.c_str(), protocol);
 
   // Now that we know what protocol we are speaking with the other end,
   // we can serialize pending messages. Messages that are not compatible
@@ -1459,7 +1462,7 @@ int Connection::dispatchMessageBody(ProtocolHeader header,
   };
 
   size_t protocol_bytes_already_read =
-      ProtocolHeader::bytesNeeded(ph.type, proto_);
+      ProtocolHeader::bytesNeeded(ph.type, getProto());
   size_t payload_size = ph.len - protocol_bytes_already_read;
 
   // Request reservation to add this message into the system.
@@ -1490,7 +1493,7 @@ int Connection::dispatchMessageBody(ProtocolHeader header,
     return -1;
   }
 
-  ProtocolReader reader(ph.type, std::move(inbuf), proto_);
+  ProtocolReader reader(ph.type, std::move(inbuf), getProto());
 
   ++num_messages_received_;
   num_bytes_received_ += ph.len;
@@ -1526,7 +1529,7 @@ int Connection::dispatchMessageBody(ProtocolHeader header,
                  "%s has invalid format. proto_:%hu",
                  messageTypeNames()[ph.type].c_str(),
                  conn_description_.c_str(),
-                 proto_);
+                 getProto());
         err = E::BADMSG;
         return -1;
 
@@ -1843,7 +1846,7 @@ void Connection::getDebugInfo(InfoSocketsTable& table) const {
       .set<10>(total_busy_time == 0
                    ? 0
                    : 100.0 * total_sndbuf_limited_time / total_busy_time)
-      .set<11>(proto_)
+      .set<11>(getProto())
       .set<12>(this->getTcpSendBufSize())
       .set<13>(isSSL())
       .set<14>(fd_);

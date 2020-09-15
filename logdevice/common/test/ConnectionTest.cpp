@@ -1228,7 +1228,7 @@ TEST_F(ClientConnectionTest, SenderBytesPendingTest) {
   auto raw_msg = new VarLengthTestMessage(3 /* min_proto */, 42 /* size */);
   std::unique_ptr<facebook::logdevice::Message> msg(raw_msg);
   auto msg_size_max_proto = msg->size();
-  auto msg_size_at_proto = msg->size(conn_->getProto());
+  auto msg_size_at_proto = msg->size(conn_->getInfo().protocol.value());
   auto envelope = conn_->registerMessage(std::move(msg));
   // Message cost at max compatibility is added at registerMessage.
   EXPECT_EQ(bytes_pending_, msg_size_max_proto);

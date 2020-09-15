@@ -53,6 +53,12 @@ struct ConnectionInfo {
   ConnectionType connection_type;
 
   /**
+   * Protocol version negotiated following handshake, before handshake must be
+   * folly::none.
+   */
+  folly::Optional<uint16_t> protocol;
+
+  /**
    * Produces a numan-readable string like
    * "C22566784 ([abcd:1234:5678:90ef:1111:2222:3333:4444]:41406)"
    */

@@ -533,9 +533,8 @@ Connection* Sender::findConnection(const Address& addr) const {
 
 folly::Optional<uint16_t>
 Sender::getSocketProtocolVersion(node_index_t idx) const {
-  auto conn = findServerConnection(idx);
-  return conn != nullptr && conn->isHandshaken() ? conn->getProto()
-                                                 : folly::Optional<uint16_t>();
+  const auto* conn = findServerConnection(idx);
+  return conn != nullptr ? conn->getInfo().protocol : folly::none;
 }
 
 ClientID Sender::getOurNameAtPeer(node_index_t node_index) const {

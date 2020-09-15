@@ -565,14 +565,6 @@ class Connection : public TrafficShappingSocket {
   }
 
   /**
-   * @return protocol version used by this Socket. Returns
-   * Settings::max_protocol if !isHandshaken().
-   */
-  uint16_t getProto() const {
-    return proto_;
-  }
-
-  /**
    * @return Get the ClientID that the other end assigned to our connection and
    * reported in the ACK.  Only for Sockets that initiated an outgoing
    * connection to a server.
@@ -910,16 +902,6 @@ class Connection : public TrafficShappingSocket {
   // ungraceful server shutdown
   bool peer_shuttingdown_{false};
 
-  // Protocol version negotiated following handshake.
-  // Only set when the socket is handshaken.
-  // This is passed to serialization and deserialization handlers.
-  // The only messages that can be serialized/deserialized before we actually
-  // set this value are ACK and HELLO messages. However, the default value
-  // of Settings::max_protocol (set in constructor) will do as
-  // getMinProtocolVersion() should return
-  // Compatibility::MIN_PROTOCOL_SUPPORTED for them.
-  uint16_t proto_;
-
   // For Sockets that initiated an outgoing connection to a server and received
   // a positive ACK, this is the ClientID that the other end assigned to our
   // connection and reported in the ACK. For all other Sockets, or if an
@@ -1103,6 +1085,22 @@ class Connection : public TrafficShappingSocket {
 
   // used for num_connections counter
   folly::Optional<ConnectionKind> connection_kind_;
+
+  /**
+   * @return protocol version used by this connection which is either negotiated
+   * protocol if connection is handshaken or pre_handshake_proto_ otherwise.
+   */
+  uint16_t getProto() const {
+    return info_.protocol.value_or(pre_handshake_proto_);
+  }
+
+  // Version of ser/der protocol used before handshake takes place.
+  // The only messages that can be serialized/deserialized with this version
+  // are ACK and HELLO messages. However, the default value of
+  // Settings::max_protocol (set in constructor) will do as
+  // getMinProtocolVersion() should return Compatibility::MIN_PROTOCOL_SUPPORTED
+  // for them.
+  const uint16_t pre_handshake_proto_;
 
   friend class ConnectionTest;
 };
