@@ -510,6 +510,11 @@ class LocalLogStore : boost::noncopyable {
     // Delete if no new options are added for a while.
   };
 
+  // @return Whether this local log store is in fail safe mode.
+  virtual bool inFailSafeMode() const {
+    return false;
+  }
+
   // Place the store into a persistent read-only mode due to an error.
   // @return  false if the store was already in fail-safe mode.
   virtual bool enterFailSafeMode(const char* /*context*/,

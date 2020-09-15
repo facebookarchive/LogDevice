@@ -298,7 +298,7 @@ class RocksDBLogStoreBase : public LocalLogStore {
   // True if an error has occurred which indicates partial loss of
   // access or corruption of the database. Reads can still be attempted,
   // but writes will be denied.
-  bool inFailSafeMode() const {
+  bool inFailSafeMode() const override {
     return fail_safe_mode_.load();
   }
 

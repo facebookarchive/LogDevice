@@ -30,6 +30,8 @@
 
 namespace facebook { namespace logdevice {
 
+using fb_status = facebook::fb303::cpp2::fb_status;
+
 AdminAPIHandler::AdminAPIHandler(
     const std::string& service_name,
     Processor* processor,
@@ -54,6 +56,20 @@ void AdminAPIHandler::getLogTreeInfo(thrift::LogTreeInfo& response) {
   response.set_num_logs(logsconfig->size());
   response.set_max_backlog_seconds(logsconfig->getMaxBacklogDuration().count());
   response.set_is_fully_loaded(logsconfig->isFullyLoaded());
+}
+
+fb_status AdminAPIHandler::getStatus() {
+  ShardedRocksDBLocalLogStore* sharded_store =
+      AdminAPIHandlerBase::sharded_store_;
+  if (sharded_store != nullptr) {
+    for (int i = 0; i < sharded_store->numShards(); ++i) {
+      LocalLogStore* local_log_store = sharded_store->getByIndex(i);
+      if (local_log_store != nullptr && local_log_store->inFailSafeMode()) {
+        return fb_status::WARNING;
+      }
+    }
+  }
+  return LogDeviceThriftHandler::getStatus();
 }
 
 void AdminAPIHandler::getReplicationInfo(thrift::ReplicationInfo& response) {

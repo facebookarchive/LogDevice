@@ -19,6 +19,7 @@
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/WorkerType.h"
 #include "logdevice/common/types_internal.h"
+#include "logdevice/server/locallogstore/ShardedRocksDBLocalLogStore.h"
 #include "logdevice/server/thrift/LogDeviceThriftHandler.h"
 
 namespace facebook { namespace logdevice {
@@ -47,6 +48,8 @@ class AdminAPIHandler : public LogDeviceThriftHandler,
       UpdateableSettings<ServerSettings> updateable_server_settings,
       UpdateableSettings<AdminServerSettings> updateable_admin_server_settings,
       StatsHolder* stats_holder);
+
+  facebook::fb303::cpp2::fb_status getStatus() override;
 
   // *** LogTree-related APIs
   void getLogTreeInfo(thrift::LogTreeInfo&) override;
