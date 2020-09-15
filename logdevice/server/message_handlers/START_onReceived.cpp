@@ -343,11 +343,12 @@ Message::Disposition START_onReceived(START_Message* msg,
     }
   }
 
+  auto csid = w->sender().getCSID(from);
   auto insert_result =
       w->serverReadStreams().insertOrGet(from.id_.client_,
                                          header.log_id,
                                          shard_idx,
-                                         *w->sender().getCSID(from),
+                                         csid.value_or(""),
                                          header.read_stream_id);
   ServerReadStream* stream = insert_result.first;
   if (stream == nullptr) {

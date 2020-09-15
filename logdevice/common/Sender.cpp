@@ -1123,57 +1123,9 @@ int Sender::setPrincipal(const Address& addr, PrincipalIdentity principal) {
   return -1;
 }
 
-const std::string* Sender::getCSID(const Address& addr) {
-  if (addr.isClientAddress()) {
-    auto pos = impl_->client_conns_.find(addr.id_.client_);
-    if (pos != impl_->client_conns_.end()) {
-      ld_check(pos->second->getInfo().peer_name == addr);
-      return &pos->second->csid_;
-    }
-  } else { // addr is a server address
-    auto pos = impl_->server_conns_.find(addr.asNodeID().index());
-    if (pos != impl_->server_conns_.end() &&
-        pos->second->getInfo().peer_name.asNodeID().equalsRelaxed(
-            addr.id_.node_)) {
-      // server_conns_ csid should all be empty, this is because
-      // the server_conns_ will always be on the sender side, as in they
-      // send the initial HELLO_Message. This means that they will never
-      // have receive a HELLO_Message thus never have their csid set.
-      ld_check(pos->second->csid_ == "");
-      return &pos->second->csid_;
-    }
-  }
-
-  return nullptr;
-}
-
-int Sender::setCSID(const Address& addr, std::string csid) {
-  if (addr.isClientAddress()) {
-    auto pos = impl_->client_conns_.find(addr.id_.client_);
-    if (pos != impl_->client_conns_.end()) {
-      ld_check(pos->second->getInfo().peer_name == addr);
-
-      // Whenever a HELLO_Message is sent, a new client Connection is
-      // created on the server side. Meaning that whenever this function is
-      // called, the principal should be empty.
-      ld_check(pos->second->csid_ == "");
-      pos->second->csid_ = std::move(csid);
-      return 0;
-    }
-  } else { // addr is a server address
-    auto pos = impl_->server_conns_.find(addr.asNodeID().index());
-    if (pos != impl_->server_conns_.end() &&
-        pos->second->getInfo().peer_name.asNodeID().equalsRelaxed(
-            addr.id_.node_)) {
-      // server_conns_ should never have setCSID called as they
-      // should always be the calling side, as in they always send the
-      // initial HELLO_Message.
-      ld_check(false);
-      return 0;
-    }
-  }
-
-  return -1;
+folly::Optional<std::string> Sender::getCSID(const Address& addr) const {
+  const auto* info = getConnectionInfo(addr);
+  return info ? info->csid : folly::none;
 }
 
 std::string Sender::getClientLocation(const ClientID& cid) const {

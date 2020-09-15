@@ -135,8 +135,7 @@ static bool isValidServerConnection(const node_index_t& peer_nid,
 template <typename HelloHeader, typename AckHeader>
 static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
                                                  AckHeader& ackhdr,
-                                                 const ConnectionInfo& info,
-                                                 const std::string& csid) {
+                                                 const ConnectionInfo& info) {
   Worker* w = Worker::onThisThread();
 
   const auto& from = info.peer_name;
@@ -150,7 +149,7 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
   // This seems hacky; PrincipalParser should populate a provided
   // PrincipalIdentity instead of creating and returning a new one?
   auto fill_out_client_info_in_principal = [&] {
-    principal.csid = csid;
+    principal.csid = info.csid.value_or("");
     Sockaddr client_sock_addr = Sender::sockaddrOrInvalid(from);
     std::string client_sock_str = client_sock_addr.valid()
         ? client_sock_addr.toStringNoPort()
@@ -448,8 +447,12 @@ Message::Disposition HELLO_Message::onReceived(const Address& from) {
     new_info.peer_node_idx = source_node_id_.index();
   }
 
+  if (header_.flags & HELLO_Header::CSID) {
+    new_info.csid = csid_;
+  }
+
   // must be called after we check if the connection is from a source node.
-  auto principal = checkAuthenticationData(header_, ackhdr, new_info, csid_);
+  auto principal = checkAuthenticationData(header_, ackhdr, new_info);
 
   if (header_.flags & HELLO_Header::DESTINATION_NODE) {
     if (!destination_node_id_.isNodeID()) {
@@ -487,18 +490,6 @@ Message::Disposition HELLO_Message::onReceived(const Address& from) {
                       server_cluster_name.c_str(),
                       cluster_name_.c_str());
       ackhdr.status = E::INVALID_CLUSTER;
-    }
-  }
-
-  if (header_.flags & HELLO_Header::CSID) {
-    int rv = Worker::onThisThread()->sender().setCSID(from, csid_);
-    if (rv != 0) {
-      ld_critical("INTERNAL ERROR: Could not set CSID for HELLO Message "
-                  "received from %s",
-                  Sender::describeConnection(from).c_str());
-      // This should never happen.
-      ld_check(false);
-      ackhdr.status = E::INTERNAL;
     }
   }
 

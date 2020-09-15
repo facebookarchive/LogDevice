@@ -762,25 +762,11 @@ class Sender : public SenderBase {
   /**
    * @param addr    peer name of a client or server Connection expected to be
    *                under the management of this Sender.
-   * @return a pointer to the CSID held in the Connection matching the addr or
-   *         nullptr if no Connection is known to this Sender match addr
+   * @return the CSID held in the Connection matching the addr or
+   *         folly::none if no Connection is known to this Sender match address
+   *         or CSID for connection is not known
    */
-  const std::string* getCSID(const Address& addr);
-
-  /**
-   * This method sets the csid_ string in the Connection object.
-   * See HELLO_Message.cpp for more detail.
-   * Asserts that the csid is not changed after it is initially set.
-   *
-   * @param addr      peer name of a client or server Connection expected to be
-   *                  under the management of this Sender.
-   * @param csid      the value of the CSID(Client Session ID)
-   *                  that will be set in the Connection
-   *
-   * @return 0 if it was successful, -1 if no Connections known to this Sender
-   * match addr
-   */
-  int setCSID(const Address& addr, std::string csid);
+  folly::Optional<std::string> getCSID(const Address& addr) const;
 
   std::string getClientLocation(const ClientID& cid) const;
 

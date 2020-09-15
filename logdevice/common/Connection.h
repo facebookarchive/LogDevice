@@ -275,10 +275,6 @@ class Connection : public TrafficShappingSocket {
   std::shared_ptr<PrincipalIdentity> principal_ =
       std::make_shared<PrincipalIdentity>();
 
-  // CSID, Client Session ID
-  // Used to uniquely identify client sessions. Supplied by client
-  std::string csid_;
-
   // Traffic shaping state shared between Sockets with the same bandwidth
   // constraints.
   FlowGroup& flow_group_;
