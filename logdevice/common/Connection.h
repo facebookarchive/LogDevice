@@ -251,9 +251,6 @@ class Connection : public TrafficShappingSocket {
    */
   bool isNodeConnectionAddressOrGenerationOutdated() const;
 
-  // TODO(mmhg) Make it private
-  ConnectionInfo info_;
-
   /**
    * Returns the info struct for this connection. The sturct's lifetime is bound
    * to connection.
@@ -262,18 +259,14 @@ class Connection : public TrafficShappingSocket {
     return info_;
   }
 
-  void setInfo(const ConnectionInfo& new_info) {
-    info_ = new_info;
-  }
+  /**
+   * Replaces existing info for this connection.
+   */
+  void setInfo(const ConnectionInfo& new_info);
 
   // A numan-readable string like
   // "C22566784 ([abcd:1234:5678:90ef:1111:2222:3333:4444]:41406)"
   std::string conn_description_;
-
-  // Used to identify the client for permission checks. Set after successfull
-  // authentication
-  std::shared_ptr<PrincipalIdentity> principal_ =
-      std::make_shared<PrincipalIdentity>();
 
   // Traffic shaping state shared between Sockets with the same bandwidth
   // constraints.
@@ -991,6 +984,9 @@ class Connection : public TrafficShappingSocket {
 
  private:
   class HandshakeTimeout;
+  // General connection attributes like peer address and csid. Partially set in
+  // c-tor, partially during handshake (see HELLO_Message.cpp).
+  ConnectionInfo info_;
   // The file descriptor of the underlying OS socket. Set to -1 in situations
   // where the file descriptor is not known (e.g., before connecting).
   int fd_;
@@ -1043,6 +1039,10 @@ class Connection : public TrafficShappingSocket {
   uint16_t getProto() const {
     return info_.protocol.value_or(pre_handshake_proto_);
   }
+
+  // Checks the new info being set on connection is valid with respect to
+  // current attributes and fails ld_checks if not.
+  void checkNewInfo(const ConnectionInfo&) const;
 
   // Version of ser/der protocol used before handshake takes place.
   // The only messages that can be serialized/deserialized with this version

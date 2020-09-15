@@ -1057,70 +1057,9 @@ Connection* FOLLY_NULLABLE Sender::findConnection(const Address& addr) {
   return conn;
 }
 
-const PrincipalIdentity* Sender::getPrincipal(const Address& addr) {
-  if (addr.isClientAddress()) {
-    auto pos = impl_->client_conns_.find(addr.id_.client_);
-    if (pos != impl_->client_conns_.end()) {
-      ld_check(pos->second->getInfo().peer_name == addr);
-      return pos->second->principal_.get();
-    }
-  } else { // addr is a server address
-    auto pos = impl_->server_conns_.find(addr.asNodeID().index());
-    if (pos != impl_->server_conns_.end() &&
-        pos->second->getInfo().peer_name.asNodeID().equalsRelaxed(
-            addr.asNodeID())) {
-      // server_conns_ principals should all be empty, this is because
-      // the server_conns_ will always be on the sender side, as in they
-      // send the initial HELLO_Message. This means that they will never have
-      // receive a HELLO_Message thus never have their principal set.
-      ld_check(pos->second->principal_->type == "");
-      return pos->second->principal_.get();
-    }
-  }
-
-  return nullptr;
-}
-
-int Sender::setPrincipal(const Address& addr, PrincipalIdentity principal) {
-  if (addr.isClientAddress()) {
-    auto pos = impl_->client_conns_.find(addr.id_.client_);
-    if (pos != impl_->client_conns_.end()) {
-      ld_check(pos->second->getInfo().peer_name == addr);
-
-      // Whenever a HELLO_Message is sent, a new client Connection is
-      // created on the server side. Meaning that whenever this function is
-      // called, the principal should be empty.
-      ld_check(pos->second->principal_->type == "");
-
-      // See if this principal requires specialized traffic tagging.
-      auto scfg = worker_->getServerConfig();
-      for (auto identity : principal.identities) {
-        auto principal_settings = scfg->getPrincipalByName(&identity.second);
-        if (principal_settings != nullptr &&
-            principal_settings->egress_dscp != 0) {
-          pos->second->setDSCP(principal_settings->egress_dscp);
-          break;
-        }
-      }
-
-      pos->second->principal_ =
-          std::make_shared<PrincipalIdentity>(std::move(principal));
-      return 0;
-    }
-  } else { // addr is a server address
-    auto pos = impl_->server_conns_.find(addr.asNodeID().index());
-    if (pos != impl_->server_conns_.end() &&
-        pos->second->getInfo().peer_name.asNodeID().equalsRelaxed(
-            addr.id_.node_)) {
-      // server_conns_ should never have setPrincipal called as they
-      // should always be the calling side, as in they always send the
-      // initial HELLO_Message.
-      ld_check(false);
-      return 0;
-    }
-  }
-
-  return -1;
+const PrincipalIdentity* Sender::getPrincipal(const Address& address) {
+  const auto* info = getConnectionInfo(address);
+  return info ? info->principal.get() : nullptr;
 }
 
 folly::Optional<std::string> Sender::getCSID(const Address& addr) const {
@@ -1142,16 +1081,38 @@ Sender::getConnectionInfo(const Address& address) const {
 }
 
 bool Sender::setConnectionInfo(const Address& address,
-                               const ConnectionInfo& info) {
+                               const ConnectionInfo& new_info) {
   auto* connection = findConnection(address);
   if (connection == nullptr) {
     return false;
   }
-  connection->setInfo(info);
-  if (address.isClientAddress() && info.peer_node_idx) {
-    connection->setDSCP(settings_->server_dscp_default);
+  auto dscp_mark = detectDSCP(new_info);
+  if (dscp_mark) {
+    connection->setDSCP(dscp_mark.value());
   }
+  connection->setInfo(new_info);
   return true;
+}
+
+folly::Optional<uint8_t> Sender::detectDSCP(const ConnectionInfo& info) {
+  folly::Optional<uint8_t> dscp = folly::none;
+  auto config = worker_->getServerConfig();
+  // Only set DSCP on incoming connections
+  if (info.peer_name.isClientAddress()) {
+    // Try to find principal-specific settings for DSCP
+    for (const auto& identity : info.principal->identities) {
+      auto principal_cfg = config->getPrincipalByName(&identity.second);
+      if (principal_cfg != nullptr && principal_cfg->egress_dscp != 0) {
+        dscp = principal_cfg->egress_dscp;
+        break;
+      }
+    }
+    // Set default DSCP for incoming connection from server nodes
+    if (!dscp.hasValue() && info.peer_node_idx) {
+      dscp = settings_->server_dscp_default;
+    }
+  }
+  return dscp;
 }
 
 std::pair<Sender::ExtractPeerIdentityResult, PrincipalIdentity>

@@ -99,6 +99,13 @@ struct ConnectionInfo {
   folly::Optional<std::string> csid = folly::none;
 
   /**
+   * Used to identify the client for permission checks. Set to non-empty value
+   * upon successfull authentication.
+   */
+  std::shared_ptr<PrincipalIdentity> principal =
+      std::make_shared<PrincipalIdentity>();
+
+  /**
    * Produces a numan-readable string like
    * "C22566784 ([abcd:1234:5678:90ef:1111:2222:3333:4444]:41406)"
    */

@@ -523,22 +523,7 @@ class Sender : public SenderBase {
    * @return a pointer to the principal held in the Connection matching the addr
    * or nullptr if no Connection is known to this Sender match addr
    */
-  const PrincipalIdentity* getPrincipal(const Address& addr);
-
-  /**
-   * This method sets the princpal_ string in the Connection object when
-   * authentication is successful. see HELLO_Message.cpp for more detail.
-   * Asserts that the principal is not changed after it is initially set.
-   *
-   * @param addr      peer name of a client or server Connection expected to be
-   *                  under the management of this Sender.
-   * @param principal the value of the principal that will be set in the
-   * Connection
-   *
-   * @return 0 if it was successful, -1 if no Connections known to this Sender
-   * match addr
-   */
-  int setPrincipal(const Address& addr, PrincipalIdentity principal);
+  const PrincipalIdentity* getPrincipal(const Address&);
 
   // An enum representing the result of the peer identity extractions.
   enum class ExtractPeerIdentityResult {
@@ -1011,6 +996,9 @@ class Sender : public SenderBase {
 
   Connection* findConnection(const Address& addr) const;
   Connection* findClientConnection(const ClientID& client_id) const;
+
+  // Identifies right DSCP marking for connection based in connection properties
+  folly::Optional<uint8_t> detectDSCP(const ConnectionInfo&);
 };
 
 }} // namespace facebook::logdevice

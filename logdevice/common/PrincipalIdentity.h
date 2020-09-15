@@ -43,15 +43,14 @@ struct PrincipalIdentity {
   std::string client_address;
   std::string csid;
 
-  explicit PrincipalIdentity() {}
+  PrincipalIdentity() = default;
 
   explicit PrincipalIdentity(const std::string& type);
 
-  explicit PrincipalIdentity(
-      const std::string& type,
-      const std::pair<std::string, std::string>& identity);
+  PrincipalIdentity(const std::string& type,
+                    const std::pair<std::string, std::string>& identity);
 
-  explicit PrincipalIdentity(
+  PrincipalIdentity(
       const std::string& type,
       const std::pair<std::string, std::string>& identity,
       const std::vector<std::pair<std::string, std::string>>& identities);
@@ -62,6 +61,24 @@ struct PrincipalIdentity {
 
   bool match(const std::string& idtype, const std::string& identity);
   static bool isValidIdentityType(const std::string& idType);
+
+  /**
+   * Checks whether this object repesents default empty identity.
+   */
+  bool isEmpty() {
+    return type.empty();
+  }
+
+  bool operator==(const PrincipalIdentity& rhs) const {
+    if (this == &rhs) {
+      return true;
+    }
+    return type == rhs.type && primary_identity == rhs.primary_identity;
+  }
+
+  bool operator!=(const PrincipalIdentity& rhs) const {
+    return !(*this == rhs);
+  }
 };
 
 }} // namespace facebook::logdevice

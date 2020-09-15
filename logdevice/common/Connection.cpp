@@ -33,6 +33,7 @@
 #include "logdevice/common/SSLPrincipalParser.h"
 #include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/SocketDependencies.h"
+#include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/network/MessageReader.h"
@@ -96,9 +97,7 @@ Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
                        SocketType type,
                        ConnectionType conntype,
                        FlowGroup& flow_group)
-    : info_(peer_name, peer_sockaddr, type, conntype),
-      conn_description_(info_.describe()),
-      flow_group_(flow_group),
+    : flow_group_(flow_group),
       socket_ref_holder_(std::make_shared<bool>(true), this),
       impl_(new SocketImpl),
       deps_(std::move(deps)),
@@ -117,10 +116,12 @@ Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
       num_messages_received_(0),
       num_bytes_received_(0),
       end_stream_rewind_event_(deps_->getEvBase()),
+      info_(peer_name, peer_sockaddr, type, conntype),
       retry_receipt_of_message_(deps_->getEvBase()),
       sched_write_chain_(deps_->getEvBase()),
       last_used_time_(SteadyTimestamp::now()),
       pre_handshake_proto_(getSettings().max_protocol) {
+  conn_description_ = info_.describe();
   if (!peer_sockaddr.valid()) {
     ld_check(!peer_name.isClientAddress());
     if (info_.connection_type == ConnectionType::SSL) {
@@ -650,6 +651,23 @@ void Connection::onHandshakeTimeout() {
                     conn_description_.c_str());
   close(E::TIMEDOUT);
   STAT_INCR(deps_->getStats(), handshake_timeouts);
+}
+
+void Connection::setInfo(const ConnectionInfo& new_info) {
+  checkNewInfo(new_info);
+  info_ = new_info;
+}
+
+void Connection::checkNewInfo(const ConnectionInfo& new_info) const {
+  // Peer name is not allowed to change
+  ld_check(info_.peer_name == new_info.peer_name);
+
+  if (*new_info.principal != *info_.principal) {
+    // Only incoming connections are authenticated
+    ld_check(new_info.peer_name.isClientAddress());
+    // No changes to principal apart from one-time upgrade from empty
+    ld_check(info_.principal->isEmpty());
+  }
 }
 
 void Connection::setDSCP(uint8_t dscp) {
@@ -1587,7 +1605,7 @@ int Connection::dispatchMessageBody(ProtocolHeader header,
   // 4. Dispatch message to state machines for processing.
 
   Message::Disposition disp = deps_->onReceived(
-      msg.get(), info_.peer_name, principal_, std::move(resource_token));
+      msg.get(), info_.peer_name, info_.principal, std::move(resource_token));
 
   // 5. Dispose off message according to state machine's request.
   switch (disp) {

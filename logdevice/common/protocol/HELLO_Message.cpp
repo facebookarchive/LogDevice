@@ -135,7 +135,7 @@ static bool isValidServerConnection(const node_index_t& peer_nid,
 template <typename HelloHeader, typename AckHeader>
 static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
                                                  AckHeader& ackhdr,
-                                                 const ConnectionInfo& info) {
+                                                 ConnectionInfo& info) {
   Worker* w = Worker::onThisThread();
 
   const auto& from = info.peer_name;
@@ -304,19 +304,9 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
       ackhdr.status = E::ACCESS;
       return principal;
     }
-
-    int rv = w->sender().setPrincipal(from, principal);
-    if (rv != 0) {
-      ld_critical("INTERNAL ERROR: Could not set principal for HELLO Message "
-                  "received from %s",
-                  Sender::describeConnection(from).c_str());
-      // This should never happen. We are invoking onReceived and thus
-      // this function from the Connection that needs its principal set.
-      ld_check(false);
-      ackhdr.status = E::INTERNAL;
-    }
   }
 
+  info.principal = std::make_shared<PrincipalIdentity>(principal);
   return principal;
 }
 
