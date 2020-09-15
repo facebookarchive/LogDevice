@@ -12,7 +12,6 @@
 #include "logdevice/common/AllSequencers.h"
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/AppenderBuffer.h"
-#include "logdevice/common/Connection.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/EpochMetaDataMap.h"
 #include "logdevice/common/EpochSequencer.h"

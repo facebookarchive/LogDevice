@@ -1346,14 +1346,19 @@ std::string Sender::dumpQueuedMessages(Address addr) const {
   return folly::toJson(folly::toDynamic(strmap));
 }
 
-void Sender::forEachConnection(
-    std::function<void(const Connection&)> cb) const {
+void Sender::forAllConnections(
+    const std::function<void(const Connection&)>& cb) const {
   for (const auto& entry : impl_->server_conns_) {
     cb(*entry.second);
   }
   for (const auto& entry : impl_->client_conns_) {
     cb(*entry.second);
   }
+}
+
+void Sender::forEachConnection(
+    const std::function<void(const ConnectionInfo&)>& cb) const {
+  forAllConnections([&cb](const Connection& c) { cb(c.getInfo()); });
 }
 
 std::shared_ptr<const std::atomic<bool>>
@@ -1457,7 +1462,7 @@ void Sender::cleanupConnections() {
 }
 
 void Sender::fillDebugInfo(InfoSocketsTable& table) const {
-  forEachConnection(
+  forAllConnections(
       [&table](const Connection& conn) { conn.getDebugInfo(table); });
 }
 }} // namespace facebook::logdevice

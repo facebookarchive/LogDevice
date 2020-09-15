@@ -15,7 +15,6 @@
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/AppenderPrep.h"
 #include "logdevice/common/ClusterState.h"
-#include "logdevice/common/Connection.h"
 #include "logdevice/common/InternalAppendRequest.h"
 #include "logdevice/common/MetaDataLogWriter.h"
 #include "logdevice/common/PayloadGroupCodec.h"

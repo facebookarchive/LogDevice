@@ -740,9 +740,10 @@ class Sender : public SenderBase {
   std::string dumpQueuedMessages(Address addr) const;
 
   /**
-   * Invokes a callback for each Connection.  Used to gather debug info.
+   * Invokes a callback for each Connection with its info structure.
    */
-  void forEachConnection(std::function<void(const Connection&)> cb) const;
+  void
+  forEachConnection(const std::function<void(const ConnectionInfo&)>& cb) const;
 
   /**
    * Fills give table with debug information about all connections managed by
@@ -1005,6 +1006,10 @@ class Sender : public SenderBase {
 
   // Identifies right DSCP marking for connection based in connection properties
   folly::Optional<uint8_t> detectDSCP(const ConnectionInfo&);
+
+  // Iterates over all connections and invokes a callback for each of them.
+  void
+  forAllConnections(const std::function<void(const Connection&)>& cb) const;
 };
 
 }} // namespace facebook::logdevice

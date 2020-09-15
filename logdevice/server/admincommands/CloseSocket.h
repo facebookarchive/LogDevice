@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include "logdevice/common/Connection.h"
+#include "logdevice/common/ConnectionInfo.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/WorkerType.h"
@@ -99,8 +99,8 @@ class CloseSocket : public AdminCommand {
       int closed = 0;
       std::vector<Address> addresses;
       if (all_clients_) {
-        sender.forEachConnection([&addresses](const Connection& c) {
-          const auto peer_name = c.getInfo().peer_name;
+        sender.forEachConnection([&addresses](const ConnectionInfo& info) {
+          const auto peer_name = info.peer_name;
           if (peer_name.isClientAddress()) {
             addresses.push_back(peer_name);
           }

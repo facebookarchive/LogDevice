@@ -10,7 +10,6 @@
 #include <folly/Memory.h>
 
 #include "logdevice/common/AdminCommandTable.h"
-#include "logdevice/common/Connection.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/request_util.h"
 #include "logdevice/server/admincommands/AdminCommand.h"

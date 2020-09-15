@@ -11,7 +11,6 @@
 
 #include "logdevice/common/Appender.h"
 #include "logdevice/common/ClientIdxAllocator.h"
-#include "logdevice/common/Connection.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/RebuildingTypes.h"
 #include "logdevice/common/Request.h"

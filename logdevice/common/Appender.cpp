@@ -17,7 +17,6 @@
 #include "logdevice/common/AppenderTracer.h"
 #include "logdevice/common/Checksum.h"
 #include "logdevice/common/ClusterState.h"
-#include "logdevice/common/Connection.h"
 #include "logdevice/common/EpochMetaData.h"
 #include "logdevice/common/EpochSequencer.h"
 #include "logdevice/common/ExponentialBackoffAdaptiveVariable.h"

@@ -761,13 +761,12 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled) {
     sem = Semaphore();
     srv_w->add([&]() {
       auto* worker = Worker::onThisThread();
-      worker->sender().forEachConnection([&](const Connection& c) {
-        const auto& info = c.getInfo();
+      worker->sender().forEachConnection([&](const ConnectionInfo& info) {
         if (!info.peer_name.isClientAddress()) {
           return;
         }
         ClientID cid = info.peer_name.asClientID();
-        bool h = c.isHandshaken();
+        bool h = info.protocol.hasValue();
         all_handshaken &= h;
         clientIDs.push_back(info.peer_name.asClientID());
         ld_debug("%s is %shandshaken", cid.toString().c_str(), h ? "" : "not ");

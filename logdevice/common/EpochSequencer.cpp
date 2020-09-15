@@ -10,7 +10,6 @@
 #include "logdevice/common/AbortAppendersEpochRequest.h"
 #include "logdevice/common/AllSequencers.h"
 #include "logdevice/common/Appender.h"
-#include "logdevice/common/Connection.h"
 #include "logdevice/common/CopySetManager.h"
 #include "logdevice/common/CopySetSelectorFactory.h"
 #include "logdevice/common/EpochMetaData.h"
