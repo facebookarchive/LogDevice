@@ -58,6 +58,7 @@ enum class KeyPrefix : char {
   PartitionMeta_CompactedRetention = 'w',
   PartitionMeta_MinTimestamp = 'x',
   PartitionMeta_MaxTimestamp = 'y',
+  PartitionMeta_CsiEnabled = 'Z',
   PartitionMeta_LastCompaction = 'z',
   // Reserved for identifying the version of DB format, see checkSchemaVersion()
   Reserved_SchemaVersion = '.',
@@ -477,6 +478,8 @@ class PartitionMetaKey {
         return prefix(KeyPrefix::PartitionMeta_CompactedRetention);
       case PartitionMetadataType::DIRTY:
         return prefix(KeyPrefix::PartitionMeta_Dirty);
+      case PartitionMetadataType::CSI_ENABLED:
+        return prefix(KeyPrefix::PartitionMeta_CsiEnabled);
       case PartitionMetadataType::MAX:
         break;
     }

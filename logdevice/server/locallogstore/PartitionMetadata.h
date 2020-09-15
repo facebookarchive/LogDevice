@@ -30,6 +30,7 @@ enum class PartitionMetadataType {
   LAST_COMPACTION = 3,
   COMPACTED_RETENTION = 4,
   DIRTY = 5,
+  CSI_ENABLED = 6,
   MAX
 };
 
@@ -175,6 +176,30 @@ class PartitionDirtyMetadata : public PartitionMetadata {
   bool under_replicated_ = false;
 
   mutable std::vector<uint8_t> serialize_buffer_;
+};
+
+// Holds whether or not CSI is enabled for this partition. This is added
+// when creating the partition.
+class PartitionCSIMetadata final : public PartitionMetadata {
+ public:
+  explicit PartitionCSIMetadata(bool csi_enabled) : csi_enabled_(csi_enabled) {}
+
+  PartitionMetadataType getType() const override {
+    return PartitionMetadataType::CSI_ENABLED;
+  }
+
+  GEN_METADATA_SERIALIZATION_METHODS(PartitionCSIMetadata,
+                                     csi_enabled_,
+                                     "CSI " +
+                                         (csi_enabled_ ? "Enabled"
+                                                       : "Disabled"))
+
+  bool isCSIEnabled() const {
+    return csi_enabled_;
+  }
+
+ private:
+  bool csi_enabled_{false};
 };
 
 /**
