@@ -58,6 +58,10 @@ class PartitionedRocksDBStore::Iterator : public LocalLogStore::ReadIterator {
     return RocksDBLogStoreBase::getIOBytesUnnormalized();
   }
 
+  bool isCSIEnabled() const {
+    return data_iterator_ != nullptr && data_iterator_->isCSIEnabled();
+  }
+
  private:
   struct PartitionInfo {
     PartitionPtr partition_;
@@ -216,7 +220,7 @@ class PartitionedRocksDBStore::Iterator : public LocalLogStore::ReadIterator {
   std::unique_ptr<RocksDBLocalLogStore::CSIWrapper> data_iterator_;
 
   const PartitionedRocksDBStore* pstore_;
-  const LocalLogStore::ReadOptions options_;
+  LocalLogStore::ReadOptions options_;
 
   // Reset to false during seek operations if all partitions in the range
   // [starting partition, destination partition] are fully replicated.
@@ -307,7 +311,7 @@ class PartitionedRocksDBStore::PartitionedAllLogsIterator
   using LogDirectoryEntry = std::pair<logid_t, DirectoryEntry>;
 
   const PartitionedRocksDBStore* pstore_;
-  const LocalLogStore::ReadOptions options_;
+  LocalLogStore::ReadOptions options_;
 
   // Used by getProgress(). Same length as directory_. If the iterator is
   // on directory entry i, getProgress() reports progress_lookup_[i].

@@ -67,6 +67,8 @@ class ServerProcessor;
 
 class PartitionedRocksDBStore : public RocksDBLogStoreBase {
  public:
+  class Iterator;
+
   static const char* METADATA_CF_NAME;
   static const char* UNPARTITIONED_CF_NAME;
   static const char* SNAPSHOTS_CF_NAME;
@@ -1181,7 +1183,6 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
       const std::shared_ptr<const RocksDBSettings> settings) override;
 
  private:
-  class Iterator;
   class PartitionedAllLogsIterator;
   class PartitionDirectoryIterator;
   class FindTime;
@@ -1314,6 +1315,10 @@ class PartitionedRocksDBStore : public RocksDBLogStoreBase {
   // Called by the constructor.
   // Reads persisted dirty metadata for the given partition.
   bool readPartitionDirtyState(PartitionPtr partition);
+
+  // Called by the constructor.
+  // Read persisted copyset-indexing status metadata.
+  bool readPartitionCSIStatus(PartitionPtr partition);
 
   // Called by the constructor.
   // Reads oldest partition ID from metadata and, if it's greater than

@@ -31,6 +31,7 @@
 #include "logdevice/common/util.h"
 #include "logdevice/server/ServerProcessor.h"
 #include "logdevice/server/locallogstore/PartitionMetadata.h"
+#include "logdevice/server/locallogstore/PartitionedRocksDBStoreIterators.h"
 #include "logdevice/server/locallogstore/RocksDBCompactionFilter.h"
 #include "logdevice/server/locallogstore/RocksDBCustomiser.h"
 #include "logdevice/server/locallogstore/RocksDBEnv.h"
@@ -10566,4 +10567,208 @@ TEST_F(PartitionedRocksDBStoreTest, PartitionCopysetIndexSetting) {
   EXPECT_TRUE(csi_meta_object.isCSIEnabled());
   // Check the cached flag is set to true
   EXPECT_TRUE(store_->getLatestPartition()->is_csi_enabled_);
+}
+
+TEST_F(PartitionedRocksDBStoreTest, ReadingPartitionCsiMetadataOnStartup) {
+  closeStore();
+  ServerConfig::SettingsConfig s;
+  s["write-copyset-index"] = "true";
+  openStore(s);
+  store_->createPartition();
+  store_->createPartition();
+
+  closeStore();
+  s["write-copyset-index"] = "false";
+  openStore(s);
+  store_->createPartition();
+  store_->createPartition();
+
+  closeStore();
+  openStore();
+  auto partitions = store_->getPartitionList();
+
+  // First 2 had the setting enabled while the last 2 didn't
+  EXPECT_TRUE(partitions->get(ID0 + 1)->is_csi_enabled_);
+  EXPECT_TRUE(partitions->get(ID0 + 2)->is_csi_enabled_);
+  EXPECT_FALSE(partitions->get(ID0 + 3)->is_csi_enabled_);
+  EXPECT_FALSE(partitions->get(ID0 + 4)->is_csi_enabled_);
+}
+
+// Create 4 partitions while the store is open, first 2 have CSI enabled
+// and other 2 don't. When reading, RocksDBLocalLogStore::CSIWrapper should
+// have csi_iterator_ set for the first 2 and unset for the second 2.
+TEST_F(PartitionedRocksDBStoreTest,
+       ReadingPartitionCsiStatusOnPartitionChange) {
+  const logid_t logid(1);
+
+  closeStore();
+  ServerConfig::SettingsConfig s;
+  s["write-copyset-index"] = "true";
+  openStore(s);
+  store_->createPartition();
+  put({TestRecord(logid, 20)});
+  store_->createPartition();
+  put({TestRecord(logid, 30)});
+
+  closeStore();
+  s["write-copyset-index"] = "false";
+  openStore(s);
+  store_->createPartition();
+  put({TestRecord(logid, 40)});
+  store_->createPartition();
+  put({TestRecord(logid, 50)});
+
+  auto it = store_->read(
+      logid,
+      LocalLogStore::ReadOptions("ReadingPartitionCsiStatusOnPartitionChange"));
+  auto partitioned_it =
+      dynamic_cast<PartitionedRocksDBStore::Iterator*>(it.get());
+
+  partitioned_it->seek(20);
+  EXPECT_EQ(IteratorState::AT_RECORD, partitioned_it->state());
+  EXPECT_TRUE(partitioned_it->isCSIEnabled());
+
+  partitioned_it->seek(30);
+  EXPECT_EQ(IteratorState::AT_RECORD, partitioned_it->state());
+  EXPECT_TRUE(partitioned_it->isCSIEnabled());
+
+  partitioned_it->seek(40);
+  EXPECT_EQ(IteratorState::AT_RECORD, partitioned_it->state());
+  EXPECT_FALSE(partitioned_it->isCSIEnabled());
+
+  partitioned_it->seek(50);
+  EXPECT_EQ(IteratorState::AT_RECORD, partitioned_it->state());
+  EXPECT_FALSE(partitioned_it->isCSIEnabled());
+}
+
+/**
+ * Write a few records and read them back.  This verifies that ReadIterator
+ * works as advertised and that records come back in the right order.
+ */
+TEST_F(PartitionedRocksDBStoreTest, WriteReadBackTest) {
+  put({TestRecord(logid_t(2), 1)});
+  put({TestRecord(logid_t(2), 5)});
+  put({TestRecord(logid_t(1), 6)});
+  put({TestRecord(logid_t(2), 4)});
+
+  {
+    std::unique_ptr<LocalLogStore::ReadIterator> it = store_->read(
+        logid_t(1), LocalLogStore::ReadOptions("WriteReadBackTest"));
+    it->seek(0);
+    int nread = 0;
+    for (nread = 0; it->state() == IteratorState::AT_RECORD;
+         ++nread, it->next()) {
+      if (nread == 0) {
+        EXPECT_EQ(6, it->getLSN());
+      }
+    }
+    EXPECT_EQ(1, nread);
+  }
+
+  {
+    // Test that we can get records for log 2, starting from LSN 1 (inclusive)
+    std::unique_ptr<LocalLogStore::ReadIterator> it = store_->read(
+        logid_t(2), LocalLogStore::ReadOptions("WriteReadBackTest"));
+    it->seek(1);
+    int nread = 0;
+    for (nread = 0; it->state() == IteratorState::AT_RECORD;
+         ++nread, it->next()) {
+      if (nread == 0) {
+        EXPECT_EQ(1, it->getLSN());
+      } else if (nread == 1) {
+        EXPECT_EQ(4, it->getLSN());
+      } else if (nread == 2) {
+        EXPECT_EQ(5, it->getLSN());
+      }
+    }
+    EXPECT_EQ(3, nread);
+  }
+
+  {
+    // Test that starting at LSN 2 skips the first record
+    std::unique_ptr<LocalLogStore::ReadIterator> it = store_->read(
+        logid_t(2), LocalLogStore::ReadOptions("WriteReadBackTest"));
+    it->seek(2);
+    int nread = 0;
+    for (nread = 0; it->state() == IteratorState::AT_RECORD;
+         ++nread, it->next()) {
+      if (nread == 0) {
+        EXPECT_EQ(4, it->getLSN());
+      } else if (nread == 1) {
+        EXPECT_EQ(5, it->getLSN());
+      }
+    }
+    EXPECT_EQ(2, nread);
+  }
+}
+
+TEST_F(PartitionedRocksDBStoreTest, Seek) {
+  std::array<lsn_t, 3> lsns = {compose_lsn(epoch_t(1), esn_t(1)),
+                               compose_lsn(epoch_t(1), esn_t(2)),
+                               compose_lsn(epoch_t(4), esn_t(1))};
+
+  std::vector<PutWriteOp> put_ops;
+  for (lsn_t lsn : lsns) {
+    put({TestRecord(logid_t(1), lsn)});
+    put({TestRecord(LOGID_MAX_INTERNAL, lsn)});
+  }
+
+  LocalLogStore::ReadOptions options("Seek");
+  options.tailing = false;
+
+  std::unique_ptr<LocalLogStore::ReadIterator> it =
+      store_->read(logid_t(1), options);
+
+  it->seek(lsns[1]);
+  ASSERT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(lsns[1], it->getLSN());
+
+  it->prev();
+  ASSERT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(lsns[0], it->getLSN());
+
+  it->seekForPrev(LSN_MAX);
+  ASSERT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(lsns[2], it->getLSN());
+
+  it = store_->read(logid_t(2), options);
+  it->seekForPrev(LSN_MAX);
+  ASSERT_EQ(IteratorState::AT_END, it->state());
+
+  it = store_->read(LOGID_MAX_INTERNAL, options);
+  it->seekForPrev(LSN_MAX);
+  ASSERT_EQ(IteratorState::AT_RECORD, it->state());
+  EXPECT_EQ(lsns[2], it->getLSN());
+}
+
+TEST_F(PartitionedRocksDBStoreTest, BatchWithDelete) {
+  std::vector<std::unique_ptr<WriteOp>> ops;
+  put({TestRecord(logid_t(1), 6),
+       TestRecord(logid_t(2), 1),
+       TestRecord(logid_t(1), 6, TestRecord::Type::DELETE)});
+
+  {
+    std::unique_ptr<LocalLogStore::ReadIterator> it =
+        store_->read(logid_t(1), LocalLogStore::ReadOptions("BatchWithDelete"));
+    it->seek(0);
+    int nread = 0;
+    for (nread = 0; it->state() == IteratorState::AT_RECORD;
+         ++nread, it->next()) {
+    }
+    EXPECT_EQ(0, nread);
+  }
+
+  {
+    std::unique_ptr<LocalLogStore::ReadIterator> it =
+        store_->read(logid_t(2), LocalLogStore::ReadOptions("BatchWithDelete"));
+    it->seek(0);
+    int nread = 0;
+    for (nread = 0; it->state() == IteratorState::AT_RECORD;
+         ++nread, it->next()) {
+      if (nread == 0) {
+        EXPECT_EQ(1, it->getLSN());
+      }
+    }
+    EXPECT_EQ(1, nread);
+  }
 }

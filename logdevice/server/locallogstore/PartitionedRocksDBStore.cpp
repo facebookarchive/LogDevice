@@ -812,6 +812,10 @@ bool PartitionedRocksDBStore::open(
       return false;
     }
 
+    if (!readPartitionCSIStatus(partition)) {
+      return false;
+    }
+
     for (auto& ndd_kv : partition->dirty_state_.dirtied_by_nodes) {
       // Only persisting Appends for now.
       if (ndd_kv.first.second != DataClass::APPEND) {
@@ -1668,6 +1672,29 @@ bool PartitionedRocksDBStore::readPartitionDirtyState(PartitionPtr partition) {
     }
     dci++;
   };
+  return true;
+}
+
+bool PartitionedRocksDBStore::readPartitionCSIStatus(PartitionPtr partition) {
+  PartitionCSIMetadata meta(false);
+  int rv = RocksDBWriter::readMetadata(
+      this,
+      RocksDBKeyFormat::PartitionMetaKey(
+          PartitionMetadataType::CSI_ENABLED, partition->id_),
+      &meta,
+      metadata_cf_->get());
+  if (rv != 0) {
+    if (err == E::NOTFOUND) {
+      ld_warning("Partition %lu doesn't have the Copyset Index Metadata",
+                 partition->id_);
+      // return true here so we can rollout this change and then we can remove
+      // this after we're certain all old partitions written without this new
+      // metadata are purged
+      return true;
+    }
+    return false;
+  }
+  partition->is_csi_enabled_ = meta.isCSIEnabled();
   return true;
 }
 

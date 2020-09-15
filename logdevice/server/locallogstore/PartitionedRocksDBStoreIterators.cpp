@@ -48,6 +48,9 @@ void PartitionedRocksDBStore::Iterator::setDataIteratorFromCurrent(
   RecordTimestamp min_ts, max_ts;
   if (!filter || checkFilterTimeRange(*filter, &min_ts, &max_ts)) {
     if (data_iterator_ == nullptr) {
+      // This option is controlled by whether or not this partition
+      // had copy set indexing turned on at creation time.
+      options_.allow_copyset_index = current_.partition_->is_csi_enabled_;
       data_iterator_ = std::make_unique<RocksDBLocalLogStore::CSIWrapper>(
           pstore_, log_id_, options_, current_.partition_->cf_->get());
     }

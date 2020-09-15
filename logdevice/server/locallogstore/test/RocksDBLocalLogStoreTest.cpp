@@ -399,7 +399,8 @@ STORE_TEST(RocksDBLocalLogStoreTest, AllLogsIterators, store) {
  * Write a few records and read them back.  This verifies that ReadIterator
  * works as advertised and that records come back in the right order.
  */
-STORE_TEST(RocksDBLocalLogStoreTest, WriteReadBackTest, store) {
+TEST_F(RocksDBLocalLogStoreTest, WriteReadBackTest) {
+  auto store = createRocksDBLocalLogStore();
   std::vector<PutWriteOp> put_ops{
       PutWriteOp{logid_t(2),
                  1,
@@ -446,12 +447,12 @@ STORE_TEST(RocksDBLocalLogStoreTest, WriteReadBackTest, store) {
   std::vector<const WriteOp*> ops1{&put_ops[0], &put_ops[1]};
   std::vector<const WriteOp*> ops2{&put_ops[2], &put_ops[3]};
 
-  ASSERT_EQ(0, store.writeMulti(ops1));
-  ASSERT_EQ(0, store.writeMulti(ops2));
+  ASSERT_EQ(0, store->writeMulti(ops1));
+  ASSERT_EQ(0, store->writeMulti(ops2));
 
   {
-    std::unique_ptr<LocalLogStore::ReadIterator> it =
-        store.read(logid_t(1), LocalLogStore::ReadOptions("WriteReadBackTest"));
+    std::unique_ptr<LocalLogStore::ReadIterator> it = store->read(
+        logid_t(1), LocalLogStore::ReadOptions("WriteReadBackTest"));
     it->seek(0);
     int nread = 0;
     for (nread = 0; it->state() == IteratorState::AT_RECORD;
@@ -466,8 +467,8 @@ STORE_TEST(RocksDBLocalLogStoreTest, WriteReadBackTest, store) {
 
   {
     // Test that we can get records for log 2, starting from LSN 1 (inclusive)
-    std::unique_ptr<LocalLogStore::ReadIterator> it =
-        store.read(logid_t(2), LocalLogStore::ReadOptions("WriteReadBackTest"));
+    std::unique_ptr<LocalLogStore::ReadIterator> it = store->read(
+        logid_t(2), LocalLogStore::ReadOptions("WriteReadBackTest"));
     it->seek(1);
     int nread = 0;
     for (nread = 0; it->state() == IteratorState::AT_RECORD;
@@ -488,8 +489,8 @@ STORE_TEST(RocksDBLocalLogStoreTest, WriteReadBackTest, store) {
 
   {
     // Test that starting at LSN 2 skips the first record
-    std::unique_ptr<LocalLogStore::ReadIterator> it =
-        store.read(logid_t(2), LocalLogStore::ReadOptions("WriteReadBackTest"));
+    std::unique_ptr<LocalLogStore::ReadIterator> it = store->read(
+        logid_t(2), LocalLogStore::ReadOptions("WriteReadBackTest"));
     it->seek(2);
     int nread = 0;
     for (nread = 0; it->state() == IteratorState::AT_RECORD;
@@ -506,7 +507,8 @@ STORE_TEST(RocksDBLocalLogStoreTest, WriteReadBackTest, store) {
   }
 }
 
-STORE_TEST(RocksDBLocalLogStoreTest, BatchWithDelete, store) {
+TEST_F(RocksDBLocalLogStoreTest, BatchWithDelete) {
+  auto store = createRocksDBLocalLogStore();
   std::vector<std::unique_ptr<WriteOp>> ops;
   ops.push_back(
       std::make_unique<PutWriteOp>(logid_t(1),
@@ -537,11 +539,11 @@ STORE_TEST(RocksDBLocalLogStoreTest, BatchWithDelete, store) {
     op_ptrs.push_back(x.get());
   }
 
-  ASSERT_EQ(0, store.writeMulti(op_ptrs));
+  ASSERT_EQ(0, store->writeMulti(op_ptrs));
 
   {
     std::unique_ptr<LocalLogStore::ReadIterator> it =
-        store.read(logid_t(1), LocalLogStore::ReadOptions("BatchWithDelete"));
+        store->read(logid_t(1), LocalLogStore::ReadOptions("BatchWithDelete"));
     it->seek(0);
     int nread = 0;
     for (nread = 0; it->state() == IteratorState::AT_RECORD;
@@ -552,7 +554,7 @@ STORE_TEST(RocksDBLocalLogStoreTest, BatchWithDelete, store) {
 
   {
     std::unique_ptr<LocalLogStore::ReadIterator> it =
-        store.read(logid_t(2), LocalLogStore::ReadOptions("BatchWithDelete"));
+        store->read(logid_t(2), LocalLogStore::ReadOptions("BatchWithDelete"));
     it->seek(0);
     int nread = 0;
     for (nread = 0; it->state() == IteratorState::AT_RECORD;
@@ -706,7 +708,8 @@ STORE_TEST(RocksDBLocalLogStoreTest, WriteInvalidMetadata, store) {
   }
 }
 
-STORE_TEST(RocksDBLocalLogStoreTest, Seek, store) {
+TEST_F(RocksDBLocalLogStoreTest, Seek) {
+  auto store = createRocksDBLocalLogStore();
   Slice data("foo", 3);
   lsn_t lsns[] = {
       compose_lsn(epoch_t(1), esn_t(1)),
@@ -744,13 +747,13 @@ STORE_TEST(RocksDBLocalLogStoreTest, Seek, store) {
     ops.push_back(&x);
   }
 
-  ASSERT_EQ(0, store.writeMulti(ops));
+  ASSERT_EQ(0, store->writeMulti(ops));
 
   LocalLogStore::ReadOptions options("Seek");
   options.tailing = false;
 
   std::unique_ptr<LocalLogStore::ReadIterator> it =
-      store.read(logid_t(1), options);
+      store->read(logid_t(1), options);
 
   it->seek(lsns[1]);
   ASSERT_EQ(IteratorState::AT_RECORD, it->state());
@@ -764,11 +767,11 @@ STORE_TEST(RocksDBLocalLogStoreTest, Seek, store) {
   ASSERT_EQ(IteratorState::AT_RECORD, it->state());
   EXPECT_EQ(lsns[2], it->getLSN());
 
-  it = store.read(logid_t(2), options);
+  it = store->read(logid_t(2), options);
   it->seekForPrev(LSN_MAX);
   ASSERT_EQ(IteratorState::AT_END, it->state());
 
-  it = store.read(LOGID_MAX_INTERNAL, options);
+  it = store->read(LOGID_MAX_INTERNAL, options);
   it->seekForPrev(LSN_MAX);
   ASSERT_EQ(IteratorState::AT_RECORD, it->state());
   EXPECT_EQ(lsns[2], it->getLSN());

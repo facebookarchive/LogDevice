@@ -164,6 +164,10 @@ class RocksDBLocalLogStore : public RocksDBLogStoreBase {
     RecordTimestamp min_ts_ = RecordTimestamp::min();
     RecordTimestamp max_ts_ = RecordTimestamp::max();
 
+    bool isCSIEnabled() const {
+      return csi_iterator_ != nullptr;
+    }
+
    private:
     class CopySetIndexIterator;
     class DataIterator;
