@@ -807,6 +807,7 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
     gossip_settings.enabled = false; // we don't need failure detector
     UpdateableSettings<GossipSettings> ugossip_settings(
         std::move(gossip_settings));
+
     processor_ = ServerProcessor::createNoInit(
         /* sharded storage thread pool */ nullptr,
         /* log storage state map */ nullptr,
@@ -863,7 +864,10 @@ class PartitionedRocksDBStoreTest : public ::testing::Test {
     if (!env_) {
       rocksdb_settings_ = UpdateableSettings<RocksDBSettings>(
           RocksDBSettings::defaultTestSettings());
-      settings_updater_ = std::make_unique<SettingsUpdater>();
+
+      if (!settings_updater_) {
+        settings_updater_ = std::make_unique<SettingsUpdater>();
+      }
       settings_updater_->registerSettings(rocksdb_settings_);
 
       settings_overrides_.clear();
@@ -10522,4 +10526,44 @@ TEST_F(PartitionedRocksDBStoreTest,
   it->seek(25, &filter, &stats);
   EXPECT_EQ(IteratorState::AT_END, it->state());
   EXPECT_EQ(0, stats.seen_logsdb_partitions);
+}
+
+// Test that CSI status is enabled/disabled per partition.
+TEST_F(PartitionedRocksDBStoreTest, PartitionCopysetIndexSetting) {
+  PartitionCSIMetadata csi_meta_object(false);
+
+  // Turn off write-copyset-index and create a partition. That partition
+  // shouldn't have the CSI metadata enabled.
+  closeStore();
+  ServerConfig::SettingsConfig s;
+  s["write-copyset-index"] = "false";
+  openStore(s);
+  store_->createPartition();
+  int rv = RocksDBWriter::readMetadata(
+      store_.get(),
+      RocksDBKeyFormat::PartitionMetaKey(
+          PartitionMetadataType::CSI_ENABLED,
+          store_->getPartitionList()->get(ID0 + 1)->id_),
+      &csi_meta_object,
+      store_->getMetadataCFHandle());
+  EXPECT_FALSE(csi_meta_object.isCSIEnabled());
+  // Check the cached flag is also False
+  EXPECT_FALSE(store_->getLatestPartition()->is_csi_enabled_);
+
+  // Turn on write-copyset-index and create a paritiont. Now the CSI metadata
+  // should be on for the new partition.
+  closeStore();
+  s["write-copyset-index"] = "true";
+  openStore(s);
+  store_->createPartition();
+  rv = RocksDBWriter::readMetadata(
+      store_.get(),
+      RocksDBKeyFormat::PartitionMetaKey(
+          PartitionMetadataType::CSI_ENABLED,
+          store_->getPartitionList()->get(ID0 + 2)->id_),
+      &csi_meta_object,
+      store_->getMetadataCFHandle());
+  EXPECT_TRUE(csi_meta_object.isCSIEnabled());
+  // Check the cached flag is set to true
+  EXPECT_TRUE(store_->getLatestPartition()->is_csi_enabled_);
 }

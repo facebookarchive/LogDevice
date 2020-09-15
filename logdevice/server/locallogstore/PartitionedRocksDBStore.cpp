@@ -1057,6 +1057,18 @@ PartitionedRocksDBStore::createPartitionsImpl(
       if (rv != 0) {
         return false;
       }
+
+      PartitionCSIMetadata csi(
+          rocksdb_config_.getRocksDBSettings()->write_copyset_index_);
+      rv = writer_->writeMetadata(
+          PartitionMetaKey(PartitionMetadataType::CSI_ENABLED, id),
+          csi,
+          write_options,
+          metadata_cf_->get());
+      if (rv != 0) {
+        return false;
+      }
+
       if (pre_dirty_state != nullptr &&
           !pre_dirty_state->dirtied_by_nodes.empty()) {
         rv = writer_->writeMetadata(
@@ -1091,7 +1103,11 @@ PartitionedRocksDBStore::createPartitionsImpl(
   for (size_t i = 0; i < count; ++i) {
     auto cf_ptr = wrapAndRegisterCF(std::move(cfs[i]));
     new_partitions[i] = std::make_shared<Partition>(
-        first_id + i, cf_ptr, starting_timestamps[i], pre_dirty_state);
+        first_id + i,
+        cf_ptr,
+        starting_timestamps[i],
+        pre_dirty_state,
+        rocksdb_config_.getRocksDBSettings()->write_copyset_index_);
   }
   addPartitions(new_partitions);
 
@@ -5602,17 +5618,20 @@ int PartitionedRocksDBStore::isEmpty() const {
   //  * "schema_version" or ".schema_version"
   //  * partition metadata of type STARTING_TIMESTAMP.
   //  * partition metadata of type DIRTY.
+  //  * partition metadata of type CSI_ENABLED.
   RocksDBIterator it = createMetadataIterator(true);
   it.Seek(rocksdb::Slice("", 0));
-  while (
-      it.status().ok() && it.Valid() &&
-      (it.key().compare(OLD_SCHEMA_VERSION_KEY) == 0 ||
-       it.key().compare(NEW_SCHEMA_VERSION_KEY) == 0 ||
-       PartitionMetaKey::valid(it.key().data(),
-                               it.key().size(),
-                               PartitionMetadataType::STARTING_TIMESTAMP) ||
-       PartitionMetaKey::valid(
-           it.key().data(), it.key().size(), PartitionMetadataType::DIRTY))) {
+  while (it.status().ok() && it.Valid() &&
+         (it.key().compare(OLD_SCHEMA_VERSION_KEY) == 0 ||
+          it.key().compare(NEW_SCHEMA_VERSION_KEY) == 0 ||
+          PartitionMetaKey::valid(it.key().data(),
+                                  it.key().size(),
+                                  PartitionMetadataType::STARTING_TIMESTAMP) ||
+          PartitionMetaKey::valid(
+              it.key().data(), it.key().size(), PartitionMetadataType::DIRTY) ||
+          PartitionMetaKey::valid(it.key().data(),
+                                  it.key().size(),
+                                  PartitionMetadataType::CSI_ENABLED))) {
     it.Next();
   }
   if (!it.status().ok()) {
