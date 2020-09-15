@@ -79,6 +79,13 @@ struct ConnectionInfo {
   }
 
   /**
+   * For an handshaken outgoing connection to a server this is the ClientID
+   * that the other end assigned to our connection and reported in the ACK. For
+   * all other cases the value will be folly::none.
+   */
+  folly::Optional<ClientID> our_name_at_peer = folly::none;
+
+  /**
    * Produces a numan-readable string like
    * "C22566784 ([abcd:1234:5678:90ef:1111:2222:3333:4444]:41406)"
    */

@@ -4,8 +4,7 @@
 
 #include <folly/io/async/SSLContext.h>
 
-#include "logdevice/common/Address.h"
-#include "logdevice/common/NodeID.h"
+#include "logdevice/common/ConnectionInfo.h"
 #include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/RunContext.h"
@@ -13,6 +12,7 @@
 #include "logdevice/common/libevent/LibEventCompatibility.h"
 #include "logdevice/common/network/LinuxNetUtils.h"
 #include "logdevice/common/protocol/Message.h"
+
 namespace facebook { namespace logdevice {
 namespace configuration { namespace nodes {
 class NodesConfiguration;
@@ -93,10 +93,8 @@ class SocketDependencies {
   virtual std::unique_ptr<Message> createHelloMessage(NodeID destNodeID);
   virtual std::unique_ptr<Message>
   createShutdownMessage(uint32_t serverInstanceID);
-  virtual uint16_t processHelloMessage(const Message* msg);
-  virtual void processACKMessage(const Message* msg,
-                                 ClientID* our_name_at_peer,
-                                 uint16_t* destProto);
+  virtual void processHelloMessage(const Message& msg, ConnectionInfo& info);
+  virtual void processACKMessage(const Message& msg, ConnectionInfo& info);
   virtual std::unique_ptr<Message> deserialize(const ProtocolHeader& ph,
                                                ProtocolReader& reader);
   virtual std::string describeConnection(const Address& addr);

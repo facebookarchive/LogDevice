@@ -409,17 +409,17 @@ SocketDependencies::createShutdownMessage(uint32_t serverInstanceId) {
   return std::make_unique<SHUTDOWN_Message>(hdr);
 }
 
-uint16_t SocketDependencies::processHelloMessage(const Message* msg) {
-  return std::min(static_cast<const HELLO_Message*>(msg)->header_.proto_max,
-                  getSettings().max_protocol);
+void SocketDependencies::processHelloMessage(const Message& msg,
+                                             ConnectionInfo& info) {
+  const auto& hello = dynamic_cast<const HELLO_Message&>(msg);
+  info.protocol = std::min(hello.header_.proto_max, getSettings().max_protocol);
 }
 
-void SocketDependencies::processACKMessage(const Message* msg,
-                                           ClientID* our_name_at_peer,
-                                           uint16_t* destProto) {
-  const ACK_Message* ack = static_cast<const ACK_Message*>(msg);
-  *our_name_at_peer = ClientID(ack->getHeader().client_idx);
-  *destProto = ack->getHeader().proto;
+void SocketDependencies::processACKMessage(const Message& msg,
+                                           ConnectionInfo& info) {
+  const auto& ack = static_cast<const ACK_Message&>(msg);
+  info.our_name_at_peer = ClientID(ack.getHeader().client_idx);
+  info.protocol = ack.getHeader().proto;
 }
 
 std::unique_ptr<Message>

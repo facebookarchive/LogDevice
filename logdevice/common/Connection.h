@@ -544,15 +544,6 @@ class Connection : public TrafficShappingSocket {
   }
 
   /**
-   * @return Get the ClientID that the other end assigned to our connection and
-   * reported in the ACK.  Only for Sockets that initiated an outgoing
-   * connection to a server.
-   */
-  ClientID getOurNameAtPeer() const {
-    return our_name_at_peer_;
-  }
-
-  /**
    * Extracts the underlying connection certificate and parses the principal
    * identity out of it.
    * NOTES:
@@ -880,12 +871,6 @@ class Connection : public TrafficShappingSocket {
   // Used to distinguish graceful server shutdown from
   // ungraceful server shutdown
   bool peer_shuttingdown_{false};
-
-  // For Sockets that initiated an outgoing connection to a server and received
-  // a positive ACK, this is the ClientID that the other end assigned to our
-  // connection and reported in the ACK. For all other Sockets, or if an
-  // LD-level handshake has not yet completed this is an invalid ClientID.
-  ClientID our_name_at_peer_;
 
   // if the peer is a server, this object throttles the rate of connection
   // attempts

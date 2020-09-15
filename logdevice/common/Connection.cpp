@@ -106,7 +106,6 @@ Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
       drain_pos_(0),
       connected_(false),
       handshaken_(false),
-      our_name_at_peer_(ClientID::INVALID),
       outbuf_overflow_(getSettings().outbuf_overflow_kb * 1024),
       outbufs_min_budget_(getSettings().outbuf_socket_min_kb * 1024),
       handshake_timeout_event_(std::make_unique<HandshakeTimeout>(*this)),
@@ -765,7 +764,7 @@ void Connection::markDisconnectedOnClose() {
   conn_incoming_token_.release();
   conn_external_token_.release();
 
-  our_name_at_peer_ = ClientID::INVALID;
+  info_.our_name_at_peer = folly::none;
   connected_ = false;
   handshaken_ = false;
 
@@ -1241,7 +1240,7 @@ void Connection::onBytesAdmittedToSend(size_t nbytes) {
       }
     } else {
       ld_check(handshaken_);
-      if (!our_name_at_peer_.valid()) {
+      if (!info_.our_name_at_peer.hasValue()) {
         // It's an incoming connection. The first message we send must be ACK.
         ld_check(drain_pos_ > 0 || num_messages > 0);
       }
@@ -1396,10 +1395,9 @@ bool Connection::validateReceivedMessage(const Message* msg) const {
 }
 
 bool Connection::processHandshakeMessage(const Message* msg) {
-  uint16_t protocol;
   switch (msg->type_) {
     case MessageType::ACK: {
-      deps_->processACKMessage(msg, &our_name_at_peer_, &protocol);
+      deps_->processACKMessage(*msg, info_);
       if (connect_throttle_) {
         connect_throttle_->connectSucceeded();
       } else {
@@ -1428,13 +1426,14 @@ bool Connection::processHandshakeMessage(const Message* msg) {
         err = E::TOOMANY;
         return false;
       }
-      protocol = deps_->processHelloMessage(msg);
+      deps_->processHelloMessage(*msg, info_);
       break;
     default:
       ld_check(false); // unreachable.
   };
 
-  info_.protocol = protocol;
+  ld_check(info_.protocol.hasValue());
+  uint16_t protocol = info_.protocol.value();
   ld_check(protocol >= Compatibility::MIN_PROTOCOL_SUPPORTED);
   ld_check(protocol <= Compatibility::MAX_PROTOCOL_SUPPORTED);
   ld_assert(protocol <= getSettings().max_protocol);
@@ -1774,7 +1773,7 @@ void Connection::handshakeTimeoutCallback(void* arg, short) {
 }
 
 int Connection::checkConnection(ClientID* our_name_at_peer) {
-  if (!our_name_at_peer_.valid()) {
+  if (!info_.our_name_at_peer.hasValue()) {
     // socket is either not connected or we're still waiting for a handshake
     // to complete
     ld_check(connect_throttle_);
@@ -1800,7 +1799,7 @@ int Connection::checkConnection(ClientID* our_name_at_peer) {
   }
 
   if (our_name_at_peer) {
-    *our_name_at_peer = our_name_at_peer_;
+    *our_name_at_peer = info_.our_name_at_peer.value();
   }
 
   return 0;

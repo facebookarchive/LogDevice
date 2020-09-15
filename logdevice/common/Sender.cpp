@@ -410,19 +410,19 @@ int Sender::sendMessageImpl(std::unique_ptr<Message>&& msg,
     }
   }
 
+  auto peer_type = conn.getInfo().getPeerType();
   if (!isHandshakeMessage(msg->type_) &&
       // Return ENOBUFS error Sender's outbuf limit and the Connection's
       // minimum out buf limit is reached.
-      bytesPendingLimitReached(conn.getPeerType()) &&
-      conn.minOutBufLimitReached()) {
+      bytesPendingLimitReached(peer_type) && conn.minOutBufLimitReached()) {
     RATELIMIT_WARNING(std::chrono::seconds(1),
                       10,
                       "ENOBUFS for Sender. Peer type: %s. "
                       "Current sender outbuf usage: %zu. "
                       "Current sender peer outbuf usage : %zu",
-                      peerTypeToString(conn.getPeerType()),
+                      peerTypeToString(peer_type),
                       getBytesPending(),
-                      getBytesPending(conn.getPeerType()));
+                      getBytesPending(peer_type));
     err = E::NOBUFS;
     STAT_INCR(Worker::stats(), send_failed_nobufs);
     return -1;
@@ -538,8 +538,9 @@ Sender::getSocketProtocolVersion(node_index_t idx) const {
 }
 
 ClientID Sender::getOurNameAtPeer(node_index_t node_index) const {
-  Connection* conn = findServerConnection(node_index);
-  return conn != nullptr ? conn->getOurNameAtPeer() : ClientID::INVALID;
+  const auto* info = getConnectionInfo(Address(NodeID(node_index)));
+  folly::Optional<ClientID> name = info ? info->our_name_at_peer : folly::none;
+  return name.value_or(ClientID::INVALID);
 }
 
 void Sender::deliverCompletedMessages() {
