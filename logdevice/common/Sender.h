@@ -22,6 +22,7 @@
 #include <folly/ssl/OpenSSLPtrTypes.h>
 
 #include "logdevice/common/Address.h"
+#include "logdevice/common/ConnectionInfo.h"
 #include "logdevice/common/ConnectionKind.h"
 #include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/Priority.h"
@@ -481,6 +482,24 @@ class Sender : public SenderBase {
    *         see Connection::connect() for the rest of possible error codes
    */
   int connect(NodeID nid);
+
+  /**
+   * Returns connection info for the connection with given address. Retuned
+   * pointer should not outlive the connection itself so if caller needs to
+   * store information somwhere for the future usage it must be copied.
+   *
+   * @return Pointer to info struct if connection exists or nullptr
+   *         otherwise.
+   */
+  const ConnectionInfo* FOLLY_NULLABLE getConnectionInfo(const Address&) const;
+
+  /**
+   * Updates connection info by replacing with given version.
+   *
+   * @return whether connection info was successfully updated. This operation
+   * may fail only if connection with given address is not found.
+   */
+  bool setConnectionInfo(const Address&, const ConnectionInfo&);
 
   /**
    * @param addr  peer name of a client or server Connection expected to be

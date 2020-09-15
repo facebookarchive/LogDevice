@@ -166,7 +166,7 @@ int ConnectionTest::getDscp() {
   int dscp = 0;
   unsigned int dscplen = sizeof(dscp);
   int rc = 0;
-  switch (conn_->peer_sockaddr_.family()) {
+  switch (conn_->getInfo().peer_address.family()) {
     case AF_INET: {
       rc = getsockopt(conn_->fd_, IPPROTO_IP, IP_TOS, &dscp, &dscplen);
       break;

@@ -1247,7 +1247,7 @@ TEST_F(ClientConnectionTest, SenderBytesPendingTest) {
 TEST_F(ClientConnectionTest, ShouldDetectChangesInAddressForConnection) {
   using namespace configuration::nodes;
 
-  const Sockaddr kTestAddress1 = conn_->peerSockaddr();
+  const Sockaddr kTestAddress1 = conn_->getInfo().peer_address;
   const Sockaddr kTestAddress2 = Sockaddr{get_localhost_address_str(), 4441};
   const int server_nidx = server_name_.index();
   const int other_server_nidx = server_nidx + 1;

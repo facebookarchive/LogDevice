@@ -100,8 +100,9 @@ class CloseSocket : public AdminCommand {
       std::vector<Address> addresses;
       if (all_clients_) {
         sender.forEachConnection([&addresses](const Connection& c) {
-          if (c.peer_name_.isClientAddress()) {
-            addresses.push_back(c.peer_name_);
+          const auto peer_name = c.getInfo().peer_name;
+          if (peer_name.isClientAddress()) {
+            addresses.push_back(peer_name);
           }
         });
       } else {

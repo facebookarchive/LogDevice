@@ -508,8 +508,8 @@ Connection* Sender::findServerConnection(node_index_t idx) const {
 
   auto c = it->second.get();
   ld_check(c);
-  ld_check(!c->peer_name_.isClientAddress());
-  ld_check(c->peer_name_.asNodeID().index() == idx);
+  ld_check(!c->getInfo().peer_name.isClientAddress());
+  ld_check(c->getInfo().peer_name.asNodeID().index() == idx);
 
   return c;
 }
@@ -521,8 +521,8 @@ Connection* Sender::findClientConnection(const ClientID& client_id) const {
   }
   auto c = it->second.get();
   ld_check(c);
-  ld_check(c->peer_name_.isClientAddress());
-  ld_check(c->peer_name_.id_.client_ == client_id);
+  ld_check(c->getInfo().peer_name.isClientAddress());
+  ld_check(c->getInfo().peer_name.id_.client_ == client_id);
   return c;
 }
 
@@ -780,7 +780,7 @@ int Sender::checkConnection(NodeID nid, ClientID* our_name_at_peer) {
   }
 
   Connection* c = findServerConnection(nid.index());
-  if (!c || !c->peer_name_.asNodeID().equalsRelaxed(nid)) {
+  if (!c || !c->getInfo().peer_name.asNodeID().equalsRelaxed(nid)) {
     err = E::NOTFOUND;
     return -1;
   }
@@ -975,38 +975,13 @@ Connection* Sender::initServerConnection(NodeID nid, SocketType sock_type) {
 }
 
 Sockaddr Sender::getSockaddr(const Address& addr) {
-  if (addr.isClientAddress()) {
-    auto pos = impl_->client_conns_.find(addr.id_.client_);
-    if (pos != impl_->client_conns_.end()) {
-      ld_check(pos->second->peer_name_ == addr);
-      return pos->second->peer_sockaddr_;
-    }
-  } else { // addr is a server address
-    auto pos = impl_->server_conns_.find(addr.asNodeID().index());
-    if (pos != impl_->server_conns_.end() &&
-        pos->second->peer_name_.asNodeID().equalsRelaxed(addr.asNodeID())) {
-      return pos->second->peer_sockaddr_;
-    }
-  }
-
-  return Sockaddr::INVALID;
+  const auto* info = getConnectionInfo(addr);
+  return info ? info->peer_address : Sockaddr::INVALID;
 }
 
 ConnectionType Sender::getSockConnType(const Address& addr) {
-  if (addr.isClientAddress()) {
-    auto pos = impl_->client_conns_.find(addr.id_.client_);
-    if (pos != impl_->client_conns_.end()) {
-      ld_check(pos->second->peer_name_ == addr);
-      return pos->second->getConnType();
-    }
-  } else { // addr is a server address
-    Connection* c = findServerConnection(addr.asNodeID().index());
-    if (c && c->peer_name_.asNodeID().equalsRelaxed(addr.id_.node_)) {
-      return c->getConnType();
-    }
-  }
-
-  return ConnectionType::NONE;
+  const auto* info = getConnectionInfo(addr);
+  return info ? info->connection_type : ConnectionType::NONE;
 }
 
 Connection* FOLLY_NULLABLE Sender::getConnection(const ClientID& cid) {
@@ -1086,13 +1061,14 @@ const PrincipalIdentity* Sender::getPrincipal(const Address& addr) {
   if (addr.isClientAddress()) {
     auto pos = impl_->client_conns_.find(addr.id_.client_);
     if (pos != impl_->client_conns_.end()) {
-      ld_check(pos->second->peer_name_ == addr);
+      ld_check(pos->second->getInfo().peer_name == addr);
       return pos->second->principal_.get();
     }
   } else { // addr is a server address
     auto pos = impl_->server_conns_.find(addr.asNodeID().index());
     if (pos != impl_->server_conns_.end() &&
-        pos->second->peer_name_.asNodeID().equalsRelaxed(addr.asNodeID())) {
+        pos->second->getInfo().peer_name.asNodeID().equalsRelaxed(
+            addr.asNodeID())) {
       // server_conns_ principals should all be empty, this is because
       // the server_conns_ will always be on the sender side, as in they
       // send the initial HELLO_Message. This means that they will never have
@@ -1109,7 +1085,7 @@ int Sender::setPrincipal(const Address& addr, PrincipalIdentity principal) {
   if (addr.isClientAddress()) {
     auto pos = impl_->client_conns_.find(addr.id_.client_);
     if (pos != impl_->client_conns_.end()) {
-      ld_check(pos->second->peer_name_ == addr);
+      ld_check(pos->second->getInfo().peer_name == addr);
 
       // Whenever a HELLO_Message is sent, a new client Connection is
       // created on the server side. Meaning that whenever this function is
@@ -1134,7 +1110,8 @@ int Sender::setPrincipal(const Address& addr, PrincipalIdentity principal) {
   } else { // addr is a server address
     auto pos = impl_->server_conns_.find(addr.asNodeID().index());
     if (pos != impl_->server_conns_.end() &&
-        pos->second->peer_name_.asNodeID().equalsRelaxed(addr.id_.node_)) {
+        pos->second->getInfo().peer_name.asNodeID().equalsRelaxed(
+            addr.id_.node_)) {
       // server_conns_ should never have setPrincipal called as they
       // should always be the calling side, as in they always send the
       // initial HELLO_Message.
@@ -1150,13 +1127,14 @@ const std::string* Sender::getCSID(const Address& addr) {
   if (addr.isClientAddress()) {
     auto pos = impl_->client_conns_.find(addr.id_.client_);
     if (pos != impl_->client_conns_.end()) {
-      ld_check(pos->second->peer_name_ == addr);
+      ld_check(pos->second->getInfo().peer_name == addr);
       return &pos->second->csid_;
     }
   } else { // addr is a server address
     auto pos = impl_->server_conns_.find(addr.asNodeID().index());
     if (pos != impl_->server_conns_.end() &&
-        pos->second->peer_name_.asNodeID().equalsRelaxed(addr.id_.node_)) {
+        pos->second->getInfo().peer_name.asNodeID().equalsRelaxed(
+            addr.id_.node_)) {
       // server_conns_ csid should all be empty, this is because
       // the server_conns_ will always be on the sender side, as in they
       // send the initial HELLO_Message. This means that they will never
@@ -1173,7 +1151,7 @@ int Sender::setCSID(const Address& addr, std::string csid) {
   if (addr.isClientAddress()) {
     auto pos = impl_->client_conns_.find(addr.id_.client_);
     if (pos != impl_->client_conns_.end()) {
-      ld_check(pos->second->peer_name_ == addr);
+      ld_check(pos->second->getInfo().peer_name == addr);
 
       // Whenever a HELLO_Message is sent, a new client Connection is
       // created on the server side. Meaning that whenever this function is
@@ -1185,7 +1163,8 @@ int Sender::setCSID(const Address& addr, std::string csid) {
   } else { // addr is a server address
     auto pos = impl_->server_conns_.find(addr.asNodeID().index());
     if (pos != impl_->server_conns_.end() &&
-        pos->second->peer_name_.asNodeID().equalsRelaxed(addr.id_.node_)) {
+        pos->second->getInfo().peer_name.asNodeID().equalsRelaxed(
+            addr.id_.node_)) {
       // server_conns_ should never have setCSID called as they
       // should always be the calling side, as in they always send the
       // initial HELLO_Message.
@@ -1220,6 +1199,22 @@ void Sender::setClientLocation(const ClientID& cid,
     return;
   }
   conn->peer_location_ = location;
+}
+
+const ConnectionInfo* FOLLY_NULLABLE
+Sender::getConnectionInfo(const Address& address) const {
+  const auto* connection = findConnection(address);
+  return connection != nullptr ? &connection->getInfo() : nullptr;
+}
+
+bool Sender::setConnectionInfo(const Address& address,
+                               const ConnectionInfo& info) {
+  auto* connection = findConnection(address);
+  if (connection == nullptr) {
+    return false;
+  }
+  connection->setInfo(info);
+  return true;
 }
 
 std::pair<Sender::ExtractPeerIdentityResult, PrincipalIdentity>
@@ -1378,11 +1373,11 @@ void Sender::disconnectFromNodesThatChangedAddressOrGeneration() {
     }
   }
 
-  for (auto& socket : to_close) {
+  for (auto& connection : to_close) {
+    auto node_id = connection->getInfo().peer_name.id_.node_;
     ld_info("Closing connection to %s with E::NOTINFCONFIG",
-            Sender::describeConnection(Address(socket->peer_name_.id_.node_))
-                .c_str());
-    socket->close(E::NOTINCONFIG);
+            Sender::describeConnection(Address(node_id)).c_str());
+    connection->close(E::NOTINCONFIG);
   }
 }
 

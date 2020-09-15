@@ -18,6 +18,7 @@
 #include "logdevice/common/AdminCommandTable-fwd.h"
 #include "logdevice/common/ClientID.h"
 #include "logdevice/common/ConnectThrottle.h"
+#include "logdevice/common/ConnectionInfo.h"
 #include "logdevice/common/ConnectionKind.h"
 #include "logdevice/common/CostQueue.h"
 #include "logdevice/common/Envelope.h"
@@ -243,13 +244,9 @@ class Connection : public TrafficShappingSocket {
   Connection& operator=(const Connection&) = delete;
   Connection& operator=(Connection&&) = delete;
 
-  Sockaddr peerSockaddr() const {
-    return peer_sockaddr_;
-  }
-
   void setPeerNodeId(const NodeID node_id) {
     peer_node_id_ = node_id;
-    if (peer_name_.isClientAddress() && !peer_node_id_.isNodeID()) {
+    if (info_.peer_name.isClientAddress() && !peer_node_id_.isNodeID()) {
       peer_type_ = PeerType::CLIENT;
     } else {
       peer_type_ = PeerType::NODE;
@@ -263,12 +260,20 @@ class Connection : public TrafficShappingSocket {
    */
   bool isNodeConnectionAddressOrGenerationOutdated() const;
 
-  // LogDevice-level address of peer end-point at the other end of the
-  // connection
-  const Address peer_name_;
+  // TODO(mmhg) Make it private
+  ConnectionInfo info_;
 
-  // struct sockaddr of peer end point
-  const Sockaddr peer_sockaddr_;
+  /**
+   * Returns the info struct for this connection. The sturct's lifetime is bound
+   * to connection.
+   */
+  const ConnectionInfo& getInfo() const {
+    return info_;
+  }
+
+  void setInfo(const ConnectionInfo& new_info) {
+    info_ = new_info;
+  }
 
   // A numan-readable string like
   // "C22566784 ([abcd:1234:5678:90ef:1111:2222:3333:4444]:41406)"
@@ -300,14 +305,11 @@ class Connection : public TrafficShappingSocket {
   // constraints.
   FlowGroup& flow_group_;
 
-  // indicates purpose of this socket
-  const SocketType type_;
-
   /**
    * Initiate an asynchronous connect and handshake on the socket. The socket's
-   * .peer_name_ must resolve to an ip:port to which we can connect. Currently
-   * this means that .peer_name_ must be a server address. The function MUST
-   * be called on the Worker thread that runs this Socket.
+   * .info_.peer_name must resolve to an ip:port to which we can connect.
+   * Currently this means that .info_.peer_name must be a server address. The
+   * function MUST be called on the Worker thread that runs this Socket.
    *
    * @return  0 if connection was successfully initiated. -1 on failure, err
    *          is set to:
@@ -555,7 +557,7 @@ class Connection : public TrafficShappingSocket {
    * @return whether the socket is an SSL socket.
    */
   bool isSSL() const {
-    return conntype_ == ConnectionType::SSL;
+    return info_.connection_type == ConnectionType::SSL;
   }
 
   bool isHandshaken() const {
@@ -601,14 +603,6 @@ class Connection : public TrafficShappingSocket {
    * existing connection to flush and close the socket.
    */
   void sendShutdown();
-
-  SocketType getSockType() const {
-    return type_;
-  }
-
-  ConnectionType getConnType() const {
-    return conntype_;
-  }
 
   const Settings& getSettings();
 
@@ -713,7 +707,8 @@ class Connection : public TrafficShappingSocket {
 
   /**
    * This is strictly a delegating constructor. It sets all members
-   * other than peer_name_, peer_sockaddr_ and conntype_ to defaults.
+   * other than info_.peer_name, info_.peer_address and info_.connection_type to
+   * defaults.
    *
    * @param deps          @see SocketDependencies.
    * @param peer_name     LD-level 4-byte id of the other endpoint
@@ -1031,9 +1026,6 @@ class Connection : public TrafficShappingSocket {
   // KBps. This value caches the socket throughput for InfoSocket command and
   // the value here is valid only if socket-health-check-period is non-zero.
   double cached_socket_throughput_{0};
-
-  // Indicates whether this is an SSL socket
-  ConnectionType conntype_{ConnectionType::PLAIN};
 
   // true if the message error injection code has decided to rewind
   // a message stream. All traffic for this socket will be diverted until

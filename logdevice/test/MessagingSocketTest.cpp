@@ -762,13 +762,14 @@ void testOutBufsLimit(bool outBufsLimitPerPeerTypeDisabled) {
     srv_w->add([&]() {
       auto* worker = Worker::onThisThread();
       worker->sender().forEachConnection([&](const Connection& c) {
-        if (!c.peer_name_.isClientAddress()) {
+        const auto& info = c.getInfo();
+        if (!info.peer_name.isClientAddress()) {
           return;
         }
-        ClientID cid = c.peer_name_.asClientID();
+        ClientID cid = info.peer_name.asClientID();
         bool h = c.isHandshaken();
         all_handshaken &= h;
-        clientIDs.push_back(c.peer_name_.asClientID());
+        clientIDs.push_back(info.peer_name.asClientID());
         ld_debug("%s is %shandshaken", cid.toString().c_str(), h ? "" : "not ");
       });
       sem.post();

@@ -96,14 +96,9 @@ Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
                        SocketType type,
                        ConnectionType conntype,
                        FlowGroup& flow_group)
-    : peer_name_(peer_name),
-      peer_sockaddr_(peer_sockaddr),
-      conn_description_(peer_name.toString() + "(" +
-                        (peer_sockaddr_.valid() ? peer_sockaddr_.toString()
-                                                : std::string("UNKNOWN")) +
-                        ")"),
+    : info_(peer_name, peer_sockaddr, type, conntype),
+      conn_description_(info_.describe()),
       flow_group_(flow_group),
-      type_(type),
       socket_ref_holder_(std::make_shared<bool>(true), this),
       impl_(new SocketImpl),
       deps_(std::move(deps)),
@@ -127,22 +122,20 @@ Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
       retry_receipt_of_message_(deps_->getEvBase()),
       sched_write_chain_(deps_->getEvBase()),
       last_used_time_(SteadyTimestamp::now()) {
-  conntype_ = conntype;
-
   if (!peer_sockaddr.valid()) {
     ld_check(!peer_name.isClientAddress());
-    if (conntype_ == ConnectionType::SSL) {
+    if (info_.connection_type == ConnectionType::SSL) {
       err = E::NOSSLCONFIG;
       RATELIMIT_ERROR(std::chrono::seconds(10),
                       2,
                       "Recipient %s is not configured for SSL connections.",
-                      peer_name_.toString().c_str());
+                      info_.peer_name.toString().c_str());
     } else {
       err = E::NOTINCONFIG;
       RATELIMIT_ERROR(std::chrono::seconds(10),
                       2,
                       "Invalid address for %s.",
-                      peer_name_.toString().c_str());
+                      info_.peer_name.toString().c_str());
     }
     throw ConstructorFailed();
   }
@@ -260,9 +253,9 @@ Connection::~Connection() {
 }
 
 bool Connection::isNodeConnectionAddressOrGenerationOutdated() const {
-  if (peer_name_.valid() && peer_name_.isNodeAddress()) {
+  if (info_.peer_name.valid() && info_.peer_name.isNodeAddress()) {
     auto nodes_config = deps_->getNodesConfiguration();
-    auto node_id = peer_name_.asNodeID();
+    auto node_id = info_.peer_name.asNodeID();
     auto node_idx = node_id.index();
 
     if (!nodes_config->isNodeInServiceDiscoveryConfig(node_idx)) {
@@ -271,17 +264,18 @@ bool Connection::isNodeConnectionAddressOrGenerationOutdated() const {
       return true;
     }
 
-    auto expected_address = deps_->getNodeSockaddr(node_id, type_, conntype_);
+    auto expected_address = deps_->getNodeSockaddr(
+        node_id, info_.socket_type, info_.connection_type);
     auto expected_generation = nodes_config->getNodeGeneration(node_idx);
 
-    if (expected_address != peer_sockaddr_ ||
+    if (expected_address != info_.peer_address ||
         expected_generation != node_id.generation()) {
       ld_info("Configuration change detected for node %s. Expected address: "
               "%s, generation: %d, found address %s, generation %d.",
               node_id.toString().c_str(),
               expected_address.toString().c_str(),
               expected_generation,
-              peer_sockaddr_.toString().c_str(),
+              info_.peer_address.toString().c_str(),
               node_id.generation());
       return true;
     }
@@ -362,7 +356,7 @@ void Connection::updateCloseConnectionStats() {
 }
 
 int Connection::preConnectAttempt() {
-  if (peer_name_.isClientAddress()) {
+  if (info_.peer_name.isClientAddress()) {
     if (!isClosed()) {
       ld_check(connected_);
       err = E::ISCONN;
@@ -468,7 +462,7 @@ folly::Future<Status> Connection::asyncConnect() {
   auto connect_timeout_retry_multiplier =
       getSettings().connect_timeout_retry_multiplier;
   folly::SocketOptionMap options(getDefaultSocketOptions(
-      peer_sockaddr_.getSocketAddress(), getSettings()));
+      info_.peer_address.getSocketAddress(), getSettings()));
 
   for (size_t retry_count = 1; retry_count < max_retries; ++retry_count) {
     timeout += std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -494,7 +488,7 @@ folly::Future<Status> Connection::asyncConnect() {
   }
 
   proto_handler_->sock()->connect(connect_cb.get(),
-                                  peer_sockaddr_.getSocketAddress(),
+                                  info_.peer_address.getSocketAddress(),
                                   timeout.count(),
                                   options);
 
@@ -562,9 +556,9 @@ int Connection::connect() {
                   10,
                   "Connected %s socket via %s channel to %s, immediate_connect "
                   "%d, immediate_fail %d",
-                  getSockType() == SocketType::DATA ? "DATA" : "GOSSIP",
-                  getConnType() == ConnectionType::SSL ? "SSL" : "PLAIN",
-                  peerSockaddr().toString().c_str(),
+                  socketTypeToString(info_.socket_type),
+                  connectionTypeToString(info_.connection_type),
+                  info_.peer_address.toString().c_str(),
                   connected_,
                   !proto_handler_->good());
 
@@ -643,7 +637,8 @@ void Connection::onSent(std::unique_ptr<Envelope> e,
 
   if (!deps_->shuttingDown()) {
     deps_->noteBytesDrained(e->cost(), getPeerType(), e->message().type_);
-    deps_->onSent(e->moveMessage(), peer_name_, reason, e->birthTime(), cm);
+    deps_->onSent(
+        e->moveMessage(), info_.peer_name, reason, e->birthTime(), cm);
     ld_check(!e->haveMessage());
   }
 }
@@ -660,7 +655,7 @@ void Connection::onHandshakeTimeout() {
 
 void Connection::setDSCP(uint8_t dscp) {
   int rc = 0;
-  rc = deps_->setDSCP(fd_, peer_sockaddr_.family(), dscp);
+  rc = deps_->setDSCP(fd_, info_.peer_address.family(), dscp);
 
   // DSCP is used for external traffic shaping. Allow the connection to
   // continue to operate, but warn about the failure.
@@ -741,7 +736,7 @@ void Connection::close(Status reason) {
   // 1) connection has been broken or
   // 2) the remote server reported itself as being shutdown
   if (connect_throttle_ && (peer_shuttingdown_ || connection_failed)) {
-    if (peer_shuttingdown_ && !peer_name_.isClientAddress()) {
+    if (peer_shuttingdown_ && !info_.peer_name.isClientAddress()) {
       reason = E::SHUTDOWN;
     }
     connect_throttle_->connectFailed();
@@ -834,7 +829,7 @@ void Connection::clearConnQueues(Status close_reason) {
 
     // on_close_ is an intrusive list, pop_front() removes cb from list but
     // does not call any destructors. cb is now not on any callback lists.
-    cb(close_reason, peer_name_);
+    cb(close_reason, info_.peer_name);
   }
 }
 
@@ -1011,7 +1006,7 @@ int Connection::preSendCheck(const Message& msg) {
   }
 
   if (!handshaken_) {
-    if (peer_name_.isClientAddress() && !isACKMessage(msg.type_)) {
+    if (info_.peer_name.isClientAddress() && !isACKMessage(msg.type_)) {
       RATELIMIT_ERROR(std::chrono::seconds(1),
                       10,
                       "attempt to send a message of type %s to client %s "
@@ -1130,8 +1125,8 @@ Connection::registerMessage(std::unique_ptr<Message>&& msg) {
     RATELIMIT_INFO(std::chrono::seconds(60),
                    1,
                    "Messages queued to %s: %s",
-                   peer_name_.toString().c_str(),
-                   deps_->dumpQueuedMessages(peer_name_).c_str());
+                   info_.peer_name.toString().c_str(),
+                   deps_->dumpQueuedMessages(info_.peer_name).c_str());
     err = E::NOBUFS;
     return nullptr;
   }
@@ -1188,7 +1183,7 @@ void Connection::sendHello() {
   // HELLO should be the first message to be sent on this socket.
   ld_check(getBytesPending() == 0);
 
-  auto hello = deps_->createHelloMessage(peer_name_.asNodeID());
+  auto hello = deps_->createHelloMessage(info_.peer_name.asNodeID());
   auto envelope = registerMessage(std::move(hello));
   ld_check(envelope);
   releaseMessage(*envelope);
@@ -1237,7 +1232,7 @@ void Connection::onBytesAdmittedToSend(size_t nbytes) {
       ld_check_eq(drain_pos_, 0);
       ld_check_eq(num_messages, 0);
 
-      if (!peer_name_.isClientAddress()) {
+      if (!info_.peer_name.isClientAddress()) {
         // It's an outgoing connection, and we're sending HELLO.
         // Socket doesn't allow enqueueing messages until we get an ACK,
         // so the queue should be empty.
@@ -1384,7 +1379,7 @@ bool Connection::validateReceivedMessage(const Message* msg) const {
   /* verify that gossip sockets don't receive non-gossip messages
    * exceptions: handshake, shutdown
    */
-  if (type_ == SocketType::GOSSIP) {
+  if (info_.socket_type == SocketType::GOSSIP) {
     if (!(msg->type_ == MessageType::SHUTDOWN ||
           allowedOnGossipConnection(msg->type_))) {
       RATELIMIT_WARNING(std::chrono::seconds(1),
@@ -1590,7 +1585,7 @@ int Connection::dispatchMessageBody(ProtocolHeader header,
   // 4. Dispatch message to state machines for processing.
 
   Message::Disposition disp = deps_->onReceived(
-      msg.get(), peer_name_, principal_, std::move(resource_token));
+      msg.get(), info_.peer_name, principal_, std::move(resource_token));
 
   // 5. Dispose off message according to state machine's request.
   switch (disp) {
@@ -1784,7 +1779,7 @@ int Connection::checkConnection(ClientID* our_name_at_peer) {
       ld_check(!connected_);
       ld_check(isClosed());
       err = E::DISABLED;
-    } else if (peer_name_.isClientAddress()) {
+    } else if (info_.peer_name.isClientAddress()) {
       err = E::INVALID_PARAM;
     } else if (!isClosed()) {
       err = E::ALREADY;
@@ -1834,7 +1829,7 @@ void Connection::getDebugInfo(InfoSocketsTable& table) const {
   auto total_sndbuf_limited_time = health_stats_.sndbuf_limited_time_.count();
   table.next()
       .set<0>(state)
-      .set<1>(deps_->describeConnection(peer_name_))
+      .set<1>(deps_->describeConnection(info_.peer_name))
       .set<2>(getBytesPending() / 1024.0)
       .set<3>(available / 1024.0)
       .set<4>(num_bytes_received_ / 1048576.0)
@@ -1987,7 +1982,7 @@ SocketDrainStatusType Connection::checkSocketHealth() {
                    5,
                    "[%s]: Oldest msg %lums old, throughput %.3fKBps, active "
                    "time %.3fs, decision %s, net %u%%, rwnd %u%%, sndbuf %u%%",
-                   peer_name_.toString().c_str(),
+                   info_.peer_name.toString().c_str(),
                    age_in_ms,
                    rateKBps,
                    s.active_time_.count() / 1e3,
@@ -1999,7 +1994,7 @@ SocketDrainStatusType Connection::checkSocketHealth() {
     ld_debug(
         "[%s] : Oldest msg age %lums, throughput %.3fKBps, active time %3.fs, "
         "decision %s",
-        peer_name_.toString().c_str(),
+        info_.peer_name.toString().c_str(),
         age_in_ms,
         rateKBps,
         s.active_time_.count() / 1e3,
