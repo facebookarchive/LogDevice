@@ -182,11 +182,11 @@ Message::Disposition PurgeCoordinator::onReceived(CLEAN_Message* msg,
     return Message::Disposition::NORMAL;
   }
 
+  auto peer_idx = w->sender().getNodeIdx(from);
+  auto peer_nid = peer_idx ? NodeID(*peer_idx) : NodeID();
   checked_downcast<PurgeCoordinator&>(*log_state->purge_coordinator_)
-      .onCleanMessage(std::unique_ptr<CLEAN_Message>(msg),
-                      w->sender().getNodeID(from),
-                      from,
-                      w->idx_);
+      .onCleanMessage(
+          std::unique_ptr<CLEAN_Message>(msg), peer_nid, from, w->idx_);
 
   // ownership transferred to PurgeCoordinator
   return Message::Disposition::KEEP;
@@ -256,8 +256,8 @@ Message::Disposition PurgeCoordinator::onReceived(RELEASE_Message* msg,
     return Message::Disposition::NORMAL;
   }
 
-  auto peer_node_id = w->sender().getNodeID(from);
-  if (!peer_node_id.isNodeID()) {
+  auto peer_idx = w->sender().getNodeIdx(from);
+  if (!peer_idx) {
     RATELIMIT_INFO(
         std::chrono::seconds(1),
         10,
@@ -287,8 +287,9 @@ Message::Disposition PurgeCoordinator::onReceived(RELEASE_Message* msg,
     cache->onRelease(header.rid.lsn());
   }
 
+  auto peer_nid = peer_idx ? NodeID(*peer_idx) : NodeID();
   checked_downcast<PurgeCoordinator&>(*log_state->purge_coordinator_)
-      .onReleaseMessage(header.rid.lsn(), peer_node_id, header.release_type);
+      .onReleaseMessage(header.rid.lsn(), peer_nid, header.release_type);
 
   return Message::Disposition::NORMAL;
 }

@@ -444,7 +444,7 @@ Message::Disposition START_onReceived(START_Message* msg,
   stream->include_byte_offset_ =
       (header.flags & START_Header::INCLUDE_BYTE_OFFSET) &&
       Worker::settings().byte_offsets;
-  stream->is_internal_ = w->sender().getNodeID(from).isNodeID();
+  stream->is_internal_ = w->sender().getNodeIdx(from).hasValue();
 
   if (stream->digest_ || stream->no_payload_) {
     stream->setTrafficClass(TrafficClass::RECOVERY);

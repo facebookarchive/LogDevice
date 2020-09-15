@@ -9,7 +9,6 @@
 #pragma once
 
 #include "logdevice/common/Address.h"
-#include "logdevice/common/ConnectionKind.h"
 #include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/SocketTypes.h"
@@ -59,14 +58,34 @@ struct ConnectionInfo {
   folly::Optional<uint16_t> protocol;
 
   /**
+   * NodeID of the peer if this is a client (incoming) connection with another
+   * node from the cluster on the other end.
+   */
+  folly::Optional<node_index_t> peer_node_idx = folly::none;
+
+  bool isPeerClient() const {
+    return getPeerType() == PeerType::CLIENT;
+  }
+
+  /**
+   * Type of the peer this socket is connecte to (CLIENT or NODE)
+   */
+  PeerType getPeerType() const {
+    // This client connection iff
+    // 1. It is incoming, not outgoing
+    // 2. Peer node not set
+    bool is_client = peer_name.isClientAddress() && !peer_node_idx;
+    return is_client ? PeerType::CLIENT : PeerType::NODE;
+  }
+
+  /**
    * Produces a numan-readable string like
    * "C22566784 ([abcd:1234:5678:90ef:1111:2222:3333:4444]:41406)"
    */
-  std::string describe() {
+  std::string describe() const {
     auto address_str =
         peer_address.valid() ? peer_address.toString() : std::string("UNKNOWN");
     return peer_name.toString() + "(" + address_str + ")";
   }
 };
-
 }} // namespace facebook::logdevice

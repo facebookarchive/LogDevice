@@ -99,7 +99,7 @@ class BlockCatchupQueue : public AdminCommand {
     auto fn = [&](const Connection& s) {
       const auto& info = s.getInfo();
       if (!info.peer_address.getSocketAddress().isFamilyInet() ||
-          !info.peer_name.isClientAddress() || s.peer_node_id_.isNodeID()) {
+          !info.isPeerClient()) {
         return;
       }
       if (hostname_ != "all" && info.peer_address.getIPAddress() != addr) {

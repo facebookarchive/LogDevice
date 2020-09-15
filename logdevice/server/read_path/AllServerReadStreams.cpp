@@ -753,7 +753,7 @@ void AllServerReadStreams::sendShardStatusToClient(ClientID cid) {
 
   Worker* worker = Worker::onThisThread();
 
-  if (worker->sender().getNodeID(Address(cid)).isNodeID()) {
+  if (worker->sender().getNodeIdx(Address(cid))) {
     // This client is another node in the tier. It is reading the event log and
     // thus does not need us to send an update.
     return;

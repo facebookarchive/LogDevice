@@ -569,19 +569,13 @@ class Sender : public SenderBase {
   extractPeerIdentity(const Address& addr);
 
   /**
-   * Returns the NodeID of the peer with the given address.
+   * Returns the node index of the peer with the given address.
    *
    * @return if addr is a server address or corresponds to a client connection
    *         from another node, that id will be returned; otherwise, this method
-   *         returns an invalid NodeID
+   *         returns folly::none
    */
-  NodeID getNodeID(const Address& addr) const;
-
-  /**
-   * Update the NodeID of a peer with the given address. Used when a HELLO
-   * message is received from another node in the cluster.
-   */
-  void setPeerNodeID(const Address& addr, NodeID node_id);
+  folly::Optional<node_index_t> getNodeIdx(const Address& addr) const;
 
   /**
    * @return getSockaddr()  for this thread's worker (if exists), otherwise it

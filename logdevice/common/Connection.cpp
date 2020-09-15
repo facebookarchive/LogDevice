@@ -1412,7 +1412,7 @@ bool Connection::processHandshakeMessage(const Message* msg) {
       // of a handshake message may set peer_node_id_ (if the client
       // connection is in fact from another node in the cluster), which is why
       // the check is not done earlier.
-      if (peerIsClient() &&
+      if (info_.isPeerClient() &&
           !(conn_external_token_ =
                 deps_->getConnBudgetExternal().acquireToken())) {
         RATELIMIT_WARNING(std::chrono::seconds(10),
@@ -1850,10 +1850,6 @@ void Connection::getDebugInfo(InfoSocketsTable& table) const {
       .set<12>(this->getTcpSendBufSize())
       .set<13>(isSSL())
       .set<14>(fd_);
-}
-
-bool Connection::peerIsClient() const {
-  return peer_type_ == PeerType::CLIENT;
 }
 
 folly::Optional<PrincipalIdentity> Connection::extractPeerIdentity() {

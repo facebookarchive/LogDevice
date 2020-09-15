@@ -14,7 +14,9 @@
 #include <openssl/ssl.h>
 
 #include "logdevice/common/ClientHelloInfoTracer.h"
+#include "logdevice/common/ConnectionInfo.h"
 #include "logdevice/common/HELLOPrincipalParser.h"
+#include "logdevice/common/NodeID.h"
 #include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Sender.h"
@@ -75,14 +77,11 @@ static int checkProto(uint16_t min, uint16_t max, uint16_t* proto) {
  *                  as the IP address of peer_nid in the config file. Returns
  *                  false otherwise.
  */
-static bool isValidServerConnection(const NodeID& peer_nid,
+static bool isValidServerConnection(const node_index_t& peer_nid,
                                     const Address& from) {
-  assert(peer_nid.isNodeID());
-
   const auto& nodes_configuration =
       Worker::onThisThread()->getNodesConfiguration();
-  const auto& peer_svc =
-      nodes_configuration->getNodeServiceDiscovery(peer_nid.index());
+  const auto& peer_svc = nodes_configuration->getNodeServiceDiscovery(peer_nid);
 
   // Could not find a corresponding node in the config file
   if (peer_svc == nullptr) {
@@ -136,10 +135,11 @@ static bool isValidServerConnection(const NodeID& peer_nid,
 template <typename HelloHeader, typename AckHeader>
 static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
                                                  AckHeader& ackhdr,
-                                                 const Address& from,
+                                                 const ConnectionInfo& info,
                                                  const std::string& csid) {
   Worker* w = Worker::onThisThread();
 
+  const auto& from = info.peer_name;
   auto security_info = w->processor_->security_info_->get();
 
   PrincipalIdentity principal;
@@ -168,9 +168,9 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
     // in the configuration file.
     // TODO: [T71494016] Deprecate server authentication by IP option
     if (Worker::getConfig()->serverConfig()->authenticateServersByIP()) {
-      NodeID peer_nid = w->sender().getNodeID(from);
-      if (peer_nid.isNodeID()) {
-        if (isValidServerConnection(peer_nid, from)) {
+      auto peer_idx = info.peer_node_idx;
+      if (peer_idx) {
+        if (isValidServerConnection(*peer_idx, from)) {
           principal = PrincipalIdentity(Principal::CLUSTER_NODE);
           useAuthenticationData = false;
         } else {
@@ -181,9 +181,9 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
           RATELIMIT_ERROR(std::chrono::seconds(5),
                           1,
                           "ACCESS ERROR: Got a HELLO message from %s "
-                          "with an invalid node ID (%s).",
+                          "with an invalid node ID N%u.",
                           Sender::describeConnection(from).c_str(),
-                          peer_nid.toString().c_str());
+                          *peer_idx);
           return principal;
         }
       }
@@ -206,9 +206,9 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
           // If the connection is from any node, make sure we validate SSL
           // identity as configured.
           // TODO: [T71494016] Deprecate server authentication by IP option
-          NodeID peer_nid = w->sender().getNodeID(from);
+          auto peer_idx = info.peer_node_idx;
           if (!Worker::getConfig()->serverConfig()->authenticateServersByIP() &&
-              peer_nid.isNodeID()) {
+              peer_idx) {
             // `cluster_node_identity` is expected to be correctly configured at
             // all time.
             if (security_info->cluster_node_identity.empty()) {
@@ -243,14 +243,13 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
                  Sender::ExtractPeerIdentityResult::SUCCESS) ||
                 !principal.match(idType, identity)) {
               ackhdr.status = E::ACCESS;
-              RATELIMIT_ERROR(
-                  std::chrono::seconds(5),
-                  1,
-                  "ACCESS ERROR: Got a HELLO message from %s "
-                  "with an invalid identity (%s) from node ID (%s).",
-                  Sender::describeConnection(from).c_str(),
-                  principal.toString().c_str(),
-                  peer_nid.toString().c_str());
+              RATELIMIT_ERROR(std::chrono::seconds(5),
+                              1,
+                              "ACCESS ERROR: Got a HELLO message from %s "
+                              "with an invalid identity (%s) from node ID N%u.",
+                              Sender::describeConnection(from).c_str(),
+                              principal.toString().c_str(),
+                              *peer_idx);
               fill_out_client_info_in_principal();
               return principal;
             }
@@ -427,6 +426,16 @@ Message::Disposition HELLO_Message::onReceived(const Address& from) {
     ackhdr.status = E::PROTONOSUPPORT;
   }
 
+  const auto* info = Worker::onThisThread()->sender().getConnectionInfo(from);
+  if (!info) {
+    ld_error("Could not get connectiom info when processing HELLO Message "
+             "received from %s",
+             Sender::describeConnection(from).c_str());
+    err = E::NOTFOUND;
+    return Disposition::ERROR;
+  }
+
+  ConnectionInfo new_info = *info;
   if (header_.flags & HELLO_Header::SOURCE_NODE) {
     if (!source_node_id_.isNodeID()) {
       ld_error("Got a HELLO from %s with SOURCE_NODE flag and an invalid "
@@ -436,11 +445,11 @@ Message::Disposition HELLO_Message::onReceived(const Address& from) {
       return Disposition::ERROR;
     }
 
-    Worker::onThisThread()->sender().setPeerNodeID(from, source_node_id_);
+    new_info.peer_node_idx = source_node_id_.index();
   }
 
   // must be called after we check if the connection is from a source node.
-  auto principal = checkAuthenticationData(header_, ackhdr, from, csid_);
+  auto principal = checkAuthenticationData(header_, ackhdr, new_info, csid_);
 
   if (header_.flags & HELLO_Header::DESTINATION_NODE) {
     if (!destination_node_id_.isNodeID()) {
@@ -524,6 +533,7 @@ Message::Disposition HELLO_Message::onReceived(const Address& from) {
     }
   }
 
+  Worker::onThisThread()->sender().setConnectionInfo(from, new_info);
   return sendReply(ackhdr,
                    from,
                    !(header_.flags & HELLO_Header::SOURCE_NODE),

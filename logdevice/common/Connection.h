@@ -244,15 +244,6 @@ class Connection : public TrafficShappingSocket {
   Connection& operator=(const Connection&) = delete;
   Connection& operator=(Connection&&) = delete;
 
-  void setPeerNodeId(const NodeID node_id) {
-    peer_node_id_ = node_id;
-    if (info_.peer_name.isClientAddress() && !peer_node_id_.isNodeID()) {
-      peer_type_ = PeerType::CLIENT;
-    } else {
-      peer_type_ = PeerType::NODE;
-    }
-  }
-
   /**
    * If connection to node, returns whether current settings/nodes
    * configuration point to a different address than we used to connect the
@@ -293,13 +284,6 @@ class Connection : public TrafficShappingSocket {
   // CSID, Client Session ID
   // Used to uniquely identify client sessions. Supplied by client
   std::string csid_;
-
-  // NodeID of the peer if this is a client (incoming) connection with another
-  // node from the cluster on the other end.
-  NodeID peer_node_id_;
-
-  // Type of the peer this socket is connecte to (CLIENT or NODE)
-  PeerType peer_type_{PeerType::NODE};
 
   // Traffic shaping state shared between Sockets with the same bandwidth
   // constraints.
@@ -545,13 +529,8 @@ class Connection : public TrafficShappingSocket {
   void getDebugInfo(InfoSocketsTable& table) const;
 
   PeerType getPeerType() const {
-    return peer_type_;
+    return info_.getPeerType();
   }
-
-  /**
-   * @return True if the peer is a LogDevice client.
-   */
-  bool peerIsClient() const;
 
   /**
    * @return whether the socket is an SSL socket.

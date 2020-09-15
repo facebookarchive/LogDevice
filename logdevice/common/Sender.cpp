@@ -812,7 +812,7 @@ int Sender::checkConnection(ClientID cid, bool check_peer_is_node) {
     return -1;
   }
 
-  if (check_peer_is_node && pos->second->peerIsClient()) {
+  if (check_peer_is_node && pos->second->getInfo().isPeerClient()) {
     err = E::NOTANODE;
     return -1;
   }
@@ -1213,6 +1213,9 @@ bool Sender::setConnectionInfo(const Address& address,
     return false;
   }
   connection->setInfo(info);
+  if (address.isClientAddress() && info.peer_node_idx) {
+    connection->setDSCP(settings_->server_dscp_default);
+  }
   return true;
 }
 
@@ -1245,24 +1248,12 @@ Sockaddr Sender::sockaddrOrInvalid(const Address& addr) {
   return w->sender().getSockaddr(addr);
 }
 
-NodeID Sender::getNodeID(const Address& addr) const {
+folly::Optional<node_index_t> Sender::getNodeIdx(const Address& addr) const {
   if (!addr.isClientAddress()) {
-    return addr.id_.node_;
+    return addr.id_.node_.index();
   }
-
-  auto it = impl_->client_conns_.find(addr.id_.client_);
-  return it != impl_->client_conns_.end() ? it->second->peer_node_id_
-                                          : NodeID();
-}
-
-void Sender::setPeerNodeID(const Address& addr, NodeID node_id) {
-  auto it = impl_->client_conns_.find(addr.id_.client_);
-  if (it != impl_->client_conns_.end()) {
-    it->second->setPeerNodeId(node_id);
-    if (node_id.isNodeID()) {
-      it->second->setDSCP(settings_->server_dscp_default);
-    }
-  }
+  const auto* connection = findClientConnection(addr.asClientID());
+  return connection ? connection->getInfo().peer_node_idx : folly::none;
 }
 
 /* static */
