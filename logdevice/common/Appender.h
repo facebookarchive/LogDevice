@@ -448,8 +448,8 @@ class Appender : public IntrusiveUnorderedMapHook {
   }
 
   // Return socket closed status for clients to cache. If true the socket is
-  // closed.
-  std::shared_ptr<const std::atomic<bool>> getClientSocketToken() const;
+  // active.
+  std::shared_ptr<const std::atomic<bool>> getClientConnectionToken() const;
 
   request_id_t getClientRequestID() const {
     return append_request_id_;

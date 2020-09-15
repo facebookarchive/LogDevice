@@ -106,6 +106,18 @@ struct ConnectionInfo {
       std::make_shared<PrincipalIdentity>();
 
   /**
+   * Allows to check whether the connection is still active. The main use case
+   * it to be used in long-running state machines which may be active long
+   * enough for client id (32bit integer) to wrap around, which in turn may lead
+   * to message being sent to the wrong client. To prevent such case FSM takes
+   * token, stores and uses it before sending message. By doing this we can be
+   * sure the attempt will fail even if there is a new active connection with
+   * same client id.
+   */
+  std::shared_ptr<std::atomic<bool>> is_active =
+      std::make_shared<std::atomic<bool>>(false);
+
+  /**
    * Produces a numan-readable string like
    * "C22566784 ([abcd:1234:5678:90ef:1111:2222:3333:4444]:41406)"
    */

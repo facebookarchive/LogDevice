@@ -202,11 +202,10 @@ Connection::Connection(int fd,
   ld_check(client_name.valid());
   ld_check(client_addr.valid());
   connection_kind_ = connection_kind;
+  info_.is_active->store(true);
 
   // note that caller (Sender.addClient()) does not close(fd) on error.
   // If you add code here that throws ConstructorFailed you must close(fd)!
-
-  conn_closed_ = std::make_shared<std::atomic<bool>>(false);
   conn_incoming_token_ = std::move(conn_token);
 
   addHandshakeTimeoutEvent();
@@ -525,7 +524,7 @@ int Connection::connect() {
   auto fut = asyncConnect();
 
   fd_ = proto_handler_->sock()->getNetworkSocket().toFd();
-  conn_closed_ = std::make_shared<std::atomic<bool>>(false);
+  info_.is_active->store(true);
   next_pos_ = 0;
   drain_pos_ = 0;
 
@@ -725,7 +724,7 @@ void Connection::close(Status reason) {
     return;
   }
 
-  *conn_closed_ = true;
+  info_.is_active->store(false);
 
   RATELIMIT_LEVEL(
       (reason == E::CONNFAILED || reason == E::TIMEDOUT || reason == E::IDLE)
@@ -852,8 +851,7 @@ void Connection::clearConnQueues(Status close_reason) {
 
 bool Connection::isClosed() const {
   auto g = folly::makeGuard(deps_->setupContextGuard());
-  if (conn_closed_ != nullptr &&
-      !conn_closed_->load(std::memory_order_relaxed)) {
+  if (info_.is_active->load(std::memory_order_relaxed)) {
     return false;
   }
   ld_check(!connected_);

@@ -1660,9 +1660,8 @@ Sequencer::handleAppendWithLSNBeforeRedirect(Appender* appender) {
       case RecoveredLSNs::RecoveryStatus::UNKNOWN: {
         STAT_INCR(stats_, append_redirected_maybe_stored);
         // Can we send a CANCELLED?
-        std::shared_ptr<const std::atomic<bool>> socket_token{
-            appender->getClientSocketToken()};
-        if (socket_token && !socket_token->load()) {
+        auto token = appender->getClientConnectionToken();
+        if (token && token->load()) {
           err = E::CANCELLED;
           return RunAppenderStatus::ERROR_DELETE;
         } else {

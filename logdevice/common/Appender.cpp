@@ -916,8 +916,8 @@ void Appender::sendReply(lsn_t lsn, Status status, NodeID redirect) {
     return;
   }
 
-  auto socket_token = getClientSocketToken();
-  if (!socket_token || socket_token->load()) {
+  auto token = getClientConnectionToken();
+  if (!token || !token->load()) {
     ld_debug("Not sending reply to client %s, socket has disconnected.",
              reply_to_.toString().c_str());
     return;
@@ -2364,8 +2364,8 @@ bool Appender::isNodeAlive(NodeID node) {
 }
 
 std::shared_ptr<const std::atomic<bool>>
-Appender::getClientSocketToken() const {
-  return created_on_ ? created_on_->sender().getSocketToken(reply_to_)
+Appender::getClientConnectionToken() const {
+  return created_on_ ? created_on_->sender().getConnectionToken(reply_to_)
                      : nullptr;
 }
 }} // namespace facebook::logdevice

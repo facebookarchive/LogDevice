@@ -1357,14 +1357,10 @@ void Sender::forEachConnection(
 }
 
 std::shared_ptr<const std::atomic<bool>>
-Sender::getSocketToken(const ClientID cid) const {
+Sender::getConnectionToken(const ClientID cid) const {
   ld_check(cid.valid());
-  auto pos = impl_->client_conns_.find(cid);
-  if (pos == impl_->client_conns_.end()) {
-    return nullptr;
-  }
-
-  return pos->second->getSocketToken();
+  const auto* info = getConnectionInfo(Address(cid));
+  return info && info->is_active->load() ? info->is_active : nullptr;
 }
 
 void Sender::cleanupConnections() {

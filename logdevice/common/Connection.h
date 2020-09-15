@@ -383,33 +383,14 @@ class Connection : public TrafficShappingSocket {
    * writing.
    */
   bool good() const;
+
   /**
    * @return true iff close() has been called on the socket and all clients have
    * dropped references.
    */
   bool isZombie() const {
     ld_check(isClosed());
-    return conn_closed_.use_count() > 1;
-  }
-
-  /**
-   * State machines can use ClientID to send replies to client when made a
-   * request. But ClientId space is 32bit which means long running state machine
-   * can acccidentally send a message to incorrect client if the id's wrapped
-   * around. Such long running state machines can get socket token to make sure
-   * that the socket exists before trying to use the clientId to send message.
-   * The check should be performed on the same thread on which the socket was
-   * created to avoid socket getting closed between check and actually sending
-   * the message.
-   * @return conn_closed_ which gets the socket closed status for clients to
-   * cache.
-   */
-  std::shared_ptr<const std::atomic<bool>> getSocketToken() {
-    if (isClosed()) {
-      return nullptr;
-    }
-
-    return conn_closed_;
+    return info_.is_active.use_count() > 1;
   }
 
   /**
@@ -990,9 +971,6 @@ class Connection : public TrafficShappingSocket {
   // The file descriptor of the underlying OS socket. Set to -1 in situations
   // where the file descriptor is not known (e.g., before connecting).
   int fd_;
-
-  // Avoid invoking Socket::close on socket that is already closed.
-  std::shared_ptr<std::atomic<bool>> conn_closed_;
 
   // Protocol Handler layer to which owns the AsyncSocket and is responsible for
   // sending data over the socket.

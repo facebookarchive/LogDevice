@@ -354,8 +354,7 @@ class Sender : public SenderBase {
   /**
    * Get client socket token for the socket associated with client-id 'cid'.
    */
-  std::shared_ptr<const std::atomic<bool>>
-  getSocketToken(const ClientID cid) const;
+  std::shared_ptr<const std::atomic<bool>> getConnectionToken(ClientID) const;
 
   /**
    * Dispatch any accumulated message completions. Must be called from
