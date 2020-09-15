@@ -386,7 +386,7 @@ TEST_F(MessagingSocketTest, SocketConnect) {
   auto w = out.worker.get();
 
   SCOPE_EXIT {
-    w->sender().shutdownSockets(w);
+    w->shutdownSender().get();
   };
 
   ASSERT_FALSE(out.loop->getThread().isCurrentThread());
@@ -506,7 +506,7 @@ TEST_F(MessagingSocketTest, SenderBasicSend) {
   auto out = createWorker(&processor, config);
   auto w = out.worker.get();
   SCOPE_EXIT {
-    w->sender().shutdownSockets(w);
+    w->shutdownSender().get();
   };
   ASSERT_FALSE(out.loop->getThread().isCurrentThread());
 
@@ -926,7 +926,7 @@ TEST_F(MessagingSocketTest, OnHandshakeTimeout) {
   auto out = createWorker(&processor, config);
   auto w = out.worker.get();
   SCOPE_EXIT {
-    w->sender().shutdownSockets(w);
+    w->shutdownSender().get();
   };
   std::unique_ptr<Request> req =
       std::make_unique<SendStoredWithTimeoutRequest>();
@@ -1022,7 +1022,7 @@ TEST_F(MessagingSocketTest, SendFromCloseCB) {
   auto out = createWorker(processor.get(), config);
   auto w = out.worker.get();
   SCOPE_EXIT {
-    w->sender().shutdownSockets(w);
+    w->shutdownSender().get();
   };
   ASSERT_FALSE(out.loop->getThread().isCurrentThread());
 
@@ -1176,7 +1176,7 @@ TEST_F(MessagingSocketTest, AckProtoNoSupportClose) {
   auto out = createWorker(&processor, config);
   auto w = out.worker.get();
   SCOPE_EXIT {
-    w->sender().shutdownSockets(w);
+    w->shutdownSender().get();
   };
   Semaphore sem;
   auto raw_req = new SendMessageOnCloseProtoNoSupport(sem);
@@ -1222,7 +1222,7 @@ TEST_F(MessagingSocketTest, MessageProtoNoSupportOnSent) {
   auto out = createWorker(&processor, config);
   auto w = out.worker.get();
   SCOPE_EXIT {
-    w->sender().shutdownSockets(w);
+    w->shutdownSender().get();
   };
   Semaphore sem;
   std::unique_ptr<Request> req;
@@ -1315,7 +1315,7 @@ TEST_F(MessagingSocketTest, AckInvalidClusterClose) {
   auto out = createWorker(&processor, config);
   auto w = out.worker.get();
   SCOPE_EXIT {
-    w->sender().shutdownSockets(w);
+    w->shutdownSender().get();
   };
   Semaphore sem;
   auto raw_req = new SendMessageOnCloseInvalidCluster(sem);
@@ -1376,7 +1376,7 @@ TEST_F(MessagingSocketTest, ReentrantOnSent) {
   auto out = createWorker(&processor, config);
   auto w = out.worker.get();
   SCOPE_EXIT {
-    w->sender().shutdownSockets(w);
+    w->shutdownSender().get();
   };
   Semaphore sem;
   std::unique_ptr<Request> req;

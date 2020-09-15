@@ -552,7 +552,7 @@ void Processor::shutdown() {
   for (auto& workers : impl_->all_workers_) {
     for (auto& worker : workers) {
       WorkerContextScopeGuard g(worker.get());
-      worker->sender().shutdownSockets(worker.get());
+      worker->shutdownSender().wait();
     }
   }
 

@@ -413,35 +413,26 @@ class Sender : public SenderBase {
   int closeClientSocket(ClientID cid, Status reason);
 
   /**
-   * Close all server and clients Connections. Called in
-   * case of shutdown as part of force abort procedure if Connections are taking
-   * too long to drain all the messages in the output buffer.
-   *
-   * @return pair's first member has number of server Connections and
-   * second has number of clients Connections closed.
-   */
-  std::pair<uint32_t, uint32_t> closeAllSockets();
-
-  /**
-   * flushOutputAndClose(E::SHUTDOWN), and disallow initiating new connections
+   * Flushes buffered data to network and disallows initiating new connections
    * or sending messages.
-   * isClosed() can be used to find out when this operation completes.
+   *
+   * isShutdownCompleted() can be used to find out when this operation
+   * completes.
    */
-  void beginShutdown() {
-    shutting_down_ = true;
-    flushOutputAndClose(E::SHUTDOWN);
-  }
+  void beginShutdown();
 
   /**
-   * Final step of processor shutdown is to close all Connections on the
-   * executor thread where the Connection were created thread.
+   * Esnures all connections are closed. Must be be called as last step of
+   * Sender shutdown. Normally you want to call beginShutdown() first to flush
+   * buffers to network and shutdown gracefully but you do not have to, for
+   * example when shutting down Sender on emergency path or in tests.
    */
-  void shutdownSockets(folly::Executor* exec);
+  void forceShutdown();
 
   /**
    * @return true iff all owned Connections are closed.
    */
-  bool isClosed() const;
+  bool isShutdownCompleted() const;
 
   bool isClosed(const Address& addr) const;
 
@@ -834,10 +825,15 @@ class Sender : public SenderBase {
 
   /**
    * Tells all open Connections to flush output and close, asynchronously.
-   * isClosed() can be used to find out when this operation completes.
-   * Used during shutdown.
+   * isShutdownCompleted() can be used to find out when this operation
+   * completes. Used during shutdown.
    */
   void flushOutputAndClose(Status reason);
+
+  /**
+   * Unconditionally close all server and clients Connections.
+   */
+  void closeAllSockets();
 
   /**
    * A helper method for sending a message to a connected Connection.

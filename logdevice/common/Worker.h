@@ -22,6 +22,7 @@
 #include <folly/Random.h>
 #include <folly/concurrency/UnboundedQueue.h>
 #include <folly/container/F14Map.h>
+#include <folly/futures/Future.h>
 #include <folly/io/async/Request.h>
 
 #include "logdevice/common/ClientID.h"
@@ -611,12 +612,6 @@ class Worker : public WorkContext {
    */
   void forceAbortPendingWork();
 
-  /**
-   * This method closes all the Connections during shutdown if connections did
-   * not drain in given time.
-   */
-  void forceCloseSockets();
-
   virtual void subclassFinishWork() {}
   virtual void subclassWorkFinished() {}
 
@@ -806,6 +801,15 @@ class Worker : public WorkContext {
   static constexpr int kHiPriTaskExecDistribution = 70;
   static constexpr int kMidPriTaskExecDistribution = 0;
   static constexpr int kLoPriTaskExecDistribution = 30;
+
+  /**
+   * Forces shutdown of Sender owned by this Worker. Can be called from
+   * arbtirary thread because it enqueues downstream shudown call to be executed
+   * on this worker.
+   *
+   * @return Future which fullfills when sender shut down.
+   */
+  FOLLY_NODISCARD folly::SemiFuture<folly::Unit> shutdownSender();
 
  private:
   // Periodically called to report load to Processor for load-aware work

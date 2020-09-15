@@ -672,7 +672,7 @@ void Worker::finishWorkAndCloseSockets() {
     force_close_conns_counter_ = settings().time_delay_before_force_abort;
   }
 
-  if (requestsPending() == 0 && sender().isClosed()) {
+  if (!requestsPending() && sender().isShutdownCompleted()) {
     // already done
     ld_info("Worker finished closing sockets");
     processor_->noteWorkerQuiescent(idx_, worker_type_);
@@ -700,7 +700,7 @@ void Worker::finishWorkAndCloseSockets() {
         if (force_close_conns_counter_ > 0) {
           --force_close_conns_counter_;
           if (force_close_conns_counter_ == 0) {
-            forceCloseSockets();
+            sender().forceShutdown();
           }
         }
       }));
@@ -723,21 +723,20 @@ void Worker::forceAbortPendingWork() {
   }
 }
 
-void Worker::forceCloseSockets() {
-  {
-    // Close all sockets irrespective of pending work on them.
-    auto sockets_closed = sender().closeAllSockets();
-
-    ld_info("Num server sockets closed: %u, Num clients sockets closed: %u",
-            sockets_closed.first,
-            sockets_closed.second);
-  }
-}
-
 void Worker::disableSequencersDueIsolationTimeout() {
   Worker::onThisThread(false)
       ->processor_->allSequencers()
       .disableAllSequencersDueToIsolation();
+}
+
+folly::SemiFuture<folly::Unit> Worker::shutdownSender() {
+  folly::Promise<folly::Unit> promise;
+  auto future = promise.getSemiFuture();
+  add([this, p = std::move(promise)]() mutable {
+    sender().forceShutdown();
+    p.setValue(folly::unit);
+  });
+  return future;
 }
 
 void Worker::reportOldestRecoveryRequest() {

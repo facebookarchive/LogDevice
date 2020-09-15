@@ -655,39 +655,42 @@ int Sender::closeServerSocket(NodeID peer, Status reason) {
   return 0;
 }
 
-std::pair<uint32_t, uint32_t> Sender::closeAllSockets() {
-  std::pair<uint32_t, uint32_t> sockets_closed = {0, 0};
-
+void Sender::closeAllSockets() {
+  uint32_t server_sockets_closed = 0;
   for (auto& entry : impl_->server_conns_) {
     if (entry.second && !entry.second->isClosed()) {
-      sockets_closed.first++;
+      server_sockets_closed++;
       entry.second->close(E::SHUTDOWN);
     }
   }
+  ld_info("Num server sockets closed: %u", server_sockets_closed);
 
+  uint32_t client_sockets_closed = 0;
   for (auto& entry : impl_->client_conns_) {
-    if (!entry.second->isClosed()) {
-      sockets_closed.second++;
+    if (entry.second && !entry.second->isClosed()) {
+      client_sockets_closed++;
       entry.second->close(E::SHUTDOWN);
     }
   }
-
-  return sockets_closed;
+  ld_info("Num clients sockets closed: %u", client_sockets_closed);
 }
 
-void Sender::shutdownSockets(folly::Executor* executor) {
-  Semaphore sem;
-  executor->add([&] {
+void Sender::beginShutdown() {
+  shutting_down_ = true;
+  flushOutputAndClose(E::SHUTDOWN);
+}
+
+void Sender::forceShutdown() {
+  if (!shutting_down_) {
+    ld_warning("Force shutdown of Sender w/o graceful shutdown attempt");
     shutting_down_ = true;
-    closeAllSockets();
-    impl_->server_conns_.clear();
-    impl_->client_conns_.clear();
-    sem.post();
-  });
-  sem.wait();
+  }
+  closeAllSockets();
+  impl_->server_conns_.clear();
+  impl_->client_conns_.clear();
 }
 
-bool Sender::isClosed() const {
+bool Sender::isShutdownCompleted() const {
   // Go over all Connections at shutdown to find pending work. This could help
   // in figuring which Connections are slow in draining buffers.
   bool go_over_all_sockets = !worker_->isAcceptingWork();
