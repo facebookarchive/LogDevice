@@ -1176,29 +1176,11 @@ int Sender::setCSID(const Address& addr, std::string csid) {
   return -1;
 }
 
-std::string Sender::getClientLocation(const ClientID& cid) {
-  Connection* conn = getConnection(cid);
-  if (!conn) {
-    RATELIMIT_ERROR(std::chrono::seconds(1),
-                    1,
-                    "Could not find Connection: %s",
-                    describeConnection(cid).c_str());
-    return "";
-  }
-  return conn->peer_location_;
-}
-
-void Sender::setClientLocation(const ClientID& cid,
-                               const std::string& location) {
-  Connection* conn = getConnection(cid);
-  if (!conn) {
-    RATELIMIT_ERROR(std::chrono::seconds(1),
-                    1,
-                    "Could not find Connection: %s",
-                    describeConnection(cid).c_str());
-    return;
-  }
-  conn->peer_location_ = location;
+std::string Sender::getClientLocation(const ClientID& cid) const {
+  const auto* info = getConnectionInfo(Address(cid));
+  folly::Optional<std::string> location =
+      info ? info->client_location : folly::none;
+  return location.value_or("");
 }
 
 const ConnectionInfo* FOLLY_NULLABLE

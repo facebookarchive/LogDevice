@@ -270,12 +270,6 @@ class Connection : public TrafficShappingSocket {
   // "C22566784 ([abcd:1234:5678:90ef:1111:2222:3333:4444]:41406)"
   std::string conn_description_;
 
-  // Node location of peer end point.
-  // In format "{region}.{datacenter}.{cluster}.{row}.{rack}"
-  // Currently only used for passing client location from client to server
-  // for local SCD reading.
-  std::string peer_location_;
-
   // Used to identify the client for permission checks. Set after successfull
   // authentication
   std::shared_ptr<PrincipalIdentity> principal_ =
@@ -406,11 +400,7 @@ class Connection : public TrafficShappingSocket {
    */
   bool isZombie() const {
     ld_check(isClosed());
-    if (conn_closed_.use_count() > 1) {
-      return true;
-    }
-
-    return false;
+    return conn_closed_.use_count() > 1;
   }
 
   /**

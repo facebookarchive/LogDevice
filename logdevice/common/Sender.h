@@ -782,9 +782,7 @@ class Sender : public SenderBase {
    */
   int setCSID(const Address& addr, std::string csid);
 
-  std::string getClientLocation(const ClientID& cid);
-
-  void setClientLocation(const ClientID& cid, const std::string& location);
+  std::string getClientLocation(const ClientID& cid) const;
 
  private:
   // Worker owning this Sender

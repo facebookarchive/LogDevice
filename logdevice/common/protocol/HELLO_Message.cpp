@@ -512,8 +512,7 @@ Message::Disposition HELLO_Message::onReceived(const Address& from) {
       err = E::BADMSG;
       return Disposition::ERROR;
     }
-    Worker::onThisThread()->sender().setClientLocation(
-        from.id_.client_, client_location_);
+    new_info.client_location = client_location_;
   }
 
   // Parse extra build information if provided

@@ -86,6 +86,13 @@ struct ConnectionInfo {
   folly::Optional<ClientID> our_name_at_peer = folly::none;
 
   /**
+   * Node location of peer end point if known. Before handshake and for outgoing
+   * connections this field is guaranteed to be folly::none.
+   * Format: {region}.{datacenter}.{cluster}.{row}.{rack}
+   */
+  folly::Optional<std::string> client_location = folly::none;
+
+  /**
    * Produces a numan-readable string like
    * "C22566784 ([abcd:1234:5678:90ef:1111:2222:3333:4444]:41406)"
    */
