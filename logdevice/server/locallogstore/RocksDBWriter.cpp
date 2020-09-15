@@ -139,27 +139,35 @@ int RocksDBWriter::writeMulti(
         }
 
         if (op->copyset_index_lsn.has_value()) {
-          // Writing copyset index entry
-          ++csi_entry_writes;
-          ld_check(op->copyset_index_entry.data);
-          ld_check(op->copyset_index_entry.size);
-          // TODO (t9002309): block records
-          ld_check(op->copyset_index_lsn.value() == LSN_INVALID);
-          lsn_t csi_lsn = op->lsn;
+          // Decide if we need to write a CSI entry.
+          // For internal logs, write CSI even if it's disabled in settings.
+          // This way if we want to enable CSI later we don't have to do
+          // any migration for internal logs.
+          if (store_->getSettings()->write_copyset_index_ ||
+              MetaDataLog::isMetaDataLog(op->log_id) ||
+              configuration::InternalLogs::isInternal(op->log_id)) {
+            // Writing copyset index entry
+            ++csi_entry_writes;
+            ld_check(op->copyset_index_entry.data);
+            ld_check(op->copyset_index_entry.size);
+            // TODO (t9002309): block records
+            ld_check(op->copyset_index_lsn.value() == LSN_INVALID);
+            lsn_t csi_lsn = op->lsn;
 
-          // Writing copyset index entry
-          CopySetIndexKey key{op->log_id,
-                              csi_lsn,
-                              // TODO (t9002309): block records
-                              CopySetIndexKey::SINGLE_ENTRY_TYPE};
-          Slice value = op->copyset_index_entry;
-          rocksdb::Slice csi_key_slice(
-              reinterpret_cast<const char*>(&key), sizeof key);
-          rocksdb::Slice value_slice(
-              reinterpret_cast<const char*>(value.data), value.size);
-          rocksdb_batch.Merge(data_cf, csi_key_slice, value_slice);
+            // Writing copyset index entry
+            CopySetIndexKey csi_key{op->log_id,
+                                    csi_lsn,
+                                    // TODO (t9002309): block records
+                                    CopySetIndexKey::SINGLE_ENTRY_TYPE};
+            Slice value = op->copyset_index_entry;
+            rocksdb::Slice csi_key_slice(
+                reinterpret_cast<const char*>(&csi_key), sizeof csi_key);
+            rocksdb::Slice value_slice(
+                reinterpret_cast<const char*>(value.data), value.size);
+            rocksdb_batch.Merge(data_cf, csi_key_slice, value_slice);
 
-          csi_bytes += csi_key_slice.size() + value_slice.size();
+            csi_bytes += csi_key_slice.size() + value_slice.size();
+          }
         }
 
         // Writing index entries

@@ -742,17 +742,6 @@ PutWriteOp RecordRebuildingBase::AmendSelfStorageTask::createWriteOp(
       std::map<KeyType, std::string>(),
       &recordHeaderBuf_);
 
-  folly::Optional<lsn_t> block_starting_lsn;
-  if ((owner.getSettings().write_copyset_index &&
-       owner.getSettings().write_sticky_copysets_deprecated) ||
-      MetaDataLog::isMetaDataLog(owner.getLogID()) ||
-      configuration::InternalLogs::isInternal(owner.getLogID())) {
-    // Always write CSI for internal logs. This makes enabling CSI operationally
-    // easier.
-    // TODO (t9002309) : sticky copysets block LSN
-    block_starting_lsn = LSN_INVALID;
-  }
-
   auto csi_flags =
       LocalLogStoreRecordFormat::formCopySetIndexFlags(record_header_flags);
 
@@ -760,7 +749,7 @@ PutWriteOp RecordRebuildingBase::AmendSelfStorageTask::createWriteOp(
       owner.storeHeader_.wave,
       owner.newCopyset_.begin(),
       owner.newCopyset_.size(),
-      block_starting_lsn,
+      LSN_INVALID,
       csi_flags,
       &copySetIndexEntryBuf_);
 
@@ -769,7 +758,7 @@ PutWriteOp RecordRebuildingBase::AmendSelfStorageTask::createWriteOp(
                  record_header,
                  Slice(),
                  owner.getMyNodeIndex(),
-                 block_starting_lsn,
+                 LSN_INVALID,
                  csi_entry,
                  // No need to write keys when amending copyset.
                  {},

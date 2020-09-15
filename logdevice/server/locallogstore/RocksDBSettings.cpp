@@ -854,12 +854,10 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "records that do not pass copyset filters. This greatly improves the "
        "efficiency of reading and rebuilding if records are large (1KB or "
        "bigger). For small records, the overhead of maintaining the copyset "
-       "index negates the savings. **WARNING**: if this setting is enabled, "
-       "records written without --write-copyset-index will be skipped by the "
-       "copyset filter and will not be delivered to readers. Enable "
-       "--write-copyset-index first and wait for all data records written "
-       "before --write-copyset-index was enabled (if any) to be trimmed "
-       "before enabling this setting.",
+       "index negates the savings. If this setting is enabled while "
+       "--rocksdb-write-copyset-index is not, it will be ignored. After "
+       "enabling --rocksdb-write-copyset-index, all **NEW** partitions "
+       "will have copyset idnex enabled",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::LogsDB);
 
@@ -1662,6 +1660,28 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        "and likely to some metadata files like MANIFEST and OPTIONS. This "
        "memory is not allocated all at once, the buffer grows exponentially "
        "up to this size; so it's ok for this setting to be too high.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::RocksDB);
+
+  init("write-copyset-index",
+       &write_copyset_index_,
+       "true",
+       nullptr,
+       "If set, storage nodes will write the copyset index for all records in "
+       "new partitions created after this is enabled. "
+       "Note that this won't be used until --rocksdb-use-copyset-index is "
+       "enabled.",
+       SERVER | REQUIRES_RESTART,
+       SettingsCategory::RocksDB);
+
+  init("rocksdb-write-copyset-index",
+       &write_copyset_index_,
+       "true",
+       nullptr,
+       "If set, storage nodes will write the copyset index for all records in "
+       "new partitions created after this is enabled. "
+       "Note that this won't be used until --rocksdb-use-copyset-index is "
+       "enabled.",
        SERVER | REQUIRES_RESTART,
        SettingsCategory::RocksDB);
 

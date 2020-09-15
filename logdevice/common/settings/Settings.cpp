@@ -1750,13 +1750,13 @@ void Settings::defineSettings(SettingEasyInit& init) {
       SERVER | REQUIRES_RESTART /* Used in CopySetManager ctor */,
       SettingsCategory::WritePath);
   init("write-copyset-index",
-       &write_copyset_index,
+       &write_copyset_index_DEPRECATED,
        "true",
        nullptr, // no validation
        "If set, storage nodes will write the copyset index for all records. "
-       "This must be set before --rocksdb-use-copyset-index is enabled. "
-       "Doesn't affect copyset stickiness",
-       SERVER,
+       "Note that this won't be used until --rocksdb-use-copyset-index is "
+       "enabled.",
+       SERVER | DEPRECATED,
        SettingsCategory::WritePath);
   init("iterator-cache-ttl",
        &iterator_cache_ttl,

@@ -291,6 +291,9 @@ class RocksDBSettings : public SettingsBundle {
   // See cpp file for doc.
   rate_limit_t compaction_rate_limit_;
 
+  // if true, all records will have the copyset index written for them
+  bool write_copyset_index_;
+
   enum class FlushBlockPolicyType {
     DEFAULT,
     EACH_LOG,

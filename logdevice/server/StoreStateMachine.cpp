@@ -634,18 +634,6 @@ void StoreStateMachine::storeAndForward() {
 
   const auto& worker_settings = Worker::settings();
 
-  // Decide if we need to write a CSI entry.
-  // For internal logs, write CSI even if it's disabled in settings.
-  // This way if we want to enable CSI later we don't have to do any migration
-  // for internal logs.
-  folly::Optional<lsn_t> block_starting_lsn;
-  if ((worker_settings.write_copyset_index &&
-       worker_settings.write_sticky_copysets_deprecated) ||
-      MetaDataLog::isMetaDataLog(header.rid.logid) ||
-      configuration::InternalLogs::isInternal(header.rid.logid)) {
-    block_starting_lsn.assign(message_->block_starting_lsn_);
-  }
-
   // First create a storage task for the local log store.  The constructor
   // will copy any needed data from the parameters (as well as attach to the
   // PayloadHolder), making the task self-sufficient.  We'll
@@ -654,7 +642,7 @@ void StoreStateMachine::storeAndForward() {
   auto task = std::make_unique<StoreStorageTask>(
       header,
       message_->copyset_.begin(),
-      block_starting_lsn,
+      message_->block_starting_lsn_,
       message_->optional_keys_,
       message_->payload_,
       message_->extra_,

@@ -732,7 +732,7 @@ struct Settings : public SettingsBundle {
   bool enable_sticky_copysets;
 
   // if true, all records will have the copyset index written for them
-  bool write_copyset_index;
+  bool write_copyset_index_DEPRECATED;
 
   // CopySetSelector manager - sticky copyset block size
   size_t sticky_copysets_block_size;
