@@ -322,10 +322,11 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestAddNodeSuccess) {
 
   admin_client->sync_addNodes(resp, req);
   EXPECT_EQ(2, resp.added_nodes_ref()->size());
-  EXPECT_THAT(*resp.added_nodes_ref(),
-              UnorderedElementsAre(
-                  NodeConfigEq(10, *req.new_node_requests[0].new_config_ref()),
-                  NodeConfigEq(4, *req.new_node_requests[1].new_config_ref())));
+  EXPECT_THAT(
+      *resp.added_nodes_ref(),
+      UnorderedElementsAre(
+          NodeConfigEq(10, *req.new_node_requests_ref()[0].new_config_ref()),
+          NodeConfigEq(4, *req.new_node_requests_ref()[1].new_config_ref())));
 
   waitUntilMaintenanceManagerHasNCVersion(
       admin_client, *resp.new_nodes_configuration_version_ref());
@@ -335,9 +336,9 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestAddNodeSuccess) {
   EXPECT_EQ(6, nodes_config.nodes_ref()->size());
   EXPECT_THAT(*nodes_config.nodes_ref(),
               AllOf(Contains(NodeConfigEq(
-                        10, *req.new_node_requests[0].new_config_ref())),
+                        10, *req.new_node_requests_ref()[0].new_config_ref())),
                     Contains(NodeConfigEq(
-                        4, *req.new_node_requests[1].new_config_ref()))));
+                        4, *req.new_node_requests_ref()[1].new_config_ref()))));
 
   thrift::NodesStateResponse nodes_state;
   admin_client->sync_getNodesState(nodes_state, thrift::NodesStateRequest{});
@@ -358,8 +359,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestAddAlreadyExists) {
 
   thrift::AddNodesRequest req = buildAddNodesRequest({100});
   // Copy the address of an existing node
-  *req.new_node_requests[0].new_config_ref()->data_address_ref() =
-      *nodes_config.nodes[0].data_address_ref();
+  *req.new_node_requests_ref()[0].new_config_ref()->data_address_ref() =
+      *nodes_config.nodes_ref()[0].data_address_ref();
 
   try {
     thrift::AddNodesResponse resp;
