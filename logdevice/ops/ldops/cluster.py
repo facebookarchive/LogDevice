@@ -186,15 +186,14 @@ async def get_cluster_view(client: AdminAPI) -> ClusterView:
 async def group_nodes_by_scope(
     client: AdminAPI,
     node_configs: Optional[Sequence[NodeConfig]] = None,
-    replication_info: Optional[ReplicationInfo] = None,
+    scope: Optional[LocationScope] = None,
 ) -> Tuple[Tuple[NodeID, ...], ...]:
     if node_configs is None:
         response = await admin_api.get_nodes_config(client)
         node_configs = response.nodes
-    if replication_info is None:
-        replication_info = await admin_api.get_replication_info(client)
-
-    scope = replication_info.tolerable_failure_domains.domain
+    if scope is None:
+        rep_info = await admin_api.get_replication_info(client)
+        scope = rep_info.tolerable_failure_domains.domain
     ret = defaultdict(set)
 
     for node_config in node_configs:
