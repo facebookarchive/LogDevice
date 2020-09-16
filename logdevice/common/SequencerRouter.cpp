@@ -114,11 +114,11 @@ void SequencerRouter::onFailure(Status status) {
 }
 
 void SequencerRouter::onTimeout() {
-  RATELIMIT_INFO(std::chrono::seconds(1),
-                 10,
-                 "Request: log:%lu, %lums internal timer expired",
-                 log_id_.val_,
-                 getSettings().sequencer_router_internal_timeout.count());
+  RATELIMIT_DEBUG(std::chrono::seconds(1),
+                  10,
+                  "Request: log:%lu, %lums internal timer expired",
+                  log_id_.val_,
+                  getSettings().sequencer_router_internal_timeout.count());
   auto cs = getClusterState();
   if (cs) {
     cs->refreshClusterStateAsync();
