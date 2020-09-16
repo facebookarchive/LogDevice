@@ -394,6 +394,7 @@ List of LogsDB partitions that store records.  Each shard on each node has a seq
 | current\_version | long | The current live version |
 | append\_dirtied\_by | string | Nodes that have uncommitted append data in this partition. |
 | rebuild\_dirtied\_by | string | Nodes that have uncommitted rebuild data in this partition. |
+| copyset\_index\_enabled | bool | Whether or not copyset\_index is enabled for this partition. This is controlled by --rocksdb-write-copyset-index setting. |
 
 ## purges
 List the PurgeUncleanEpochs state machines currently active in the cluster. The responsability of this state machine is to delete any records that were deleted during log recovery on nodes that did not participate in that recovery. See "logdevice/server/storage/PungeUncleanEpochs.h" for more information.

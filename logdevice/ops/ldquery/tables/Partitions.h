@@ -112,7 +112,11 @@ class Partitions : public AdminCommandTable {
          "Nodes that have uncommitted append data in this partition."},
         {"rebuild_dirtied_by",
          DataType::TEXT,
-         "Nodes that have uncommitted rebuild data in this partition."}};
+         "Nodes that have uncommitted rebuild data in this partition."},
+        {"copyset_index_enabled",
+         DataType::BOOL,
+         "Whether or not copyset_index is enabled for this partition. "
+         "This is controlled by --rocksdb-write-copyset-index setting."}};
   }
   std::string getCommandToSend(QueryContext& ctx) const override {
     std::string expr;

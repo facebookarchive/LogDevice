@@ -85,6 +85,7 @@ class InfoPartitions : public AdminCommand {
                               "Append Dirtied By",
                               "Rebuild Dirtied By",
                               "Under Replicated",
+                              "Copyset Index Enabled",
                               // Level 2
                               "Approx. Obsolete Bytes");
 
@@ -176,18 +177,19 @@ class InfoPartitions : public AdminCommand {
             PartitionDirtyMetadata meta = partition->dirty_state_.metadata();
             table.set<19>(toString(meta.getDirtiedBy(DataClass::APPEND)))
                 .set<20>(toString(meta.getDirtiedBy(DataClass::REBUILD)))
-                .set<21>(partition->isUnderReplicated());
+                .set<21>(partition->isUnderReplicated())
+                .set<22>(partition->is_csi_enabled_);
           }
 
           if (level_ >= 2) {
-            table.set<22>(
+            table.set<23>(
                 partitioned_store->getApproximateObsoleteBytes(partition->id_));
           }
         }
       }
     }
 
-    constexpr std::array<int, maxLevel() + 1> num_stats_per_level = {8, 14, 1};
+    constexpr std::array<int, maxLevel() + 1> num_stats_per_level = {8, 15, 1};
     static_assert(table.numCols() ==
                       num_stats_per_level[0] + num_stats_per_level[1] +
                           num_stats_per_level[2],

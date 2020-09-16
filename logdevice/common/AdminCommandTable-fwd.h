@@ -170,7 +170,8 @@ typedef AdminCommandTable<int,                       /* Shard */
                           std::string,               /* Append Dirtied By */
                           std::string,               /* Rebuild Dirtied By */
                           bool,                      /* Under Replicated */
-                          uint64_t /* Approx. Obsolete Bytes */
+                          uint64_t, /* Approx. Obsolete Bytes */
+                          bool      /* Copyset Index Enabled */
                           >
     InfoPartitionsTable;
 
