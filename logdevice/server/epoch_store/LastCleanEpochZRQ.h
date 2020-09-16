@@ -15,6 +15,8 @@
 #include "logdevice/common/debug.h"
 #include "logdevice/common/util.h"
 #include "logdevice/include/LogTailAttributes.h"
+#include "logdevice/server/epoch_store/EpochStoreLastCleanEpochFormat.h"
+#include "logdevice/server/epoch_store/LogMetaData.h"
 #include "logdevice/server/epoch_store/ZookeeperEpochStoreRequest.h"
 
 namespace facebook { namespace logdevice {
@@ -33,8 +35,8 @@ namespace facebook { namespace logdevice {
 
 class LastCleanEpochZRQ : public ZookeeperEpochStoreRequest {
  public:
-  LastCleanEpochZRQ(logid_t logid, epoch_t epoch, EpochStore::CompletionLCE cf)
-      : ZookeeperEpochStoreRequest(logid, epoch), cf_lce_(std::move(cf)) {
+  LastCleanEpochZRQ(logid_t logid, EpochStore::CompletionLCE cf)
+      : ZookeeperEpochStoreRequest(logid), cf_lce_(std::move(cf)) {
     ld_check(cf_lce_);
   }
 
@@ -48,9 +50,43 @@ class LastCleanEpochZRQ : public ZookeeperEpochStoreRequest {
     return rootpath + "/" + std::to_string(datalog_id.val_) + "/" + leaf_name;
   }
 
-  void postCompletion(Status st, RequestExecutor& executor) override {
+  Status
+  legacyDeserializeIntoLogMetaData(std::string value,
+                                   LogMetaData& log_metadata) const override {
+    epoch_t parsed_epoch;
+    TailRecord parsed_tail;
+
+    int rv = EpochStoreLastCleanEpochFormat::fromLinearBuffer(
+        value.data(), value.size(), logid_, &parsed_epoch, &parsed_tail);
+
+    if (rv != 0) {
+      return E::BADMSG;
+    }
+
+    auto [epoch_ref, tail_record_ref] = referenceFromLogMetaData(log_metadata);
+
+    epoch_ref = parsed_epoch;
+    tail_record_ref = std::move(parsed_tail);
+
+    return Status::OK;
+  }
+
+  void postCompletion(Status st,
+                      LogMetaData&& log_metadata,
+                      RequestExecutor& executor) override {
+    auto [epoch_ref, tail_record_ref] = referenceFromLogMetaData(log_metadata);
+
+    epoch_t epoch = epoch_ref;
+    TailRecord tail_record = std::move(tail_record_ref);
+
     auto completion = std::make_unique<EpochStore::CompletionLCERequest>(
-        cf_lce_, worker_idx_, worker_type_, st, logid_, epoch_, tail_record_);
+        cf_lce_,
+        worker_idx_,
+        worker_type_,
+        st,
+        logid_,
+        epoch,
+        std::move(tail_record));
 
     std::unique_ptr<Request> rq(std::move(completion));
     int rv = executor.postWithRetrying(rq);
@@ -71,10 +107,24 @@ class LastCleanEpochZRQ : public ZookeeperEpochStoreRequest {
   static constexpr const char* znodeNameMetaDataLog = "metadatalog_lce";
 
  protected:
-  const EpochStore::CompletionLCE cf_lce_;
-  TailRecord tail_record_;
+  /**
+   * LastCleanEpoch works on both data and metadata log. This function given
+   * a log_metadata it returns a reference to the correct fields that this
+   * request should deal with.
+   */
+  std::pair<epoch_t&, TailRecord&>
+  referenceFromLogMetaData(LogMetaData& log_metadata) const {
+    if (!MetaDataLog::isMetaDataLog(logid_)) {
+      return {
+          log_metadata.data_last_clean_epoch, log_metadata.data_tail_record};
+    } else {
+      return {log_metadata.metadata_last_clean_epoch,
+              log_metadata.metadata_tail_record};
+    }
+  }
 
- public:
+ protected:
+  const EpochStore::CompletionLCE cf_lce_;
 };
 
 }} // namespace facebook::logdevice

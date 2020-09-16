@@ -43,4 +43,9 @@ std::string LogMetaData::toString() const {
       last_changed_timestamp.toMilliseconds().count());
 }
 
+void LogMetaData::touch() {
+  version = Version(version.val_ + 1);
+  last_changed_timestamp = SystemTimestamp::now();
+}
+
 }} // namespace facebook::logdevice

@@ -19,6 +19,7 @@
 
 #include "logdevice/common/CompletionRequest.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
+#include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
@@ -46,10 +47,12 @@ FileEpochStore::FileEpochStore(
 
 int FileEpochStore::getLastCleanEpoch(logid_t log_id,
                                       EpochStore::CompletionLCE cf) {
+  LogMetaData log_metadata;
   auto zrq = std::unique_ptr<ZookeeperEpochStoreRequest>(
-      new GetLastCleanEpochZRQ(log_id, EPOCH_INVALID, cf));
-  int rv = updateEpochStore(zrq);
-  zrq->postCompletion(rv == 0 ? E::OK : err, request_executor_);
+      new GetLastCleanEpochZRQ(log_id, cf));
+  int rv = updateEpochStore(zrq, log_metadata);
+  zrq->postCompletion(
+      rv == 0 ? E::OK : err, std::move(log_metadata), request_executor_);
   return 0;
 }
 
@@ -70,10 +73,12 @@ int FileEpochStore::setLastCleanEpoch(logid_t log_id,
     return -1;
   }
 
+  LogMetaData log_metadata;
   auto zrq = std::unique_ptr<ZookeeperEpochStoreRequest>(
       new SetLastCleanEpochZRQ(log_id, lce, tail_record, cf));
-  int rv = updateEpochStore(zrq);
-  zrq->postCompletion(rv == 0 ? E::OK : err, request_executor_);
+  int rv = updateEpochStore(zrq, log_metadata);
+  zrq->postCompletion(
+      rv == 0 ? E::OK : err, std::move(log_metadata), request_executor_);
   return 0;
 }
 
@@ -88,17 +93,18 @@ int FileEpochStore::createOrUpdateMetaData(
     return -1;
   }
 
+  LogMetaData log_metadata;
   auto zrq = std::unique_ptr<ZookeeperEpochStoreRequest>(
       new EpochMetaDataZRQ(log_id,
-                           EPOCH_INVALID,
                            cf,
                            std::move(updater),
                            std::move(tracer),
                            write_node_id,
                            config_->get(),
                            my_node_id_));
-  int rv = updateEpochStore(zrq);
-  zrq->postCompletion(rv == 0 ? E::OK : err, request_executor_);
+  int rv = updateEpochStore(zrq, log_metadata);
+  zrq->postCompletion(
+      rv == 0 ? E::OK : err, std::move(log_metadata), request_executor_);
   return 0;
 }
 
@@ -110,9 +116,9 @@ int FileEpochStore::provisionMetaDataLog(
     return -1;
   }
 
+  LogMetaData log_metadata;
   auto zrq = std::unique_ptr<ZookeeperEpochStoreRequest>(
       new EpochMetaDataZRQ(log_id,
-                           EPOCH_INVALID,
                            [](auto, auto, auto, auto) {},
                            std::move(provisioner),
                            MetaDataTracer(),
@@ -120,7 +126,7 @@ int FileEpochStore::provisionMetaDataLog(
                            config_->get(),
                            folly::none));
 
-  int rv = updateEpochStore(zrq);
+  int rv = updateEpochStore(zrq, log_metadata);
   if (rv != 0 && err != E::UPTODATE) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     10,
@@ -147,7 +153,8 @@ int FileEpochStore::provisionMetaDataLogs(
 }
 
 int FileEpochStore::updateEpochStore(
-    std::unique_ptr<ZookeeperEpochStoreRequest>& zrq) {
+    std::unique_ptr<ZookeeperEpochStoreRequest>& zrq,
+    LogMetaData& log_metadata) {
   logid_t logid = zrq->logid_;
 
   boost::filesystem::path store_path = zrq->getZnodePath(path_);
@@ -202,8 +209,17 @@ int FileEpochStore::updateEpochStore(
 
   std::string data;
   auto read_success = folly::readFile(store_path.c_str(), data);
-  auto next_step =
-      zrq->onGotZnodeValue(read_success ? data.data() : nullptr, data.size());
+
+  if (read_success) {
+    Status deserialization_st =
+        zrq->legacyDeserializeIntoLogMetaData(data, log_metadata);
+    if (deserialization_st != Status::OK) {
+      err = deserialization_st;
+      return -1;
+    }
+  }
+
+  auto next_step = zrq->applyChanges(log_metadata, read_success);
 
   switch (next_step) {
     case ZookeeperEpochStoreRequest::NextStep::PROVISION:
@@ -253,9 +269,12 @@ int FileEpochStore::updateEpochStore(
       return -1;
   }
 
+  // Increment version and timestamp of log metadata.
+  log_metadata.touch();
+
   char znode_value[FILE_LEN_MAX];
   int znode_value_size =
-      zrq->composeZnodeValue(znode_value, sizeof(znode_value));
+      zrq->composeZnodeValue(log_metadata, znode_value, sizeof(znode_value));
 
   using folly::test::TemporaryFile;
   TemporaryFile tmp("epoch_store_new_contents",

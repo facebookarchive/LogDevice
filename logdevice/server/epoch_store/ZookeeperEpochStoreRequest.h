@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "logdevice/server/epoch_store/LogMetaData.h"
 #include "logdevice/server/epoch_store/ZookeeperEpochStore.h"
 
 namespace facebook { namespace logdevice {
@@ -25,7 +26,7 @@ namespace facebook { namespace logdevice {
 
 class ZookeeperEpochStoreRequest {
  public:
-  ZookeeperEpochStoreRequest(logid_t logid, epoch_t epoch);
+  explicit ZookeeperEpochStoreRequest(logid_t logid);
 
   virtual ~ZookeeperEpochStoreRequest() {}
 
@@ -40,7 +41,9 @@ class ZookeeperEpochStoreRequest {
    *
    * @param st   set the status argument of the completion function to this
    */
-  virtual void postCompletion(Status st, RequestExecutor& executor) = 0;
+  virtual void postCompletion(Status st,
+                              LogMetaData&& log_metadata,
+                              RequestExecutor& executor) = 0;
 
   /**
    * Returns the path to znode on which this request operates.
@@ -57,13 +60,18 @@ class ZookeeperEpochStoreRequest {
   enum class NextStep : uint8_t { MODIFY = 0, PROVISION, STOP, FAILED };
 
   /**
-   * Called by store_->zkGetCF() if the Zookeeper get call to this
-   * request's znode completes successfully (including the case where the
-   * znode does not exist). May set epoch_ and metadata_.
-   *
-   * @param  value   znode value passed to zkGetCF() completion function, or
-   *                 nullptr if znode does not exist
-   * @param  len     length of value in bytes (0 if znode does not exist)
+   * Given the legacy znode value, deserialize it into the provided LogMetaData
+   * structure. Returns`Status::OK` on success or the corresponding error on
+   * failure.
+   * This function won't be called if the znode wasn't found.
+   */
+  virtual Status
+  legacyDeserializeIntoLogMetaData(std::string value,
+                                   LogMetaData& log_metadata) const = 0;
+
+  /*
+   * Executes the logic of the request itself applying the necessary
+   * modifications for the `LogMetaData` structure if needed.
    *
    * @return NextStep::MODIFY if value has been parsed and accepted,
    *         and it needs to be updated. Request processing must continue
@@ -80,11 +88,12 @@ class ZookeeperEpochStoreRequest {
    *         NextStep::FAILED if the parsing failed and caller must stop
    *         processing the request and post a completion request. Sets err to:
    *           BADMSG  if value is invalid
-   *           STALE   if value indicates that epoch_ is stale and must not
+   *           STALE   if value indicates that epoch is stale and must not
    *                   be stored
    *           TOOBIG  if the value is too big for this type of request
    */
-  virtual NextStep onGotZnodeValue(const char* value, int len) = 0;
+  virtual NextStep applyChanges(LogMetaData& log_metadata,
+                                bool value_existed) = 0;
 
   /**
    * Composes a string in @param buf of size @param size bytes in the format
@@ -93,14 +102,14 @@ class ZookeeperEpochStoreRequest {
    * @return length of the resulting string, not including the null-terminator
    *         If this is >= @param size, the string was truncated.
    */
-  virtual int composeZnodeValue(char* buf, size_t size) = 0;
+  virtual int composeZnodeValue(LogMetaData& log_metadata,
+                                char* buf,
+                                size_t size) const = 0;
 
   // id of log on whose metadata this request operates, passed to cf_
   const logid_t logid_;
 
  protected:
-  epoch_t epoch_; // read from or stored in znode
-
   const worker_id_t worker_idx_; // id of Worker on which to execute cf_, or
                                  // -1 if cf_ can be executed on any Worker
 

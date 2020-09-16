@@ -28,6 +28,7 @@
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/include/ConfigSubscriptionHandle.h"
 #include "logdevice/server/epoch_store/EpochStoreEpochMetaDataFormat.h"
+#include "logdevice/server/epoch_store/LogMetaData.h"
 
 /**
  * @file ZookeeperEpochStore implements an EpochStore interface to a
@@ -148,8 +149,9 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
    * Schedules a request on the Processor after a Zookeeper modification
    * completes.
    */
-  void postRequestCompletion(int rc,
-                             std::unique_ptr<ZookeeperEpochStoreRequest> zrq);
+  void postRequestCompletion(Status st,
+                             std::unique_ptr<ZookeeperEpochStoreRequest> zrq,
+                             LogMetaData&& log_metadata);
 
   /**
    * The callback executed when a znode has been fetched.
@@ -164,6 +166,7 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
    * a zookeeper multiOp.
    */
   void provisionLogZnodes(std::unique_ptr<ZookeeperEpochStoreRequest> zrq,
+                          LogMetaData&& log_metadata,
                           std::string znode_value);
 };
 

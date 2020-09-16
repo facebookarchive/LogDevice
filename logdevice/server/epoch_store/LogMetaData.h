@@ -36,6 +36,11 @@ class LogMetaData {
   bool operator==(const LogMetaData& rhs) const;
   bool operator!=(const LogMetaData& rhs) const;
   std::string toString() const;
+
+  /**
+   * Increments the version and updates the last changed timestamp.
+   */
+  void touch();
 };
 
 }} // namespace facebook::logdevice

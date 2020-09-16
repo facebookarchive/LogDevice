@@ -93,7 +93,8 @@ class FileEpochStore : public EpochStore, boost::noncopyable {
    *                   TOOBIG         epoch number exhausted
    *                   BADMSG         malformed record format
    */
-  int updateEpochStore(std::unique_ptr<ZookeeperEpochStoreRequest>& zrq);
+  int updateEpochStore(std::unique_ptr<ZookeeperEpochStoreRequest>& zrq,
+                       LogMetaData& log_metadata);
 
   std::string path_;
 

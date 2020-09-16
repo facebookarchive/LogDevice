@@ -10,8 +10,8 @@
 #include <cstdio>
 
 #include "logdevice/common/debug.h"
-#include "logdevice/server/epoch_store/EpochStoreLastCleanEpochFormat.h"
 #include "logdevice/server/epoch_store/LastCleanEpochZRQ.h"
+#include "logdevice/server/epoch_store/LogMetaData.h"
 
 namespace facebook { namespace logdevice {
 
@@ -26,37 +26,25 @@ class GetLastCleanEpochZRQ : public LastCleanEpochZRQ {
   using LastCleanEpochZRQ::LastCleanEpochZRQ;
 
   // see ZookeeperEpochStoreRequest.h
-  NextStep onGotZnodeValue(const char* znode_value,
-                           int znode_value_len) override {
-    ld_check(epoch_ == EPOCH_INVALID); // must not yet have been initialized
-
-    if (!znode_value) {
+  NextStep applyChanges(LogMetaData& log_metadata,
+                        bool value_existed) override {
+    if (!value_existed) {
       err = E::NOTFOUND;
       return NextStep::FAILED;
     }
+    auto [_, tail_record_ref] = referenceFromLogMetaData(log_metadata);
 
-    epoch_t parsed_epoch;
-    TailRecord parsed_tail;
-
-    int rv = EpochStoreLastCleanEpochFormat::fromLinearBuffer(
-        znode_value, znode_value_len, logid_, &parsed_epoch, &parsed_tail);
-
-    if (rv != 0) {
-      err = E::BADMSG;
-      return NextStep::FAILED;
-    }
-
-    ld_check(parsed_tail.isValid());
-    ld_check(!parsed_tail.containOffsetWithinEpoch());
-    epoch_ = parsed_epoch;
-    tail_record_ = parsed_tail;
+    ld_check(tail_record_ref.isValid());
+    ld_check(!tail_record_ref.containOffsetWithinEpoch());
 
     err = E::OK; // on success signal to caller that processing must be
     return NextStep::STOP; // terminated and a completion request posted
   }
 
   // see ZookeeperEpochStoreRequest.h
-  int composeZnodeValue(char* /*buf*/, size_t /*size*/) override {
+  int composeZnodeValue(LogMetaData& /*log_metadata*/,
+                        char* /*buf*/,
+                        size_t /*size*/) const override {
     ld_check(false);
     RATELIMIT_CRITICAL(std::chrono::seconds(1),
                        10,

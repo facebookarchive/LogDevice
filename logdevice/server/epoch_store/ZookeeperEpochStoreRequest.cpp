@@ -15,10 +15,8 @@
 
 namespace facebook { namespace logdevice {
 
-ZookeeperEpochStoreRequest::ZookeeperEpochStoreRequest(logid_t logid,
-                                                       epoch_t epoch)
+ZookeeperEpochStoreRequest::ZookeeperEpochStoreRequest(logid_t logid)
     : logid_(logid),
-      epoch_(epoch),
       worker_idx_(Worker::onThisThread(false /* enforce_worker */)
                       ? Worker::onThisThread()->idx_
                       : worker_id_t(-1)),

@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include <memory>
+
 #include <folly/Memory.h>
 
 #include "logdevice/common/MetaDataTracer.h"
@@ -25,14 +27,13 @@ namespace facebook { namespace logdevice {
 class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
  public:
   EpochMetaDataZRQ(logid_t logid,
-                   epoch_t epoch,
                    EpochStore::CompletionMetaData cf,
                    std::shared_ptr<EpochMetaData::Updater> updater,
                    MetaDataTracer tracer,
                    EpochStore::WriteNodeID write_node_id,
                    std::shared_ptr<const NodesConfiguration> cfg,
                    folly::Optional<NodeID> my_node_id)
-      : ZookeeperEpochStoreRequest(logid, epoch),
+      : ZookeeperEpochStoreRequest(logid),
         cf_meta_data_(std::move(cf)),
         updater_(updater),
         cfg_(std::move(cfg)),
@@ -44,37 +45,41 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
     ld_check(cfg_);
   }
 
-  // see ZookeeperEpochStoreRequest.h
-  NextStep onGotZnodeValue(const char* value, int len) override {
-    ld_check(epoch_ == EPOCH_INVALID); // must not yet be initialized
-
-    std::unique_ptr<EpochMetaData> metadata;
-    if (value) {
-      // the znode exists
-      metadata = std::make_unique<EpochMetaData>();
-      NodeID node_id;
-      int rv = EpochStoreEpochMetaDataFormat::fromLinearBuffer(
-          value, len, metadata.get(), logid_, *cfg_, &node_id);
-      if (rv != 0 && err != E::EMPTY) {
-        // err set in fromLinearBuffer
-        ld_check(err == E::BADMSG || err == E::INVALID_PARAM);
-        return NextStep::FAILED;
-      }
-      if (node_id.isNodeID()) {
-        if (!meta_properties_) {
-          meta_properties_ = std::make_unique<EpochStoreMetaProperties>();
-        }
-        meta_properties_->last_writer_node_id.assign(node_id);
-      }
-
-      ld_assert(
-          metadata &&
-          (metadata->isValid() || (metadata->isEmpty() && err == E::EMPTY)));
+  Status
+  legacyDeserializeIntoLogMetaData(std::string value,
+                                   LogMetaData& log_metadata) const override {
+    EpochMetaData metadata{};
+    NodeID node_id;
+    int rv = EpochStoreEpochMetaDataFormat::fromLinearBuffer(
+        value.data(), value.size(), &metadata, logid_, *cfg_, &node_id);
+    if (rv != 0 && err != E::EMPTY) {
+      // err set in fromLinearBuffer
+      ld_check(err == E::BADMSG || err == E::INVALID_PARAM);
+      return err;
     }
+    if (node_id.isNodeID()) {
+      log_metadata.epoch_store_properties.last_writer_node_id.assign(node_id);
+    }
+
+    ld_assert(metadata.isValid() || (metadata.isEmpty() && err == E::EMPTY));
+    log_metadata.current_epoch_metadata = std::move(metadata);
+    return Status::OK;
+  }
+
+  // see ZookeeperEpochStoreRequest.h
+  NextStep applyChanges(LogMetaData& log_metadata,
+                        bool value_existed) override {
+    std::unique_ptr<EpochMetaData> metadata;
+    if (value_existed) {
+      // Move the data into a unique ptr for comptability with existing APIs
+      // and later we will move it back.
+      metadata = std::make_unique<EpochMetaData>(
+          std::move(log_metadata.current_epoch_metadata));
+    }
+
     if (metadata) {
       tracer_.setOldMetaData(*metadata);
     }
-
     // Note: we allow the znode buffer to be empty (but not malformed)
     // in such case, create and write metadata with the initial epoch.
     // metadata can be nullptr if znode does not exist yet.
@@ -103,11 +108,9 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
     };
 
     if (metadata) {
-      // update epoch_ and metadata_ member in the request
-      epoch_ = metadata->h.epoch;
-      metadata_ = std::move(metadata);
       ld_check(result == EpochMetaData::UpdateResult::FAILED ||
-               metadata_->isValid());
+               metadata->isValid());
+      log_metadata.current_epoch_metadata = std::move(*metadata);
     }
     return next_step;
   }
@@ -118,7 +121,9 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
     return rootpath + "/" + std::to_string(logid_.val_) + "/" + znodeName;
   }
 
-  void postCompletion(Status st, RequestExecutor& executor) override {
+  void postCompletion(Status st,
+                      LogMetaData&& log_metadata,
+                      RequestExecutor& executor) override {
     tracer_.trace(st);
     // eventually transfer metadata_ to the completion function
     auto completion = std::make_unique<EpochStore::CompletionMetaDataRequest>(
@@ -127,8 +132,10 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
         worker_type_,
         st,
         logid_,
-        std::move(metadata_),
-        std::move(meta_properties_));
+        std::make_unique<EpochMetaData>(
+            std::move(log_metadata.current_epoch_metadata)),
+        std::make_unique<EpochStoreMetaProperties>(
+            std::move(log_metadata.epoch_store_properties)));
 
     std::unique_ptr<Request> rq(std::move(completion));
     int rv = executor.postWithRetrying(rq);
@@ -146,35 +153,37 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
   }
 
   // see ZookeeperEpochStoreRequest.h
-  int composeZnodeValue(char* buf, size_t size) override {
+  int composeZnodeValue(LogMetaData& log_metadata,
+                        char* buf,
+                        size_t size) const override {
     ld_check(buf);
     // must have valid metadata
-    ld_check(metadata_ != nullptr);
-    ld_check(metadata_->isValid());
-    ld_check(metadata_->h.epoch == epoch_);
+    ld_check(log_metadata.current_epoch_metadata.isValid());
 
     // Only record the NodeID for requests that are written by the sequencer
     // node.
-    folly::Optional<NodeID> node_id_to_write;
     switch (write_node_id_) {
       case EpochStore::WriteNodeID::MY:
-        node_id_to_write = my_node_id_.value();
-        if (!node_id_to_write->isNodeID()) {
+        if (!my_node_id_.has_value() || !my_node_id_->isNodeID()) {
           ld_check(false);
           err = E::INTERNAL;
           return -1;
         }
+        log_metadata.epoch_store_properties.last_writer_node_id.assign(
+            my_node_id_.value());
         break;
       case EpochStore::WriteNodeID::KEEP_LAST:
-        if (meta_properties_) {
-          node_id_to_write = meta_properties_->last_writer_node_id;
-        }
+        // Do nothing
         break;
       case EpochStore::WriteNodeID::NO:
+        log_metadata.epoch_store_properties.last_writer_node_id.reset();
         break;
     }
+
+    folly::Optional<NodeID> node_id_to_write =
+        log_metadata.epoch_store_properties.last_writer_node_id;
     return EpochStoreEpochMetaDataFormat::toLinearBuffer(
-        *metadata_, buf, size, node_id_to_write);
+        log_metadata.current_epoch_metadata, buf, size, node_id_to_write);
   }
 
   static constexpr const char* znodeName = "sequencer";
@@ -186,13 +195,6 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
   std::shared_ptr<EpochMetaData::Updater> updater_;
   // true if the writer's NodeID should be written to the metadata
   std::shared_ptr<const NodesConfiguration> cfg_;
-
-  // epoch metadata read from or written to the epoch store, whichever happened
-  // last.
-  std::unique_ptr<EpochMetaData> metadata_;
-
-  // MetaProperties that will be passed to the CF
-  std::unique_ptr<EpochStoreMetaProperties> meta_properties_;
 
   MetaDataTracer tracer_;
 

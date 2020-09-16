@@ -128,6 +128,7 @@ std::string ZookeeperEpochStore::znodePathForLog(logid_t logid) const {
 
 void ZookeeperEpochStore::provisionLogZnodes(
     std::unique_ptr<ZookeeperEpochStoreRequest> zrq,
+    LogMetaData&& log_metadata,
     std::string znode_value) {
   ld_check(!znode_value.empty());
 
@@ -145,9 +146,12 @@ void ZookeeperEpochStore::provisionLogZnodes(
   ops.emplace_back(ZookeeperClientBase::makeCreateOp(
       logroot + "/" + LastCleanEpochZRQ::znodeNameMetaDataLog, ""));
 
-  auto cb = [this, znode_value = std::move(znode_value), zrq = std::move(zrq)](
+  auto cb = [this,
+             znode_value = std::move(znode_value),
+             zrq = std::move(zrq),
+             log_metadata = std::move(log_metadata)](
                 int rc, std::vector<zk::OpResponse> results) mutable {
-    Status st = completionStatus(rc, zrq->logid_);
+    const Status st = completionStatus(rc, zrq->logid_);
     if (st == E::OK) {
       // If everything worked well, then each individual operation should've
       // went through fine as well
@@ -165,9 +169,10 @@ void ZookeeperEpochStore::provisionLogZnodes(
         // provisioning upon success.
         auto rootcb = [this,
                        znode_value = std::move(znode_value),
-                       zrq = std::move(zrq)](
+                       zrq = std::move(zrq),
+                       log_metadata = std::move(log_metadata)](
                           int rootrc, std::string rootpath) mutable {
-          auto rootst = completionStatus(rootrc, LOGID_INVALID);
+          const auto rootst = completionStatus(rootrc, zrq->logid_);
           if (rootst == E::OK) {
             ld_info("Created root znode %s successfully", rootpath.c_str());
           } else {
@@ -180,7 +185,9 @@ void ZookeeperEpochStore::provisionLogZnodes(
           // If the path already exists or has just been created, continue
           if (rootst == E::OK || rootst == E::EXISTS) {
             // retrying the original multi-op
-            provisionLogZnodes(std::move(zrq), std::move(znode_value));
+            provisionLogZnodes(std::move(zrq),
+                               std::move(log_metadata),
+                               std::move(znode_value));
           } else {
             RATELIMIT_ERROR(std::chrono::seconds(10),
                             10,
@@ -189,7 +196,8 @@ void ZookeeperEpochStore::provisionLogZnodes(
                             rootpath.c_str(),
                             rootrc,
                             error_description(rootst));
-            postRequestCompletion(rootrc, std::move(zrq));
+            postRequestCompletion(
+                rootst, std::move(zrq), std::move(log_metadata));
           }
         };
         zkclient_->createWithAncestors(rootPath(), "", std::move(rootcb));
@@ -206,7 +214,7 @@ void ZookeeperEpochStore::provisionLogZnodes(
     }
 
     // post completion to do the actual work
-    postRequestCompletion(rc, std::move(zrq));
+    postRequestCompletion(st, std::move(zrq), std::move(log_metadata));
   };
 
   zkclient_->multiOp(std::move(ops), std::move(cb));
@@ -220,20 +228,28 @@ void ZookeeperEpochStore::onGetZnodeComplete(
   ZookeeperEpochStoreRequest::NextStep next_step;
   bool do_provision = false;
   ld_check(zrq);
-
-  const char* value_for_zrq = value_from_zk.data();
+  LogMetaData log_metadata;
 
   Status st = completionStatus(rc, zrq->logid_);
-  if (st != E::OK && st != E::NOTFOUND) {
-    goto err;
+  bool value_existed = false;
+  switch (st) {
+    case E::OK:
+      value_existed = true;
+      st = zrq->legacyDeserializeIntoLogMetaData(
+          std::move(value_from_zk), log_metadata);
+      if (st != Status::OK) {
+        goto err;
+      }
+      break;
+    case E::NOTFOUND:
+      // Do nothing.
+      break;
+    default:
+      // Anything else is considered an error.
+      goto err;
   }
 
-  if (st == E::NOTFOUND) {
-    // no znode exists, passing nullptr with length 0 to zrq
-    value_for_zrq = nullptr;
-  }
-
-  next_step = zrq->onGotZnodeValue(value_for_zrq, value_from_zk.size());
+  next_step = zrq->applyChanges(log_metadata, value_existed);
   switch (next_step) {
     case ZookeeperEpochStoreRequest::NextStep::PROVISION:
       // continue with creation of new znodes
@@ -264,6 +280,9 @@ void ZookeeperEpochStore::onGetZnodeComplete(
       // no default to let compiler to check if we exhaust all NextSteps
   }
 
+  // Increment version and timestamp of log metadata.
+  log_metadata.touch();
+
   { // Without this scope gcc throws a "goto cross initialization" error.
     // Using a switch() instead of a goto results in a similar error.
     // Using a single-iteration loop is confusing. Perphas we should start
@@ -271,7 +290,7 @@ void ZookeeperEpochStore::onGetZnodeComplete(
 
     char znode_value[ZNODE_VALUE_WRITE_LEN_MAX];
     int znode_value_size =
-        zrq->composeZnodeValue(znode_value, sizeof(znode_value));
+        zrq->composeZnodeValue(log_metadata, znode_value, sizeof(znode_value));
     if (znode_value_size < 0 || znode_value_size >= sizeof(znode_value)) {
       ld_check(false);
       RATELIMIT_CRITICAL(std::chrono::seconds(1),
@@ -287,7 +306,8 @@ void ZookeeperEpochStore::onGetZnodeComplete(
 
     std::string znode_value_str(znode_value, znode_value_size);
     if (do_provision) {
-      provisionLogZnodes(std::move(zrq), std::move(znode_value_str));
+      provisionLogZnodes(
+          std::move(zrq), std::move(log_metadata), std::move(znode_value_str));
       return;
     } else {
       std::string znode_path = zrq->getZnodePath(rootPath());
@@ -297,9 +317,14 @@ void ZookeeperEpochStore::onGetZnodeComplete(
       // number of znode on every write to that znode. If the versions do not
       // match zkSetCf() will be called with status ZBADVERSION. This ensures
       // that if our read-modify-write of znode_path succeeds, it was atomic.
-      auto cb = [this, req = std::move(zrq)](int res, zk::Stat) mutable {
-        postRequestCompletion(res, std::move(req));
-      };
+      auto cb =
+          [this, req = std::move(zrq), log_metadata = std::move(log_metadata)](
+              int res, zk::Stat) mutable {
+            auto logid = req->logid_;
+            postRequestCompletion(completionStatus(res, logid),
+                                  std::move(req),
+                                  std::move(log_metadata));
+          };
       zkclient_->setData(std::move(znode_path),
                          std::move(znode_value_str),
                          std::move(cb),
@@ -312,23 +337,15 @@ err:
   ld_check(st != E::OK);
 
 done:
-  if (st != E::SHUTDOWN || !shutting_down_.load()) {
-    zrq->postCompletion(st, request_executor_);
-  } else {
-    // Do not post a CompletionRequest if Zookeeper client is shutting down and
-    // the EpochStore is being destroyed. Note that we can get also get an
-    // E::SHUTDOWN code if the ZookeeperClient is being destroyed due to
-    // zookeeper quorum change, but the EpochStore is still there.
-  }
+  postRequestCompletion(st, std::move(zrq), std::move(log_metadata));
 }
 
 void ZookeeperEpochStore::postRequestCompletion(
-    int rc,
-    std::unique_ptr<ZookeeperEpochStoreRequest> zrq) {
-  Status st = completionStatus(rc, zrq->logid_);
-
+    Status st,
+    std::unique_ptr<ZookeeperEpochStoreRequest> zrq,
+    LogMetaData&& log_metadata) {
   if (st != E::SHUTDOWN || !shutting_down_.load()) {
-    zrq->postCompletion(st, request_executor_);
+    zrq->postCompletion(st, std::move(log_metadata), request_executor_);
   } else {
     // Do not post a CompletionRequest if Zookeeper client is shutting down and
     // the EpochStore is being destroyed. Note that we can get also get an
@@ -352,7 +369,7 @@ int ZookeeperEpochStore::runRequest(
 
 int ZookeeperEpochStore::getLastCleanEpoch(logid_t logid, CompletionLCE cf) {
   return runRequest(std::unique_ptr<ZookeeperEpochStoreRequest>(
-      new GetLastCleanEpochZRQ(logid, EPOCH_INVALID, cf)));
+      new GetLastCleanEpochZRQ(logid, cf)));
 }
 
 int ZookeeperEpochStore::setLastCleanEpoch(logid_t logid,
@@ -390,7 +407,6 @@ int ZookeeperEpochStore::createOrUpdateMetaData(
 
   return runRequest(std::unique_ptr<ZookeeperEpochStoreRequest>(
       new EpochMetaDataZRQ(logid,
-                           EPOCH_INVALID,
                            cf,
                            std::move(updater),
                            std::move(tracer),
