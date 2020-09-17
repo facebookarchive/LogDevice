@@ -343,9 +343,9 @@ ClientReadStream::getClientReadStreamDebugInfo() const {
   return info;
 }
 
-void ClientReadStream::sampleDebugInfo(
-    const ClientReadStream::ClientReadStreamDebugInfo& info) const {
+void ClientReadStream::sampleDebugInfo() const {
   Worker* w = worker_;
+  auto info = getClientReadStreamDebugInfo();
   if (!(w && w->processor_ &&
         w->processor_->getDebugClientConfig()
             .isReadStreamDebugInfoSamplingAllowed(info.csid))) {

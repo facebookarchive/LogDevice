@@ -714,6 +714,10 @@ class ClientReadStream : boost::noncopyable {
     return id_;
   }
 
+  const std::string& getReaderName() const {
+    return deps_->getReaderName();
+  }
+
   const std::shared_ptr<UpdateableConfig>& getConfig() const {
     return config_;
   }
@@ -846,16 +850,16 @@ class ClientReadStream : boost::noncopyable {
   };
 
   /**
+   * sample the ClientReadStreamDebugInfo
+   */
+  void sampleDebugInfo() const;
+
+ private:
+  /**
    * @return ClientReadStreamDebugInfo with all the data for debug
    */
   ClientReadStreamDebugInfo getClientReadStreamDebugInfo() const;
 
-  /**
-   * sample the ClientReadStreamDebugInfo
-   */
-  void sampleDebugInfo(const ClientReadStreamDebugInfo&) const;
-
- private:
   /**
    * @return True if there are records we can ship right now to the application,
    * ie the front of `buffer_` contains a record.
