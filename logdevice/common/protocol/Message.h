@@ -23,6 +23,7 @@
 #include "logdevice/common/protocol/ProtocolWriter.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
+#include "logdevice/include/PermissionActions.h"
 
 namespace facebook { namespace logdevice {
 
@@ -30,6 +31,16 @@ class ProtocolReader;
 class ProtocolWriter;
 struct Address;
 struct MessageReadResult;
+
+/**
+ * Stores security specific permission requirements
+ * of a message, based on the message type.
+ */
+struct PermissionParams {
+  bool requiresPermission{false};
+  ACTION action{ACTION::MAX};
+  logid_t log_id{LOGID_INVALID};
+};
 
 /**
  * @file  an object of class Message represents a message that was received
@@ -261,6 +272,15 @@ struct Message {
   virtual std::vector<std::pair<std::string, folly::dynamic>>
   getDebugInfo() const {
     return {};
+  }
+
+  /**
+   * Returns permission parameters for the particular type of message.
+   * This is used to determine security requirements of a message.
+   */
+  virtual PermissionParams getPermissionParams() const {
+    PermissionParams params;
+    return params;
   }
 
   Message& operator=(const Message&) = delete;

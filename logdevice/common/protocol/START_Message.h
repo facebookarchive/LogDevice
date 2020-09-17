@@ -159,6 +159,8 @@ class START_Message : public Message {
   // server-side filtering parameters
   ReadStreamAttributes attrs_;
 
+  PermissionParams getPermissionParams() const override;
+
   std::string client_session_id_; // session id of client that created stream
   uint64_t csid_hash_pt1 = 0;     // Session id hash, pt1
   uint64_t csid_hash_pt2 = 0;     // Session id hash, pt2

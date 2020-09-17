@@ -83,6 +83,8 @@ class FINDKEY_Message : public Message {
     return folly::Executor::LO_PRI;
   }
 
+  PermissionParams getPermissionParams() const override;
+
   FINDKEY_Header header_;
 
   // The key provided by the client.

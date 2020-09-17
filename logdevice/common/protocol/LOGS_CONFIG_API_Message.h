@@ -77,6 +77,8 @@ class LOGS_CONFIG_API_Message : public Message {
   std::vector<std::pair<std::string, folly::dynamic>>
   getDebugInfo() const override;
 
+  PermissionParams getPermissionParams() const override;
+
   LOGS_CONFIG_API_Header header_;
   std::string blob_;
   // Used only by MUTATION_REQUEST.

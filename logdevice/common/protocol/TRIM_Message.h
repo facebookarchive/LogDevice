@@ -43,6 +43,8 @@ class TRIM_Message : public Message {
     return header_;
   }
 
+  PermissionParams getPermissionParams() const override;
+
  private:
   TRIM_Header header_;
 };

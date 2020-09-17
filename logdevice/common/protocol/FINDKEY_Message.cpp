@@ -64,4 +64,12 @@ void FINDKEY_Message::onSent(Status status, const Address& to) const {
   }
 }
 
+PermissionParams FINDKEY_Message::getPermissionParams() const {
+  PermissionParams params;
+  params.requiresPermission = true;
+  params.action = ACTION::READ;
+  params.log_id = header_.log_id;
+  return params;
+}
+
 }} // namespace facebook::logdevice

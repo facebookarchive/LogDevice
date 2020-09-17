@@ -23,7 +23,6 @@
 #include "logdevice/server/RECORD_onSent.h"
 #include "logdevice/server/STARTED_onSent.h"
 #include "logdevice/server/STORE_onSent.h"
-#include "logdevice/server/ServerMessagePermission.h"
 #include "logdevice/server/ServerWorker.h"
 #include "logdevice/server/StoreStateMachine.h"
 #include "logdevice/server/message_handlers/CHECK_NODE_HEALTH_onReceived.h"
@@ -59,7 +58,7 @@ Message::Disposition
 ServerMessageDispatch::onReceivedImpl(Message* msg,
                                       const Address& from,
                                       const PrincipalIdentity& principal) {
-  auto params = ServerMessagePermission::computePermissionParams(msg);
+  auto params = msg->getPermissionParams();
 
   std::shared_ptr<PermissionChecker> permission_checker =
       processor_->security_info_->get()->permission_checker;

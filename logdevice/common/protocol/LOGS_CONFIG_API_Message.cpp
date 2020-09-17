@@ -118,4 +118,13 @@ void LOGS_CONFIG_API_Message::onSent(Status status, const Address& to) const {
   }
 }
 
+PermissionParams LOGS_CONFIG_API_Message::getPermissionParams() const {
+  PermissionParams params;
+  params.requiresPermission =
+      (header_.request_type == LOGS_CONFIG_API_Header::Type::MUTATION_REQUEST);
+  params.action = ACTION::LOG_MANAGEMENT;
+  params.log_id = LOGID_INVALID;
+  return params;
+}
+
 }} // namespace facebook::logdevice

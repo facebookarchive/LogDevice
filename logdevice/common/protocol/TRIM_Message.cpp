@@ -39,4 +39,12 @@ void TRIM_Message::onSent(Status status, const Address& to) const {
   }
 }
 
+PermissionParams TRIM_Message::getPermissionParams() const {
+  PermissionParams params;
+  params.requiresPermission = true;
+  params.action = ACTION::TRIM;
+  params.log_id = getHeader().log_id;
+  return params;
+}
+
 }} // namespace facebook::logdevice

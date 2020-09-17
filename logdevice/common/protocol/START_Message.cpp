@@ -159,4 +159,12 @@ START_Message::getDebugInfo() const {
   return res;
 }
 
+PermissionParams START_Message::getPermissionParams() const {
+  PermissionParams params;
+  params.requiresPermission = true;
+  params.action = ACTION::READ;
+  params.log_id = header_.log_id;
+  return params;
+}
+
 }} // namespace facebook::logdevice
