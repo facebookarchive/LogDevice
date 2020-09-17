@@ -7,7 +7,6 @@
  */
 #include "logdevice/lib/ClientWorker.h"
 
-#include "logdevice/common/ReadStreamDebugInfoSamplingConfig.h"
 #include "logdevice/common/client_read_stream/AllClientReadStreams.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/lib/ClientMessageDispatch.h"
@@ -45,16 +44,6 @@ std::unique_ptr<MessageDispatch> ClientWorker::createMessageDispatch() {
   return std::make_unique<ClientMessageDispatch>();
 }
 
-void ClientWorker::sampleAllReadStreamsDebugInfo() const {
-  if (processor_->getDebugClientConfig().isReadStreamDebugInfoSamplingAllowed(
-          processor_->csid_)) {
-    clientReadStreams().sampleAllReadStreamsDebugInfo();
-  }
-
-  sample_read_streams_timer_->activate(
-      settings().all_read_streams_sampling_rate);
-}
-
 void ClientWorker::setupWorker() {
   Worker::setupWorker();
   if (idx_.val() ==
@@ -65,10 +54,6 @@ void ClientWorker::setupWorker() {
     impl_->node_stats_handler_->init();
     impl_->node_stats_handler_->start();
   }
-
-  sample_read_streams_timer_ = std::make_unique<Timer>(
-      std::bind(&ClientWorker::sampleAllReadStreamsDebugInfo, this));
-  sampleAllReadStreamsDebugInfo();
 }
 
 NodeStatsMessageCallback* ClientWorker::nodeStatsMessageCallback() const {

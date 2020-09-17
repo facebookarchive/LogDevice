@@ -306,6 +306,7 @@ ClientReadStream::getClientReadStreamDebugInfo() const {
   }
 
   info.csid = deps_->getClientSessionID();
+  info.reader_name = deps_->getReaderName();
   info.log_id = log_id_;
   info.next_lsn = next_lsn_to_deliver_;
   info.window_high = window_high_;
@@ -344,17 +345,11 @@ ClientReadStream::getClientReadStreamDebugInfo() const {
 }
 
 void ClientReadStream::sampleDebugInfo() const {
-  Worker* w = worker_;
-  auto info = getClientReadStreamDebugInfo();
-  if (!(w && w->processor_ &&
-        w->processor_->getDebugClientConfig()
-            .isReadStreamDebugInfoSamplingAllowed(info.csid))) {
-    return;
-  }
-
+  const auto& info = getClientReadStreamDebugInfo();
   auto sample = std::make_unique<TraceSample>();
   sample->addNormalValue("thread_name", ThreadID::getName());
   sample->addNormalValue("csid", info.csid);
+  sample->addNormalValue("reader_name", info.reader_name);
   sample->addIntValue("log_id", info.log_id.val());
   sample->addIntValue("stream_id", info.stream_id.val());
   sample->addIntValue("next_lsn", info.next_lsn);
@@ -415,7 +410,8 @@ void ClientReadStream::getDebugInfo(InfoClientReadStreamsTable& table) const {
       .set<11>(info.redelivery)
       .set<12>(info.filter_version)
       .set<13>(info.shards_down)
-      .set<14>(info.shards_slow);
+      .set<14>(info.shards_slow)
+      .set<22>(info.reader_name);
 
   if (info.health.has_value()) {
     table.set<10>(info.health.value());

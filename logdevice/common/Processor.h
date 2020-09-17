@@ -405,8 +405,6 @@ class Processor : public folly::enable_shared_from_this<Processor>,
    */
   ResourceBudget::Token getIncomingMessageToken(size_t payload_size);
 
-  ReadStreamDebugInfoSamplingConfig& getDebugClientConfig();
-
   RequestExecutor getRequestExecutor() {
     return RequestExecutor(this);
   }

@@ -279,10 +279,6 @@ void Processor::startRunning() {
   }
 }
 
-ReadStreamDebugInfoSamplingConfig& Processor::getDebugClientConfig() {
-  return impl_->read_stream_debug_info_sampling_config_;
-}
-
 ThriftRouter* Processor::getThriftRouter() const {
   return thrift_router_.get();
 }

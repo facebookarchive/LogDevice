@@ -26,6 +26,7 @@
 #include "logdevice/common/CheckNodeHealthRequest.h"
 #include "logdevice/common/CheckSealRequest.h"
 #include "logdevice/common/ClientIdxAllocator.h"
+#include "logdevice/common/ClientReadStreamDebugInfoHandler.h"
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/ConfigurationFetchRequest.h"
 #include "logdevice/common/CopySetManager.h"
@@ -59,7 +60,6 @@
 #include "logdevice/common/TrimRequest.h"
 #include "logdevice/common/WorkerTimeoutStats.h"
 #include "logdevice/common/WriteMetaDataRecord.h"
-#include "logdevice/common/client_read_stream/AllClientReadStreams.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
 #include "logdevice/common/configuration/logs/LogsConfigManager.h"
@@ -138,9 +138,15 @@ class WorkerImpl {
                         w->immutable_settings_->num_workers),
         // TODO: Make this configurable
         previously_redirected_appends_(1024),
-        graylistingTracker_(std::make_unique<GraylistingTracker>())
-
-  {
+        graylistingTracker_(std::make_unique<GraylistingTracker>()),
+        clientReadStreamDebugHandler_{
+            w->processor_->csid_,
+            w->getEvBase().getEventBase(),
+            w->immutable_settings_->all_read_streams_sampling_rate,
+            w->processor_->getPluginRegistry(),
+            w->processor_->updateableSettings()
+                ->all_read_streams_debug_config_path,
+            clientReadStreams_} {
     const auto& read_shaping_cfg =
         config->get()->serverConfig()->getReadIOShapingConfig();
     read_shaping_container_ = std::make_unique<ShapingContainer>(
@@ -183,10 +189,11 @@ class WorkerImpl {
   WriteMetaDataRecordMap runningWriteMetaDataRecords_;
   AppendRequestEpochMap appendRequestEpochMap_;
   CheckNodeHealthRequestSet pendingHealthChecks_;
-  AllClientReadStreams clientReadStreams_;
   std::unique_ptr<SequencerBackgroundActivator> sequencerBackgroundActivator_;
   std::unique_ptr<GraylistingTracker> graylistingTracker_;
   std::unique_ptr<ShapingContainer> read_shaping_container_;
+  AllClientReadStreams clientReadStreams_;
+  ClientReadStreamDebugInfoHandler clientReadStreamDebugHandler_;
 };
 
 std::string Worker::makeThreadName(Processor* processor,

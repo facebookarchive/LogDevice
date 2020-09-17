@@ -33,6 +33,7 @@
 #include "logdevice/common/ThreadID.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/WorkerType.h"
+#include "logdevice/common/client_read_stream/AllClientReadStreams.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/types_internal.h"
@@ -110,7 +111,6 @@ namespace facebook { namespace logdevice {
  *       pass the requests to a Worker.
  */
 
-class AllClientReadStreams;
 class AppenderBuffer;
 class BufferedWriterShard;
 class ClusterState;

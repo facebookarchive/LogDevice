@@ -131,8 +131,6 @@ class AllClientReadStreams : public ShardAuthoritativeStatusSubscriber {
    */
   void forEachStream(std::function<void(ClientReadStream& read_stream)> cb);
 
-  void sampleAllReadStreamsDebugInfo() const;
-
   void subscribe(Subscriber&& subscriber) {
     subscriber_ = std::move(subscriber);
   }

@@ -51,71 +51,7 @@ TEST(ReadStreamDebugInfoSamplingConfigTest, ConstructionNotFoundPlugin) {
   folly::Baton<> invokeCallback;
   fetcher->setUpdateCallback([&](const auto&) { invokeCallback.post(); });
 
-  EXPECT_FALSE(fetcher->isReadStreamDebugInfoSamplingAllowed("test-csid"));
-  EXPECT_FALSE(fetcher->isReadStreamDebugInfoSamplingAllowed("test-csid1"));
-  EXPECT_FALSE(fetcher->isReadStreamDebugInfoSamplingAllowed(""));
   EXPECT_FALSE(invokeCallback.try_wait_for(std::chrono::seconds(1)));
-}
-
-TEST(ReadStreamDebugInfoSamplingConfigTest, Construction) {
-  std::shared_ptr<PluginRegistry> plugin_registry = make_test_plugin_registry();
-
-  AllReadStreamsDebugConfigs configs;
-  configs.configs_ref()->push_back(buildConfig("test-csid", 123));
-  std::string serialized_configs = "data: " +
-      ThriftCodec::serialize<apache::thrift::SimpleJSONSerializer>(configs);
-
-  std::unique_ptr<ReadStreamDebugInfoSamplingConfig> fetcher =
-      std::make_unique<ReadStreamDebugInfoSamplingConfig>(
-          plugin_registry, serialized_configs);
-
-  EXPECT_TRUE(fetcher->isReadStreamDebugInfoSamplingAllowed(
-      "test-csid", std::chrono::seconds(120)));
-
-  EXPECT_FALSE(fetcher->isReadStreamDebugInfoSamplingAllowed("test-csid1"));
-  EXPECT_FALSE(fetcher->isReadStreamDebugInfoSamplingAllowed(""));
-}
-
-TEST(ReadStreamDebugInfoSamplingConfigTest, ExpiredDeadline) {
-  std::shared_ptr<PluginRegistry> plugin_registry = make_test_plugin_registry();
-
-  AllReadStreamsDebugConfigs configs;
-  configs.configs_ref()->push_back(buildConfig("test-csid", 1));
-  std::string serialized_configs = "data: " +
-      ThriftCodec::serialize<apache::thrift::SimpleJSONSerializer>(configs);
-
-  std::unique_ptr<ReadStreamDebugInfoSamplingConfig> fetcher =
-      std::make_unique<ReadStreamDebugInfoSamplingConfig>(
-          plugin_registry, serialized_configs);
-
-  EXPECT_FALSE(fetcher->isReadStreamDebugInfoSamplingAllowed("test-csid"));
-  EXPECT_FALSE(fetcher->isReadStreamDebugInfoSamplingAllowed("test-csid1"));
-  EXPECT_FALSE(fetcher->isReadStreamDebugInfoSamplingAllowed(""));
-}
-
-TEST(ReadStreamDebugInfoSamplingConfigTest, MultipleConfigs) {
-  std::shared_ptr<PluginRegistry> plugin_registry = make_test_plugin_registry();
-
-  AllReadStreamsDebugConfigs configs;
-  configs.configs_ref()->push_back(buildConfig("test-csid", 1));
-
-  configs.configs_ref()->push_back(buildConfig("test-csid1", 123));
-  std::string serialized_configs = "data: " +
-      ThriftCodec::serialize<apache::thrift::SimpleJSONSerializer>(configs);
-
-  std::unique_ptr<ReadStreamDebugInfoSamplingConfig> fetcher =
-      std::make_unique<ReadStreamDebugInfoSamplingConfig>(
-          plugin_registry, serialized_configs);
-
-  EXPECT_TRUE(fetcher->isReadStreamDebugInfoSamplingAllowed(
-      "test-csid1", std::chrono::seconds(120)));
-
-  // Permission denied after deadline expiration
-  EXPECT_FALSE(fetcher->isReadStreamDebugInfoSamplingAllowed(
-      "test-csid1", std::chrono::seconds(124)));
-
-  EXPECT_FALSE(fetcher->isReadStreamDebugInfoSamplingAllowed("test-csid"));
-  EXPECT_FALSE(fetcher->isReadStreamDebugInfoSamplingAllowed(""));
 }
 
 TEST(ReadStreamDebugInfoSamplingConfigTest, CallCallbackWithConfig) {

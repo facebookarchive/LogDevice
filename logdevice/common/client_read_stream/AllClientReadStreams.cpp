@@ -151,14 +151,6 @@ void AllClientReadStreams::getReadStreamsDebugInfo(
   }
 }
 
-void AllClientReadStreams::sampleAllReadStreamsDebugInfo() const {
-  for (const auto& stream : streams_) {
-    if (stream.second) {
-      stream.second->sampleDebugInfo();
-    }
-  }
-}
-
 std::string
 AllClientReadStreams::getAllReadStreamsDebugInfo(bool pretty,
                                                  bool json,
@@ -186,7 +178,8 @@ AllClientReadStreams::getAllReadStreamsDebugInfo(bool pretty,
                                    "Last Time Stuck",
                                    "Last Reported State",
                                    "Last Tail Info",
-                                   "Time Lag Record");
+                                   "Time Lag Record",
+                                   "Reader Name");
 
   auto tables = run_on_all_workers(&processor, [&]() {
     InfoClientReadStreamsTable t(table);

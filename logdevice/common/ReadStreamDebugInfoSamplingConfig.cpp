@@ -34,18 +34,10 @@ struct AllReadStreamsDebugCallback
 };
 
 template <typename F>
-static std::unique_ptr<AllReadStreamsDebugCallback<F>> createCallback(F func) {
+std::unique_ptr<AllReadStreamsDebugCallback<F>> createCallback(F func) {
   return std::make_unique<AllReadStreamsDebugCallback<F>>(func);
 }
 
-std::chrono::seconds currentTimeInSeconds() {
-  return std::chrono::duration_cast<std::chrono::seconds>(
-      std::chrono::system_clock::now().time_since_epoch());
-}
-
-bool isDeadlineExpired(int64_t deadline, std::chrono::seconds current_time) {
-  return current_time > std::chrono::seconds(deadline);
-}
 } // namespace
 
 namespace facebook { namespace logdevice {
@@ -82,29 +74,6 @@ ReadStreamDebugInfoSamplingConfig::ReadStreamDebugInfoSamplingConfig(
   ConfigSource::Output out;
   auto status = source_->getConfig(path, &out);
   updateCallback(status, out);
-}
-
-bool ReadStreamDebugInfoSamplingConfig::isReadStreamDebugInfoSamplingAllowed(
-    const std::string& csid,
-    std::chrono::seconds current_time) const {
-  auto locked_configs = configs_.rlock();
-  if (csid == "" || *locked_configs == nullptr) {
-    return false;
-  }
-
-  for (const auto& config : *(*locked_configs)->configs_ref()) {
-    if (*config.csid_ref() != csid ||
-        isDeadlineExpired(*config.deadline_ref(), current_time)) {
-      continue;
-    }
-    return true;
-  }
-  return false;
-}
-
-bool ReadStreamDebugInfoSamplingConfig::isReadStreamDebugInfoSamplingAllowed(
-    const std::string& csid) const {
-  return isReadStreamDebugInfoSamplingAllowed(csid, currentTimeInSeconds());
 }
 
 void ReadStreamDebugInfoSamplingConfig::setUpdateCallback(

@@ -43,12 +43,6 @@ class ReadStreamDebugInfoSamplingConfig {
     unsetUpdateCallback();
   }
 
-  bool
-  isReadStreamDebugInfoSamplingAllowed(const std::string& csid,
-                                       std::chrono::seconds current_time) const;
-
-  bool isReadStreamDebugInfoSamplingAllowed(const std::string& csid) const;
-
   /*
    * Sets callback to be notified whenever configuration changes.
    * If the config is already available when this function is called,
