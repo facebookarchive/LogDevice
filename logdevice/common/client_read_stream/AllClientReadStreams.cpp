@@ -26,16 +26,18 @@ void AllClientReadStreams::insertAndStart(
   ld_check(insert_result.second); // new read streams should have unique IDs
   // Starting stream after insert, as start() might need to look up the calling
   // instance.
+  subscriber_.onStreamAdd(*insert_result.first->second);
   insert_result.first->second->start();
 }
 
 bool AllClientReadStreams::erase(read_stream_id_t id) {
-  auto it = streams_.find(id);
-  if (it != streams_.end()) {
-    streams_.erase(it);
-    return true;
-  }
-  return false;
+  auto eraseReadStream = [this](read_stream_id_t&&,
+                                std::unique_ptr<ClientReadStream>&& stream) {
+    if (stream) {
+      subscriber_.onStreamRemoved(*stream);
+    }
+  };
+  return streams_.eraseInto(id, std::move(eraseReadStream)) == 1;
 }
 
 void AllClientReadStreams::onDataRecord(
