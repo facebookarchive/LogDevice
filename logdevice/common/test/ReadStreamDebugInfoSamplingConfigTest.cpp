@@ -9,10 +9,14 @@
 #include "logdevice/common/ReadStreamDebugInfoSamplingConfig.h"
 
 #include <chrono>
+#include <fstream>
 #include <thread>
 
+#include <folly/experimental/TestUtil.h>
+#include <folly/synchronization/Baton.h>
 #include <gtest/gtest.h>
 
+#include "logdevice/common/FileConfigSource.h"
 #include "logdevice/common/ThriftCodec.h"
 #include "logdevice/common/plugin/CommonBuiltinPlugins.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
@@ -31,6 +35,12 @@ AllReadStreamsDebugConfig buildConfig(std::string csid, int64_t deadline) {
   return config;
 }
 
+void writeTo(const AllReadStreamsDebugConfigs& config,
+             const std::string& path) {
+  std::ofstream out(path);
+  out << ThriftCodec::serialize<apache::thrift::SimpleJSONSerializer>(config);
+}
+
 TEST(ReadStreamDebugInfoSamplingConfigTest, ConstructionNotFoundPlugin) {
   std::shared_ptr<PluginRegistry> plugin_registry = make_test_plugin_registry();
 
@@ -38,9 +48,13 @@ TEST(ReadStreamDebugInfoSamplingConfigTest, ConstructionNotFoundPlugin) {
       std::make_unique<ReadStreamDebugInfoSamplingConfig>(
           plugin_registry, "asd: asd");
 
+  folly::Baton<> invokeCallback;
+  fetcher->setUpdateCallback([&](const auto&) { invokeCallback.post(); });
+
   EXPECT_FALSE(fetcher->isReadStreamDebugInfoSamplingAllowed("test-csid"));
   EXPECT_FALSE(fetcher->isReadStreamDebugInfoSamplingAllowed("test-csid1"));
   EXPECT_FALSE(fetcher->isReadStreamDebugInfoSamplingAllowed(""));
+  EXPECT_FALSE(invokeCallback.try_wait_for(std::chrono::seconds(1)));
 }
 
 TEST(ReadStreamDebugInfoSamplingConfigTest, Construction) {
@@ -103,4 +117,38 @@ TEST(ReadStreamDebugInfoSamplingConfigTest, MultipleConfigs) {
   EXPECT_FALSE(fetcher->isReadStreamDebugInfoSamplingAllowed("test-csid"));
   EXPECT_FALSE(fetcher->isReadStreamDebugInfoSamplingAllowed(""));
 }
+
+TEST(ReadStreamDebugInfoSamplingConfigTest, CallCallbackWithConfig) {
+  folly::test::TemporaryFile config(
+      "ReadStreamDebugInfoSamplingConfigTest.CallCallbackWithConfig");
+  auto path = folly::fs::canonical(config.path()).string();
+
+  std::shared_ptr<PluginRegistry> plugin_registry = make_test_plugin_registry();
+
+  AllReadStreamsDebugConfigs configs;
+  configs.configs_ref()->push_back(buildConfig("test-csid", 1));
+  writeTo(configs, path);
+
+  std::unique_ptr<ReadStreamDebugInfoSamplingConfig> fetcher =
+      std::make_unique<ReadStreamDebugInfoSamplingConfig>(
+          plugin_registry, "file:" + path);
+
+  AllReadStreamsDebugConfigs readConfig;
+  folly::Baton<> invokeCallback;
+  fetcher->setUpdateCallback([&](const auto& config) {
+    readConfig = config;
+    invokeCallback.post();
+  });
+  EXPECT_TRUE(invokeCallback.try_wait_for(std::chrono::seconds(1)));
+  ASSERT_EQ(configs, readConfig);
+
+  invokeCallback.reset();
+  configs.configs_ref()->push_back(buildConfig("test-csid-2", 3));
+  writeTo(configs, path);
+
+  ASSERT_TRUE(invokeCallback.try_wait_for(
+      FileConfigSource::defaultPollingInterval() * 2));
+  ASSERT_EQ(configs, readConfig);
+}
+
 } // namespace

@@ -107,6 +107,21 @@ bool ReadStreamDebugInfoSamplingConfig::isReadStreamDebugInfoSamplingAllowed(
   return isReadStreamDebugInfoSamplingAllowed(csid, currentTimeInSeconds());
 }
 
+void ReadStreamDebugInfoSamplingConfig::setUpdateCallback(
+    Callback&& updateCallback) {
+  auto configWLock = configs_.wlock();
+  updateCallback_ = std::move(updateCallback);
+  auto configRLock = configWLock.moveFromWriteToRead();
+  if (*configRLock) {
+    updateCallback_(**configRLock);
+  }
+}
+
+void ReadStreamDebugInfoSamplingConfig::unsetUpdateCallback() {
+  auto configWLock = configs_.wlock();
+  updateCallback_ = [](auto&&...) {};
+}
+
 void ReadStreamDebugInfoSamplingConfig::updateCallback(
     Status status,
     ConfigSource::Output out) {
@@ -125,5 +140,7 @@ void ReadStreamDebugInfoSamplingConfig::updateCallback(
         "Unable to deserialize fetched All Read Streams Debugging Config.");
   }
   configs_.exchange(std::move(deserialized_configs));
+  auto configs = configs_.rlock();
+  updateCallback_(**configs);
 }
 }} // namespace facebook::logdevice
