@@ -7,6 +7,7 @@
  */
 #include "logdevice/server/Server.h"
 
+#include <folly/MapUtil.h>
 #include <folly/io/async/EventBaseThread.h>
 #include <thrift/lib/cpp/util/EnumUtils.h>
 
@@ -305,11 +306,17 @@ bool ServerParameters::registerAndUpdateNodeInfo(
       ld_check(service_discovery);
       const auto old_version = service_discovery->version;
       const auto new_version = server_settings_->version.value_or(old_version);
+      const auto task_handle =
+          folly::get_default(service_discovery->tags, "handle", "");
+      const auto container_handle =
+          folly::get_default(service_discovery->tags, "container", "");
       if (new_version < old_version) {
         ld_error("Found the node with the same name but higher version (%lu > "
-                 "%lu) in the config",
+                 "%lu) in the config - task handle: %s, container handle: %s",
                  old_version,
-                 new_version);
+                 new_version,
+                 task_handle.c_str(),
+                 container_handle.c_str());
         return false;
       }
       // Now let's make sure that our attributes are up to date.
