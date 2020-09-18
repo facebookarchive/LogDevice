@@ -10,6 +10,7 @@
 #include "logdevice/common/MetaDataTracer.h"
 #include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/debug.h"
+#include "logdevice/common/nodeset_selection/NodeSetSelector.h"
 #include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
 #include "logdevice/lib/ClientProcessor.h"
 
@@ -194,7 +195,7 @@ UpdateResult updateMetaDataIfNeeded(
       target_nodeset_size.value(),
       nodeset_seed.value(),
       prev_metadata_exists ? metadata.get() : nullptr,
-      nullptr);
+      NodeSetSelector::Options{});
 
   UpdateResult result =
       prev_metadata_exists ? UpdateResult::UNCHANGED : UpdateResult::CREATED;

@@ -32,8 +32,7 @@ class SelectAllShardsNodeSetSelector : public NodeSetSelector {
       nodeset_size_t target_nodeset_size,
       uint64_t seed,
       const EpochMetaData* prev,
-      const Options* options = nullptr /* ignored */
-      ) override {
+      const Options& options) override {
     Result res;
     const auto logcfg = cfg->getLogGroupByIDShared(log_id);
     if (!logcfg) {
@@ -50,7 +49,7 @@ class SelectAllShardsNodeSetSelector : public NodeSetSelector {
 
     const auto& membership = nodes_configuration.getStorageMembership();
     for (const auto node : *membership) {
-      if ((!options || !options->exclude_nodes.count(node))) {
+      if (!options.exclude_nodes.count(node)) {
         auto num_shards = nodes_configuration.getNumShards(node);
         for (shard_index_t s = 0; s < num_shards; ++s) {
           ShardID shard(node, s);

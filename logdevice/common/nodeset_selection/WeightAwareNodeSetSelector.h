@@ -45,7 +45,7 @@ class WeightAwareNodeSetSelector : public NodeSetSelector {
       nodeset_size_t target_nodeset_size,
       uint64_t seed,
       const EpochMetaData* prev,
-      const Options* options = nullptr) override;
+      const Options& options) override;
 
  private:
   MapLogToShardFn mapLogToShard_;

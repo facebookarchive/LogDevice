@@ -25,7 +25,7 @@ NodeSetSelector::Result WeightAwareNodeSetSelector::getStorageSet(
     nodeset_size_t target_nodeset_size,
     uint64_t seed,
     const EpochMetaData* prev,
-    const Options* options) {
+    const Options& options) {
   Result res;
   res.decision = Decision::FAILED;
 
@@ -104,7 +104,7 @@ NodeSetSelector::Result WeightAwareNodeSetSelector::getStorageSet(
   const auto& membership = nodes_configuration.getStorageMembership();
   for (const auto node : *membership) {
     // Filter nodes excluded from `options`.
-    if (options != nullptr && options->exclude_nodes.count(node)) {
+    if (options.exclude_nodes.count(node)) {
       continue;
     }
 

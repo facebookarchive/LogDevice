@@ -534,7 +534,8 @@ TEST_F(FailureDetectorIntegrationTest, StartingState) {
                               *cluster->getConfig()->getNodesConfiguration(),
                               /* target_nodeset_size */ 1,
                               /* seed */ 0,
-                              nullptr);
+                              nullptr,
+                              NodeSetSelector::Options{});
   ASSERT_EQ(selected.decision, NodeSetSelector::Decision::NEEDS_CHANGE);
   ASSERT_EQ(selected.storage_set.size(), 1);
   auto S = selected.storage_set[0];

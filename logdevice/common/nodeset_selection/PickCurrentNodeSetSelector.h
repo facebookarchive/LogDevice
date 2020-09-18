@@ -34,7 +34,7 @@ class PickCurrentNodeSetSelector : public NodeSetSelector {
       nodeset_size_t target_nodeset_size,
       uint64_t seed,
       const EpochMetaData* prev,
-      const Options* options = nullptr /* ignored */
+      const Options& /* options */
       ) override {
     Result res;
     const LogsConfig::LogGroupNodePtr logcfg =

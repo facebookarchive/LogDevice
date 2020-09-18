@@ -28,7 +28,7 @@ namespace facebook { namespace logdevice {
 int RandomCrossDomainNodeSetSelector::buildDomainMap(
     const configuration::nodes::NodesConfiguration& nodes_configuration,
     NodeLocationScope sync_replication_scope,
-    const Options* options,
+    const Options& options,
     DomainMap* map) {
   ld_check(map);
   ld_check(sync_replication_scope > NodeLocationScope::NODE &&
@@ -43,7 +43,7 @@ int RandomCrossDomainNodeSetSelector::buildDomainMap(
     ld_check(sd != nullptr);
 
     // filter nodes excluded from @param options
-    if (options != nullptr && options->exclude_nodes.count(node)) {
+    if (options.exclude_nodes.count(node)) {
       // skip the node
       continue;
     }
@@ -91,7 +91,7 @@ storage_set_size_t RandomCrossDomainNodeSetSelector::getStorageSetSizeImpl(
     NodeLocationScope sync_replication_scope,
     int replication_factor,
     DomainMap* domain_map,
-    const Options* options) {
+    const Options& options) {
   ld_check(sync_replication_scope != NodeLocationScope::NODE);
 
   DomainMap local_domain_map;
@@ -202,7 +202,7 @@ NodeSetSelector::Result RandomCrossDomainNodeSetSelector::getStorageSet(
     nodeset_size_t target_nodeset_size,
     uint64_t seed,
     const EpochMetaData* prev,
-    const Options* options) {
+    const Options& options) {
   Result res;
   auto logcfg = cfg->getLogGroupByIDShared(log_id);
   if (!logcfg) {

@@ -38,7 +38,7 @@ class TestNodeSetSelector : public NodeSetSelector {
                        nodeset_size_t /* target_nodeset_size */,
                        uint64_t /* seed */,
                        const EpochMetaData* prev,
-                       const Options* /*options*/ = nullptr /* ignored */
+                       const Options& /* options */
                        ) override {
     ld_check(!storage_set_.empty());
     Result res;

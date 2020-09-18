@@ -41,7 +41,7 @@ class RandomNodeSetSelector : public NodeSetSelector {
       nodeset_size_t target_nodeset_size,
       uint64_t seed,
       const EpochMetaData* prev,
-      const Options* options = nullptr) override;
+      const Options& options) override;
 
  protected:
   // randomly select a nodeset of size @nodeset_size from a pool of candidate
@@ -52,7 +52,7 @@ class RandomNodeSetSelector : public NodeSetSelector {
       const configuration::nodes::NodesConfiguration& nodes_configuration,
       const NodeSetIndices& eligible_nodes,
       size_t nodeset_size,
-      const Options* options);
+      const Options& options);
 
  private:
   std::default_random_engine rnd_;
@@ -63,7 +63,7 @@ class RandomNodeSetSelector : public NodeSetSelector {
       const configuration::nodes::NodesConfiguration& nodes_configuration,
       nodeset_size_t target_nodeset_size,
       ReplicationProperty replication,
-      const Options* options = nullptr);
+      const Options& options);
 };
 
 }} // namespace facebook::logdevice

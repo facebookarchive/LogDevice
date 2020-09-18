@@ -64,7 +64,7 @@ class RandomCrossDomainNodeSetSelector : public RandomNodeSetSelector {
       nodeset_size_t target_nodeset_size,
       uint64_t seed,
       const EpochMetaData* prev,
-      const Options* options = nullptr) override;
+      const Options& options) override;
 
  private:
   using DomainMap = std::map<std::string, NodeSetIndices>;
@@ -81,11 +81,11 @@ class RandomCrossDomainNodeSetSelector : public RandomNodeSetSelector {
       NodeLocationScope sync_replication_scope,
       int replication_factor,
       DomainMap* domain_map,
-      const Options* options);
+      const Options& options);
   static int buildDomainMap(
       const configuration::nodes::NodesConfiguration& nodes_configuration,
       NodeLocationScope sync_replication_scope,
-      const Options* options,
+      const Options& options,
       DomainMap* map);
 
   // Extracts replication factor and highest replication scope from

@@ -3776,7 +3776,7 @@ class ManualNodeSetSelector : public NodeSetSelector {
       nodeset_size_t /* ignored */,
       uint64_t /* ignored */,
       const EpochMetaData* prev,
-      const Options* /* ignored */
+      const Options& /* options */
       ) override {
     Result res;
     const LogsConfig::LogGroupNodePtr logcfg =

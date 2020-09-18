@@ -34,7 +34,7 @@ std::unique_ptr<StorageSet> RandomNodeSetSelector::randomlySelectNodes(
     const configuration::nodes::NodesConfiguration& nodes_configuration,
     const NodeSetIndices& eligible_nodes,
     size_t nodeset_size,
-    const Options* options) {
+    const Options& options) {
   if (nodeset_size > eligible_nodes.size()) {
     return nullptr;
   }
@@ -50,7 +50,7 @@ std::unique_ptr<StorageSet> RandomNodeSetSelector::randomlySelectNodes(
     }
 
     // filter nodes excluded from @param options
-    if (options != nullptr && options->exclude_nodes.count(i)) {
+    if (options.exclude_nodes.count(i)) {
       // skip the node
       continue;
     }
@@ -90,7 +90,7 @@ storage_set_size_t RandomNodeSetSelector::getStorageSetSize(
     const configuration::nodes::NodesConfiguration& nodes_configuration,
     nodeset_size_t target_nodeset_size,
     ReplicationProperty replication,
-    const Options* /*options*/) {
+    const Options& /* options */) {
   size_t storage_set_count = 0;
 
   const auto& membership = nodes_configuration.getStorageMembership();
@@ -119,7 +119,7 @@ NodeSetSelector::Result RandomNodeSetSelector::getStorageSet(
     nodeset_size_t target_nodeset_size,
     uint64_t seed,
     const EpochMetaData* prev,
-    const Options* options) {
+    const Options& options) {
   Result res;
   auto logcfg = cfg->getLogGroupByIDShared(log_id);
   if (!logcfg) {

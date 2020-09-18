@@ -60,15 +60,15 @@ addWeightedNodes(std::shared_ptr<const NodesConfiguration>& nodes,
   }
 }
 
-static void
-verify_result(NodeSetSelector* selector,
-              std::shared_ptr<Configuration>& config,
-              logid_t logid,
-              Decision expected_decision,
-              verify_func_t verify,
-              const NodeSetSelector::Options* options = nullptr,
-              size_t iteration = 10,
-              folly::Optional<nodeset_size_t> target_size = folly::none) {
+static void verify_result(
+    NodeSetSelector* selector,
+    std::shared_ptr<Configuration>& config,
+    logid_t logid,
+    Decision expected_decision,
+    verify_func_t verify,
+    const NodeSetSelector::Options& options = NodeSetSelector::Options{},
+    size_t iteration = 10,
+    folly::Optional<nodeset_size_t> target_size = folly::none) {
   SCOPED_TRACE("log " + toString(logid.val_));
 
   if (!target_size.has_value()) {
@@ -132,14 +132,14 @@ verify_result(NodeSetSelector* selector,
 
 // return true if nodesets for a given log based on 2 node configs are the same;
 // false otherwise
-static std::pair<size_t, size_t>
-compare_nodesets(NodeSetSelector* selector,
-                 std::shared_ptr<Configuration>& config1,
-                 std::shared_ptr<Configuration>& config2,
-                 logid_t logid,
-                 std::map<ShardID, size_t>& old_distribution,
-                 std::map<ShardID, size_t>& new_distribution,
-                 const NodeSetSelector::Options* options = nullptr) {
+static std::pair<size_t, size_t> compare_nodesets(
+    NodeSetSelector* selector,
+    std::shared_ptr<Configuration>& config1,
+    std::shared_ptr<Configuration>& config2,
+    logid_t logid,
+    std::map<ShardID, size_t>& old_distribution,
+    std::map<ShardID, size_t>& new_distribution,
+    const NodeSetSelector::Options& options = NodeSetSelector::Options{}) {
   auto old_res = selector->getStorageSet(logid,
                                          config1.get(),
                                          *config1->getNodesConfiguration(),
@@ -285,7 +285,7 @@ TEST(RandomNodeSetSelectorTest, NodeExclusion) {
                 logid_t{1},
                 Decision::NEEDS_CHANGE,
                 gen({1, 2, 3}),
-                &options);
+                options);
 
   options.exclude_nodes = {1, 3};
   verify_result(selector.get(),
@@ -293,7 +293,7 @@ TEST(RandomNodeSetSelectorTest, NodeExclusion) {
                 logid_t{5},
                 Decision::NEEDS_CHANGE,
                 gen({1, 3}),
-                &options);
+                options);
 
   options.exclude_nodes = {1, 2, 3};
   // there are not enough nodes for log 6
@@ -302,7 +302,7 @@ TEST(RandomNodeSetSelectorTest, NodeExclusion) {
                 logid_t{6},
                 Decision::FAILED,
                 gen({1, 2, 3}),
-                &options);
+                options);
 }
 
 TEST(RandomNodeSetSelector, ImpreciseNodeSetSize) {
@@ -446,7 +446,7 @@ TEST(RandomCrossDomainNodeSetSelectorTest, NodeExclusion) {
                 Decision::NEEDS_CHANGE,
                 // should select 4 racks of 5 nodes each
                 std::bind(verify_domains, 4, 5, std::placeholders::_1),
-                &options);
+                options);
 
   // nodeset generation and nodeset size if one rack is partially removed
   options.exclude_nodes = {20, 21, 22, 23};
@@ -456,7 +456,7 @@ TEST(RandomCrossDomainNodeSetSelectorTest, NodeExclusion) {
                 Decision::NEEDS_CHANGE,
                 // should select 4 racks of 5 nodes each
                 std::bind(verify_domains, 4, 5, std::placeholders::_1),
-                &options);
+                options);
 
   // nodeset generation and nodeset size if two racks is partially removed
   options.exclude_nodes = {15, 16, 17, 20, 21, 22, 23};
@@ -466,7 +466,7 @@ TEST(RandomCrossDomainNodeSetSelectorTest, NodeExclusion) {
                 Decision::NEEDS_CHANGE,
                 // should select 3 racks of 5 nodes each
                 std::bind(verify_domains, 3, 5, std::placeholders::_1),
-                &options);
+                options);
 
   // nodeset generation and nodeset size if three racks is partially removed
   options.exclude_nodes = {10, 11, 15, 16, 20, 21, 22};
@@ -477,7 +477,7 @@ TEST(RandomCrossDomainNodeSetSelectorTest, NodeExclusion) {
                 // should select 5 racks of 3 nodes each, not 2 racks of 5
                 // nodes each
                 std::bind(verify_domains, 5, 3, std::placeholders::_1),
-                &options);
+                options);
 }
 
 void basic_test(NodeSetSelectorType ns_type) {
@@ -675,7 +675,7 @@ void basic_test(NodeSetSelectorType ns_type) {
               std::vector<int>({1, 0, (int)ss->size() - 10, 3, 3, 3}), count);
         }
       },
-      &options);
+      options);
 }
 
 TEST(WeightAwareNodeSetSelectorTest, ExcludeFromNodesets) {
@@ -969,7 +969,7 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, DisabledNodes) {
                                      6,
                                      0,
                                      nullptr,
-                                     nullptr);
+                                     NodeSetSelector::Options{});
   ASSERT_EQ(Decision::NEEDS_CHANGE, res.decision);
 
   std::array<int, 3> per_domain{};
@@ -1018,7 +1018,7 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, Seed) {
                                      /* target_nodeset_size */ 5,
                                      /* seed */ 0,
                                      nullptr,
-                                     nullptr);
+                                     NodeSetSelector::Options{});
   ASSERT_EQ(Decision::NEEDS_CHANGE, res.decision);
   ASSERT_EQ(5, res.storage_set.size());
 
@@ -1030,7 +1030,7 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, Seed) {
                                       5,
                                       0,
                                       &meta,
-                                      nullptr);
+                                      NodeSetSelector::Options{});
   EXPECT_EQ(Decision::KEEP, res2.decision);
   EXPECT_EQ(res.signature, res2.signature);
 
@@ -1045,7 +1045,7 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, Seed) {
                                       5,
                                       1,
                                       &meta,
-                                      nullptr);
+                                      NodeSetSelector::Options{});
   EXPECT_EQ(Decision::NEEDS_CHANGE, res3.decision);
   EXPECT_NE(res3.signature, res2.signature);
   ASSERT_EQ(5, res3.storage_set.size());
@@ -1058,7 +1058,7 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, Seed) {
                                       5,
                                       1,
                                       &meta,
-                                      nullptr);
+                                      NodeSetSelector::Options{});
   EXPECT_EQ(Decision::KEEP, res4.decision);
   EXPECT_EQ(res3.signature, res4.signature);
 
@@ -1069,7 +1069,7 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, Seed) {
                                       6,
                                       1,
                                       &meta,
-                                      nullptr);
+                                      NodeSetSelector::Options{});
   EXPECT_EQ(Decision::NEEDS_CHANGE, res5.decision);
   EXPECT_NE(res5.signature, res4.signature);
   ASSERT_EQ(6, res5.storage_set.size());
@@ -1082,7 +1082,7 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, Seed) {
                                       6,
                                       1,
                                       &meta,
-                                      nullptr);
+                                      NodeSetSelector::Options{});
   EXPECT_EQ(Decision::KEEP, res6.decision);
   EXPECT_EQ(res5.signature, res6.signature);
 }

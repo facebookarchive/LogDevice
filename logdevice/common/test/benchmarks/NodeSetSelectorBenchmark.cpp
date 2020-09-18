@@ -58,7 +58,7 @@ static void do_benchmark(NodeSetSelectorType type, unsigned iterations) {
                                        20,
                                        0,
                                        nullptr,
-                                       nullptr);
+                                       NodeSetSelector::Options{});
     ld_check(res.decision == NodeSetSelector::Decision::NEEDS_CHANGE);
   }
 }
