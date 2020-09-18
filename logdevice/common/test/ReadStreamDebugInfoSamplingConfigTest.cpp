@@ -12,6 +12,7 @@
 #include <fstream>
 #include <thread>
 
+#include <folly/FileUtil.h>
 #include <folly/experimental/TestUtil.h>
 #include <folly/synchronization/Baton.h>
 #include <gtest/gtest.h>
@@ -37,8 +38,11 @@ AllReadStreamsDebugConfig buildConfig(std::string csid, int64_t deadline) {
 
 void writeTo(const AllReadStreamsDebugConfigs& config,
              const std::string& path) {
-  std::ofstream out(path);
-  out << ThriftCodec::serialize<apache::thrift::SimpleJSONSerializer>(config);
+  folly::writeFileAtomic(
+      path,
+      ThriftCodec::serialize<apache::thrift::SimpleJSONSerializer>(config),
+      0644,
+      folly::SyncType::WITH_SYNC);
 }
 
 TEST(ReadStreamDebugInfoSamplingConfigTest, ConstructionNotFoundPlugin) {
