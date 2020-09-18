@@ -45,6 +45,8 @@ enum ClusterStateNodeState : uint8_t {
   DEAD = 1,
   FAILING_OVER = 2,
   STARTING = 3,
+  // We don't know the state yet.
+  UNKNOWN = 99,
 };
 /* Type of callbacks used for node state changes subscriptions */
 struct ClusterStateSubscriptionList {
@@ -81,6 +83,8 @@ class ClusterState {
         return "FAILING_OVER";
       case STARTING:
         return "STARTING";
+      case UNKNOWN:
+        return "UNKNOWN";
     }
     return "UNKNOWN";
   }
@@ -101,22 +105,30 @@ class ClusterState {
     return nodes_in_config_.count(idx) > 0;
   }
 
+  // defaultState is used if the stat of the node is UNKNOWN.
   static inline bool isAliveState(NodeState state) {
     return state == NodeState::FULLY_STARTED || state == NodeState::STARTING;
   }
 
   bool isAnyNodeAlive() const;
 
-  bool isNodeAlive(node_index_t idx) const {
-    return isAliveState(getNodeState(idx));
+  // defaultState is used if the stat of the node is UNKNOWN.
+  bool isNodeAlive(node_index_t idx,
+                   NodeState defaultState = NodeState::FULLY_STARTED) const {
+    return isAliveState(getNodeState(idx, defaultState));
   }
 
-  bool isNodeFullyStarted(node_index_t idx) const {
-    return getNodeState(idx) == NodeState::FULLY_STARTED;
+  // defaultState is used if the stat of the node is UNKNOWN.
+  bool
+  isNodeFullyStarted(node_index_t idx,
+                     NodeState defaultState = NodeState::FULLY_STARTED) const {
+    return getNodeState(idx, defaultState) == NodeState::FULLY_STARTED;
   }
 
-  bool isNodeStarting(node_index_t idx) const {
-    return getNodeState(idx) == NodeState::STARTING;
+  // defaultState is used if the stat of the node is UNKNOWN.
+  bool isNodeStarting(node_index_t idx,
+                      NodeState defaultState = NodeState::FULLY_STARTED) const {
+    return getNodeState(idx, defaultState) == NodeState::STARTING;
   }
 
   bool isNodeOverloaded(node_index_t idx) const {
@@ -127,7 +139,9 @@ class ClusterState {
     return getNodeStatus(idx) == NodeHealthStatus::UNHEALTHY;
   }
 
-  NodeState getNodeState(node_index_t idx) const {
+  NodeState
+  getNodeState(node_index_t idx,
+               NodeState defaultState = NodeState::FULLY_STARTED) const {
     folly::SharedMutex::ReadHolder read_lock(mutex_);
     // check the node list if the index falls within what we know
     // otherwise fall back to considering the node dead. If the index is beyond
@@ -135,8 +149,16 @@ class ClusterState {
     // anyway.
     ld_check(idx >= 0);
     auto node_state = node_state_map_.find(idx);
-    return node_state == node_state_map_.end() ? NodeState::DEAD
-                                               : node_state->second->load();
+    auto state = node_state == node_state_map_.end()
+        ? NodeState::DEAD
+        : node_state->second->load();
+
+    // We return the default supplied state if we don't know what is the state
+    // yet.
+    if (state == NodeState::UNKNOWN) {
+      return defaultState;
+    }
+    return state;
   }
 
   NodeHealthStatus getNodeStatus(node_index_t idx) const {

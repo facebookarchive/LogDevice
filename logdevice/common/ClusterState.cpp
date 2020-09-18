@@ -330,13 +330,12 @@ void ClusterState::resizeClusterState(size_t new_size, bool notifySubscribers) {
       } else {
         /* If we have failure detector, mark new nodes as dead by default;
          * the failure detector will then change their state as needed.
-         * Otherwise, treat nodes as fully started by default,
+         * Otherwise, treat nodes as UNKNOWN by default,
          * so that HashBasedSequencerLocator can hash to an
          * actual node and not return E::NOTFOUND
          */
-        auto state = have_failure_detector
-            ? ClusterState::NodeState::DEAD
-            : ClusterState::NodeState::FULLY_STARTED;
+        auto state = have_failure_detector ? ClusterState::NodeState::DEAD
+                                           : ClusterState::NodeState::UNKNOWN;
         new_state_map.insert(
             {i, std::make_unique<std::atomic<ClusterState::NodeState>>(state)});
         // If we have failure detector, mark new nodes as unhealthy by default;

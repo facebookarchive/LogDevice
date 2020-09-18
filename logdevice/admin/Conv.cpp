@@ -84,6 +84,8 @@ thrift::ServiceState toThrift(const ClusterStateNodeState& input) {
       return thrift::ServiceState::STARTING_UP;
     case ClusterStateNodeState::FAILING_OVER:
       return thrift::ServiceState::SHUTTING_DOWN;
+    case ClusterStateNodeState::UNKNOWN:
+      return thrift::ServiceState::UNKNOWN;
   }
   return thrift::ServiceState::UNKNOWN;
 }

@@ -407,9 +407,11 @@ MaintenanceManager::getNodeStateInternal(
   state.set_config(std::move(node_config));
 
   if (cluster_state) {
-    // Set node state
-    state.set_daemon_state(
-        toThrift<thrift::ServiceState>(cluster_state->getNodeState(node)));
+    // Set node state. If the state is UNKNOWN, let's use it as is without
+    // masking. This makes it that external callers to Admin API will see that
+    // we still don't have a stable state for this node.
+    state.set_daemon_state(toThrift<thrift::ServiceState>(
+        cluster_state->getNodeState(node, ClusterStateNodeState::UNKNOWN)));
     // Set node health status
     state.set_daemon_health_status(toThrift<thrift::ServiceHealthStatus>(
         cluster_state->getNodeStatus(node)));
@@ -1739,9 +1741,16 @@ MaintenanceManager::runShardWorkflows() {
     // Getting the ClusterStateNodeState for this node, if we don't have gossip
     // information (no ClusterState) we assume FULLY_STARTED as this is the
     // safest option to avoid blocking ENABLE(s).
+    //
+    // This case should never happen in practice (ClusterState is always
+    // non-null on admin server).
     ClusterStateNodeState gossip_state = ClusterStateNodeState::FULLY_STARTED;
     if (cluster_state != nullptr) {
-      gossip_state = cluster_state->getNodeState(shard_id.node());
+      // If the node state is UNKNOWN (happens if this node was just added, or
+      // admin server just started). We want to assume that it's dead to avoid
+      // enabling it before it attempts to start.
+      gossip_state = cluster_state->getNodeState(
+          shard_id.node(), ClusterStateNodeState::DEAD);
     } else {
       RATELIMIT_INFO(
           std::chrono::seconds(10),
@@ -1900,7 +1909,11 @@ MaintenanceManager::runSequencerWorkflows() {
     ld_check(node_state.has_value());
     ClusterStateNodeState gossip_state = ClusterStateNodeState::FULLY_STARTED;
     if (cluster_state != nullptr) {
-      gossip_state = cluster_state->getNodeState(node);
+      // If the node state is UNKNOWN (happens if this node was just added, or
+      // admin server just started). We want to assume that it's dead to avoid
+      // enabling it before it attempts to start.
+      gossip_state =
+          cluster_state->getNodeState(node, ClusterStateNodeState::DEAD);
     } else {
       RATELIMIT_INFO(
           std::chrono::seconds(10),

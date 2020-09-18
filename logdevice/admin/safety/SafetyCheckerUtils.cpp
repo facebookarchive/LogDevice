@@ -603,9 +603,10 @@ bool isAlive(ClusterState* cluster_state,
              node_index_t index,
              bool require_fully_started) {
   if (cluster_state && require_fully_started) {
-    return cluster_state->isNodeFullyStarted(index);
+    return cluster_state->isNodeFullyStarted(
+        index, ClusterStateNodeState::DEAD);
   } else if (cluster_state) {
-    return cluster_state->isNodeAlive(index);
+    return cluster_state->isNodeAlive(index, ClusterStateNodeState::DEAD);
   } else {
     return true;
   }
