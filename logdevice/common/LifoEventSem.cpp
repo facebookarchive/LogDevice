@@ -11,6 +11,7 @@
 #include <folly/FileUtil.h>
 #include <folly/portability/Sockets.h>
 #include <folly/portability/Unistd.h>
+#include <folly/system/Pid.h>
 
 #if __linux__ && !__ANDROID__
 #define FOLLY_HAVE_EVENTFD
@@ -20,7 +21,7 @@
 namespace facebook { namespace logdevice { namespace detail {
 
 SynchronizationFd::SynchronizationFd() {
-  pid_ = pid_t(getpid());
+  pid_ = folly::get_cached_pid();
 #ifdef FOLLY_HAVE_EVENTFD
   fds_[FdType::Read] = fds_[FdType::Write] =
       eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE);
@@ -151,6 +152,6 @@ bool SynchronizationFd::read() noexcept {
 }
 
 void SynchronizationFd::check_pid() {
-  CHECK_EQ(pid_, pid_t(getpid()));
+  CHECK_EQ(pid_, folly::get_cached_pid());
 }
 }}} // namespace facebook::logdevice::detail
