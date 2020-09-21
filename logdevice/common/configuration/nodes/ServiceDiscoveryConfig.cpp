@@ -97,13 +97,6 @@ bool NodeServiceDiscovery::isValid() const {
                       "If an address for any priority is defined, the config "
                       "should also contain the MEDIUM priority address.");
       return false;
-    } else if (addresses_per_priority.at(ClientNetworkPriority::MEDIUM) !=
-               default_client_data_address) {
-      RATELIMIT_ERROR(std::chrono::seconds(10),
-                      5,
-                      "MEDIUM priority address should be the same as "
-                      "default_client_data_address");
-      return false;
     }
   }
 

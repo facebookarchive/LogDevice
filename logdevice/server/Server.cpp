@@ -844,13 +844,6 @@ bool Server::initListeners() {
         return false;
       }
 
-      if (priority == ServerSettings::ClientNetworkPriority::MEDIUM) {
-        // MEDIUM priority should go to the default listener.
-        ld_check(port == server_settings_->port ||
-                 socket_str == server_settings_->unix_socket);
-        continue;
-      }
-
       auto listener = initListener<ConnectionListener>(
           port,
           socket_str,

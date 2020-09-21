@@ -23,7 +23,7 @@ namespace {
 std::map<NodeServiceDiscovery::ClientNetworkPriority, std::string>
 genUnixAddressesPerNetworkPriority(std::string prefix) {
   return {{NodeServiceDiscovery::ClientNetworkPriority::MEDIUM,
-           folly::sformat("{}/address", prefix)},
+           folly::sformat("{}/medium-priority-address", prefix)},
           {NodeServiceDiscovery::ClientNetworkPriority::LOW,
            folly::sformat("{}/low-priority-address", prefix)}};
 }

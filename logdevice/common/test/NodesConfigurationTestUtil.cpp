@@ -33,6 +33,8 @@ NodeServiceDiscovery genDiscovery(node_index_t n, const Node& node) {
   std::string addr = folly::sformat("127.0.0.{}", n);
   auto default_client_data_address =
       node.address.valid() ? node.address : Sockaddr(addr, 4440);
+  auto medium_priority_data_address =
+      node.address.valid() ? node.address : Sockaddr(addr, 4447);
 
   return NodeServiceDiscovery{
       node.name,
@@ -48,7 +50,7 @@ NodeServiceDiscovery genDiscovery(node_index_t n, const Node& node) {
       node.client_thrift_api_address,
       /*addresses_per_priority*/
       {{NodeServiceDiscovery::ClientNetworkPriority::MEDIUM,
-        default_client_data_address}},
+        medium_priority_data_address}},
       node.location,
       node.roles,
       node.tags};

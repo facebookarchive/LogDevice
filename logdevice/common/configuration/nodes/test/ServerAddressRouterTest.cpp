@@ -28,6 +28,7 @@ constexpr in_port_t kTestGossipPort = 4441;
 constexpr in_port_t kTestServerToServerPort = 4442;
 constexpr in_port_t kTestDataSslPort = 4444;
 constexpr in_port_t kTestLowPriorityDataPort = 4446;
+constexpr in_port_t kTestMediumPriorityDataPort = 4447;
 const Sockaddr kTestDefaultAddress =
     Sockaddr{kTestAddress.toString(), kTestDataPort};
 const Sockaddr kTestSslAddress =
@@ -39,6 +40,8 @@ const Sockaddr kTestServerToServerAddress =
 const Sockaddr kNonExistentAddress = Sockaddr("/nonexistent");
 const Sockaddr kTestLowPriorityDataAddress =
     Sockaddr{kTestAddress.toString(), kTestLowPriorityDataPort};
+const Sockaddr kTestMediumPriorityDataAddress =
+    Sockaddr{kTestAddress.toString(), kTestMediumPriorityDataPort};
 
 class ServerAddressRouterTest : public ::testing::Test {};
 
@@ -386,7 +389,7 @@ TEST(ServerAddressRouterTest,
   nodeServiceDiscovery.ssl_address = kTestDefaultAddress;
   nodeServiceDiscovery.addresses_per_priority = {
       {ClientNetworkPriority::LOW, kTestLowPriorityDataAddress},
-      {ClientNetworkPriority::MEDIUM, kTestDefaultAddress}};
+      {ClientNetworkPriority::MEDIUM, kTestMediumPriorityDataAddress}};
 
   for (auto conn_type : {ConnectionType::PLAIN, ConnectionType::SSL}) {
     auto actual = ServerAddressRouter().getAddress(

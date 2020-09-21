@@ -29,6 +29,7 @@ const std::string kTestDomainString = "test.domain.string.five.scopes";
 const node_index_t kTestNodeIndex = 1337;
 const node_index_t kAnotherTestNodeIndex = 1007;
 const in_port_t kTestDataPort = 4440;
+const in_port_t kTestMediumPriorityPort = 4447;
 const in_port_t kTestGossipPort = 4441;
 const in_port_t kTestServerToServerPort = 4442;
 const in_port_t kTestSslPort = 4443;
@@ -47,7 +48,7 @@ const Sockaddr kTestClientThriftApiSocketAddress =
 const folly::F14FastMap<NodeServiceDiscovery::ClientNetworkPriority, Sockaddr>
     kTestAddressesPerNetworkPriority{
         {NodeServiceDiscovery::ClientNetworkPriority::MEDIUM,
-         Sockaddr{kTestAddress, kTestDataPort}}};
+         Sockaddr{kTestAddress, kTestMediumPriorityPort}}};
 
 const Sockaddr kTestSslSocketAddress = Sockaddr{kTestAddress, kTestSslPort};
 const Sockaddr kTestAdminSocketAddress = Sockaddr{kTestAddress, kTestAdminPort};
