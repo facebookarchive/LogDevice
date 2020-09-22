@@ -298,6 +298,11 @@ void PurgeCoordinator::onReleaseMessage(lsn_t lsn,
                                         NodeID from,
                                         ReleaseType release_type,
                                         OffsetMap epoch_offsets) {
+  if (release_type == ReleaseType::PER_EPOCH_DEPRECATED) {
+    // Per-epoch releases are being deprecated, skip.
+    return;
+  }
+
   // During rebuilding, don't purge, don't persist last released LSN and
   // don't broadcast the release.
   ServerWorker* worker = ServerWorker::onThisThread();
