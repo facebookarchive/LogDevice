@@ -302,24 +302,6 @@ class ClusterFactory {
   }
 
   /**
-   * Sets the node that is designated to run
-   * maintenance manager
-   */
-  ClusterFactory& runMaintenanceManagerOn(node_index_t n) {
-    maintenance_manager_node_ = n;
-
-    // Maintenance manager usually responds to events (like maintenance log
-    // deltas, event log deltas, nodes config updates) quickly, but sometimes,
-    // due to some race conditions, it seems to miss an event and goes to sleep
-    // for maintenance-manager-reevaluation-timeout. Decrease it so that tests
-    // don't time out.
-    // TODO (#54454518): Maybe make MaintenanceManager not do that.
-    setParam("--maintenance-manager-reevaluation-timeout", "5s");
-
-    return *this;
-  }
-
-  /**
    * Sets whether the standalone admin server will be running or not.
    */
   ClusterFactory& useStandaloneAdminServer(bool enable) {
@@ -709,9 +691,6 @@ class ClusterFactory {
 
   // if unset, use a random choice between the two sources
   folly::Optional<NodesConfigurationSourceOfTruth> nodes_configuration_sot_;
-
-  // The node designated to run a instance of MaintenanceManager
-  node_index_t maintenance_manager_node_ = -1;
 
   // Whether to start the standalone admin server or not.
   bool use_standalone_admin_server_ = false;
@@ -1494,9 +1473,6 @@ class Cluster {
   // type of rocksdb local log store
   RocksDBType rocksdb_type_ = RocksDBType::PARTITIONED;
 
-  // The node designated to run a instance of MaintenanceManager
-  node_index_t maintenance_manager_node_ = -1;
-
   // See ClusterFactory::hash_based_sequencer_assignment_
   bool hash_based_sequencer_assignment_{false};
 
@@ -1546,7 +1522,6 @@ class Node {
 
   bool is_storage_node_ = true;
   bool is_sequencer_node_ = true;
-  bool should_run_maintenance_manager_ = false;
 
   Node();
   ~Node() {
@@ -1643,11 +1618,6 @@ class Node {
    * --disable-rebuilding=false
    */
   int waitUntilNodeStateReady();
-  /**
-   * Waits until the ClusterMaintenanceStateMachine is fully loaded on that
-   * machine.
-   */
-  int waitUntilMaintenanceRSMReady();
 
   /**
    * Waits for the server to start accepting connections.

@@ -19,6 +19,7 @@
 #include "logdevice/common/configuration/nodes/NodesConfigurationManagerFactory.h"
 #include "logdevice/common/membership/gen-cpp2/Membership_types.h"
 #include "logdevice/common/test/TestUtil.h"
+#include "logdevice/test/utils/AdminAPITestUtils.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 #include "logdevice/test/utils/SelfRegisteredCluster.h"
@@ -28,8 +29,6 @@ using namespace apache::thrift;
 using namespace facebook::logdevice;
 
 using ClientNetworkPriority = thrift::ClientNetworkPriority;
-
-constexpr node_index_t maintenance_leader{0};
 
 class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
  protected:
@@ -43,6 +42,8 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
             .setNodesConfigurationSourceOfTruth(
                 IntegrationTestUtils::NodesConfigurationSourceOfTruth::NCM)
             .setParam("--event-log-grace-period", "1ms")
+            .setParam("--gossip-enabled", "true")
+            .setParam("--gossip-interval", "50ms")
             .setParam("--disable-event-log-trimming", "true")
             .setParam("--enable-nodes-configuration-manager",
                       "true",
@@ -53,7 +54,7 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
             .setParam("--nodes-configuration-manager-intermediary-shard-state-"
                       "timeout",
                       "2s")
-            .runMaintenanceManagerOn(maintenance_leader)
+            .useStandaloneAdminServer(true)
             .setMetaDataLogsConfig(createMetaDataLogsConfig({2, 3}, 2))
             .deferStart()
             .create(4);
@@ -137,9 +138,8 @@ class ClusterMemebershipAPIIntegrationTest : public IntegrationTestBase {
 
   bool disableAndWait(std::vector<thrift::ShardID> shards,
                       std::vector<thrift::NodeID> sequencers) {
-    auto admin_client =
-        cluster_->getNode(maintenance_leader).createAdminClient();
-    cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+    cluster_->getAdminServer()->waitUntilFullyLoaded();
+    auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
     thrift::MaintenanceDefinition request;
     request.set_user("bunny");
@@ -188,8 +188,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveAliveNodes) {
   cluster_->updateNodeAttributes(
       node_index_t(1), configuration::StorageState::DISABLED, 1, false);
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
-  cluster_->getNode(maintenance_leader).waitUntilNodeStateReady();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
   disableAndWait({mkShardID(1, -1)}, {mkNodeID(1)});
 
   try {
@@ -207,8 +207,7 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveAliveNodes) {
 
 TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveProvisioningNodes) {
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
-  cluster_->getNode(maintenance_leader).waitUntilNodeStateReady();
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
   {
     // Add two nodes with 2 shards each. They will get added as PROVISIONING.
@@ -219,6 +218,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveProvisioningNodes) {
         admin_client, *resp.new_nodes_configuration_version_ref());
   }
 
+  ASSERT_TRUE(wait_until_service_state(
+      *admin_client, {100, 101}, thrift::ServiceState::DEAD));
   thrift::RemoveNodesResponse resp;
   admin_client->sync_removeNodes(resp, buildRemoveNodesRequest({100, 101}));
   EXPECT_EQ(2, resp.removed_nodes_ref()->size());
@@ -226,8 +227,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveProvisioningNodes) {
 
 TEST_F(ClusterMemebershipAPIIntegrationTest, TestApplyDrainOnProvisioning) {
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
-  cluster_->getNode(maintenance_leader).waitUntilNodeStateReady();
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
   {
     // Add two nodes with 2 shards each. They will get added as PROVISIONING.
@@ -247,7 +248,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestApplyDrainOnProvisioning) {
 
 TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveNonExistentNode) {
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
   thrift::RemoveNodesResponse resp;
   admin_client->sync_removeNodes(resp, buildRemoveNodesRequest({10}));
@@ -256,7 +258,10 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveNonExistentNode) {
 
 TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveEnabledNodes) {
   ASSERT_EQ(0, cluster_->start({0, 2, 3}));
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
+  ASSERT_TRUE(
+      wait_until_service_state(*admin_client, {1}, thrift::ServiceState::DEAD));
 
   try {
     thrift::RemoveNodesResponse resp;
@@ -275,10 +280,12 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestRemoveNodeSuccess) {
   cluster_->updateNodeAttributes(
       node_index_t(1), configuration::StorageState::DISABLED, 1, false);
   ASSERT_EQ(0, cluster_->start({0, 2, 3}));
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
-  cluster_->getNode(maintenance_leader).waitUntilNodeStateReady();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
   disableAndWait({mkShardID(1, -1)}, {mkNodeID(1)});
 
+  ASSERT_TRUE(
+      wait_until_service_state(*admin_client, {1}, thrift::ServiceState::DEAD));
   thrift::RemoveNodesResponse resp;
   admin_client->sync_removeNodes(resp, buildRemoveNodesRequest({1}));
   EXPECT_EQ(1, resp.removed_nodes_ref()->size());
@@ -312,8 +319,8 @@ MATCHER_P2(SequencerStateEq, expected_idx, req, "") {
 TEST_F(ClusterMemebershipAPIIntegrationTest, TestAddNodeSuccess) {
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
   cluster_->waitUntilAllAvailable();
-  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
   thrift::AddNodesRequest req = buildAddNodesRequest({10, 50});
   // Let the admin server allocate the NodeID for the second node for us
@@ -352,7 +359,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestAddNodeSuccess) {
 
 TEST_F(ClusterMemebershipAPIIntegrationTest, TestAddAlreadyExists) {
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
   // Get current Admin server version
   thrift::NodesConfigResponse nodes_config;
@@ -379,7 +387,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestAddAlreadyExists) {
 
 TEST_F(ClusterMemebershipAPIIntegrationTest, TestInvalidAddNodesRequest) {
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
   // Get current Admin server version
   thrift::NodesConfigResponse nodes_config;
@@ -406,7 +415,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestInvalidAddNodesRequest) {
 TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateRequest) {
   using Priority = thrift::ClientNetworkPriority;
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
   thrift::NodesFilter filter;
   filter.set_node(mkNodeID(node_index_t(3)));
@@ -451,7 +461,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateRequest) {
 
 TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateFailure) {
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
   thrift::NodesFilter filter;
   filter.set_node(mkNodeID(node_index_t(3)));
@@ -528,8 +539,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, TestUpdateFailure) {
 
 TEST_F(ClusterMemebershipAPIIntegrationTest, MarkShardsAsProvisionedSuccess) {
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 3}));
-  cluster_->getNode(maintenance_leader).waitUntilNodeStateReady();
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
   {
     // Add two nodes with 2 shards each. They will get added as PROVISIONING.
@@ -589,8 +600,8 @@ TEST_F(ClusterMemebershipAPIIntegrationTest, MarkShardsAsProvisionedSuccess) {
 // Tests that bumping the generation of the stopped node (N1) works
 TEST_F(ClusterMemebershipAPIIntegrationTest, BumpNodeGeneration) {
   ASSERT_EQ(0, cluster_->start({0, 2, 3}));
-  cluster_->getNode(maintenance_leader).waitUntilNodeStateReady();
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
   thrift::NodesFilter filter;
   filter.set_node(mkNodeID(node_index_t(1)));

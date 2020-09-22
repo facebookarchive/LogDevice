@@ -81,8 +81,10 @@ check_is_disabled(const NodesConfiguration& nodes_configuration,
 
 folly::Optional<thrift::ClusterMembershipFailedNode>
 check_is_dead(const ClusterState& cluster_state, node_index_t idx) {
+  // The default here is FULLY_STARTED to avoid removing a node that's actually
+  // ALIVE but we don't know about it yet.
   auto node_state =
-      cluster_state.getNodeState(idx, ClusterState::NodeState::DEAD);
+      cluster_state.getNodeState(idx, ClusterState::NodeState::FULLY_STARTED);
   if (node_state == ClusterState::NodeState::DEAD) {
     return folly::none;
   }

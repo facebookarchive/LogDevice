@@ -151,4 +151,34 @@ int AdminServer::waitUntilStarted(
   return rv;
 }
 
+int AdminServer::waitUntilFullyLoaded() {
+  waitUntilStarted();
+  auto admin_client = createAdminClient();
+  return wait_until(
+      "LogDevice started but we are waiting for the Maintenance RSM to be "
+      "replayed",
+      [&]() {
+        try {
+          thrift::MaintenancesFilter req;
+          thrift::MaintenanceDefinitionResponse resp;
+          admin_client->sync_getMaintenances(resp, req);
+          return true;
+        } catch (thrift::NodeNotReady& e) {
+          ld_info("getMaintenances thrown NodeNotReady exception. Admin Server "
+                  "is not "
+                  "ready yet");
+          return false;
+        } catch (apache::thrift::transport::TTransportException& ex) {
+          ld_info("AdminServer is not fully started yet, connections are "
+                  "failing to admin server. ex: %s",
+                  ex.what());
+          return false;
+        } catch (std::exception& ex) {
+          ld_critical("An exception in AdminClient that we didn't expect: %s",
+                      ex.what());
+          return false;
+        }
+      });
+}
+
 }}} // namespace facebook::logdevice::IntegrationTestUtils

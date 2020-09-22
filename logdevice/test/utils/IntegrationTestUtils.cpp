@@ -922,7 +922,6 @@ ClusterFactory::createOneTry(const Configuration& source_config) {
   cluster->rocksdb_type_ = rocksdb_type_;
   cluster->hash_based_sequencer_assignment_ = hash_based_sequencer_assignment_;
   cluster->setNodeReplacementCounters(std::move(replacement_counters));
-  cluster->maintenance_manager_node_ = maintenance_manager_node_;
 
   if (cluster->updateNodesConfiguration(*config->getNodesConfiguration()) !=
       0) {
@@ -1384,7 +1383,6 @@ std::unique_ptr<Node> Cluster::createNode(node_index_t index,
       config_->getNodesConfiguration()->isStorageNode(index);
   node->is_sequencer_node_ =
       config_->getNodesConfiguration()->isSequencerNode(index);
-  node->should_run_maintenance_manager_ = maintenance_manager_node_ == index;
   node->cmd_args_ = commandArgsForNode(*node);
 
   ld_info("Node N%d:%d will be started on addresses: protocol:%s, ssl:%s"
@@ -1443,7 +1441,6 @@ Cluster::createSelfRegisteringNode(const std::string& name) const {
   // if needed we can change this function to accept the roles.
   node->is_storage_node_ = true;
   node->is_sequencer_node_ = true;
-  node->should_run_maintenance_manager_ = false;
 
   node->cmd_args_ = commandArgsForNode(*node);
 
@@ -1518,8 +1515,6 @@ ParamMap Cluster::commandArgsForNode(const Node& node) const {
         {"--loglevel", ParamValue{loglevelToString(default_log_level_)}},
         {"--log-file", ParamValue{node.getLogPath()}},
         {"--server-id", ParamValue{node.server_id_}},
-        {"--enable-maintenance-manager",
-          ParamValue{node.should_run_maintenance_manager_ ?"true" : "false"}},
       }
     },
     { ParamScope::SEQUENCER,
@@ -2052,38 +2047,6 @@ int Node::waitUntilNodeStateReady() {
           ld_info("getNodesState thrown NodeNotReady exception. Node %d is not "
                   "ready yet",
                   node_index_);
-          return false;
-        } catch (apache::thrift::transport::TTransportException& ex) {
-          ld_info("AdminServer is not fully started yet, connections are "
-                  "failing to node %d. ex: %s",
-                  node_index_,
-                  ex.what());
-          return false;
-        } catch (std::exception& ex) {
-          ld_critical("An exception in AdminClient that we didn't expect: %s",
-                      ex.what());
-          return false;
-        }
-      });
-}
-
-int Node::waitUntilMaintenanceRSMReady() {
-  waitUntilAvailable();
-  auto admin_client = createAdminClient();
-  return wait_until(
-      "LogDevice started but we are waiting for the Maintenance RSM to be "
-      "replayed",
-      [&]() {
-        try {
-          thrift::MaintenancesFilter req;
-          thrift::MaintenanceDefinitionResponse resp;
-          admin_client->sync_getMaintenances(resp, req);
-          return true;
-        } catch (thrift::NodeNotReady& e) {
-          ld_info(
-              "getMaintenances thrown NodeNotReady exception. Node %d is not "
-              "ready yet",
-              node_index_);
           return false;
         } catch (apache::thrift::transport::TTransportException& ex) {
           ld_info("AdminServer is not fully started yet, connections are "

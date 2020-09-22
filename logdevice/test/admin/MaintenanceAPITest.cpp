@@ -30,8 +30,6 @@ using namespace facebook::logdevice::maintenance;
 
 #define LOG_ID logid_t(1)
 
-constexpr node_index_t maintenance_leader{2};
-
 class MaintenanceAPITestDisabled : public IntegrationTestBase {};
 
 TEST_F(MaintenanceAPITestDisabled, NotSupported) {
@@ -109,8 +107,7 @@ void MaintenanceAPITest::init(size_t max_unavailable_storage_capacity_pct,
           .setParam("--max-unavailable-sequencing-capacity-pct",
                     std::to_string(max_unavailable_sequencing_capacity_pct))
           .setParam("--loglevel", "debug")
-          // Starts MaintenanceManager on N2
-          .runMaintenanceManagerOn(maintenance_leader)
+          .useStandaloneAdminServer(true)
           .setNumDBShards(num_shards)
           .setLogGroupName("test_logrange")
           .setLogAttributes(log_attrs)
@@ -124,7 +121,7 @@ void MaintenanceAPITest::init(size_t max_unavailable_storage_capacity_pct,
 TEST_F(MaintenanceAPITest, ApplyMaintenancesInvalid1) {
   init();
   cluster_->start();
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
   // Invalid maintenance
   {
     thrift::MaintenanceDefinition def;
@@ -181,9 +178,8 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesValidNoClash) {
   init();
   cluster_->start();
   cluster_->waitUntilAllAvailable();
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
-  // Wait until the RSM has replayed
-  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
   std::string created_id;
   int64_t created_on;
   {
@@ -254,9 +250,8 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesValid) {
   init();
   cluster_->start();
   cluster_->waitUntilAllAvailable();
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
-  // Wait until the RSM has replayed
-  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
   std::string created_id;
   int64_t created_on;
   {
@@ -409,9 +404,8 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesSafetyCheckResults) {
   init();
   cluster_->start();
   cluster_->waitUntilAllAvailable();
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
-  // Wait until the RSM has replayed
-  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
   // Creating an impossible maintenance, draining all shards in all nodes must
   // fail by safety checker.
@@ -452,9 +446,8 @@ TEST_F(MaintenanceAPITest, MayDisappearInSequencerFailsSafetyCheck) {
   init();
   cluster_->start();
   cluster_->waitUntilAllAvailable();
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
-  // Wait until the RSM has replayed
-  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
   // Create a maintenance that sets N1 to MAY_DISAPPEAR
   thrift::MaintenanceDefinition request1;
@@ -594,9 +587,8 @@ TEST_F(MaintenanceAPITest, RemoveMaintenancesInvalid) {
   init();
   cluster_->start();
   cluster_->waitUntilAllAvailable();
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
-  // Wait until the RSM has replayed
-  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
   // We simply can't delete with an empty filter;
   thrift::RemoveMaintenancesRequest request;
   thrift::RemoveMaintenancesResponse resp;
@@ -608,9 +600,8 @@ TEST_F(MaintenanceAPITest, RemoveMaintenances) {
   init();
   cluster_->start();
   cluster_->waitUntilAllAvailable();
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
-  // Wait until the RSM has replayed
-  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
   std::string created_id;
   std::vector<std::string> bunny_group_ids;
   {
@@ -705,9 +696,8 @@ TEST_F(MaintenanceAPITest, GetNodeState) {
   init();
   cluster_->start();
   cluster_->waitUntilAllAvailable();
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
-  // Wait until the RSM has replayed
-  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
   wait_until("MaintenanceManager is ready", [&]() {
     thrift::NodesStateRequest req;
@@ -840,9 +830,8 @@ TEST_F(MaintenanceAPITest, unblockRebuilding) {
   init();
   cluster_->start();
   cluster_->waitUntilAllAvailable();
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
-  // Wait until the RSM has replayed
-  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
   wait_until("MaintenanceManager is ready", [&]() {
     thrift::NodesStateRequest req;
@@ -976,9 +965,8 @@ TEST_F(MaintenanceAPITest, RemoveNodesInMaintenance) {
       node_index_t(4), configuration::StorageState::DISABLED, 1, false);
 
   cluster_->start({0, 1, 2, 3});
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
-  // Wait until the RSM has replayed
-  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
   {
     thrift::MaintenanceDefinition m1;
@@ -1060,9 +1048,8 @@ TEST_F(MaintenanceAPITest, SkipCapacityChecks) {
       /*max_unavailable_sequencing_capacity_pct = */ 10);
   cluster_->start();
   cluster_->waitUntilAllAvailable();
-  auto admin_client = cluster_->getNode(maintenance_leader).createAdminClient();
-  // Wait until the RSM has replayed
-  cluster_->getNode(maintenance_leader).waitUntilMaintenanceRSMReady();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
   // Creating a simple maintenance that will fail capacity checking
   thrift::MaintenanceDefinition request;

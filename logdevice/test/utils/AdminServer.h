@@ -75,6 +75,12 @@ class AdminServer {
   int waitUntilStarted(std::chrono::steady_clock::time_point deadline =
                            std::chrono::steady_clock::time_point::max());
 
+  /**
+   * Waits until the ClusterMaintenanceStateMachine is fully loaded on that
+   * machine.
+   */
+  int waitUntilFullyLoaded();
+
   std::vector<std::string> commandLine() const;
 };
 
