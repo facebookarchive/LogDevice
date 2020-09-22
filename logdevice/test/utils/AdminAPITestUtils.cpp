@@ -70,4 +70,36 @@ lsn_t write_to_maintenance_log(Client& client,
       "Wrote maintenance log delta with lsn %s", lsn_to_string(lsn).c_str());
   return lsn;
 }
+
+thrift::ShardOperationalState
+get_shard_operational_state(thrift::AdminAPIAsyncClient& admin_client,
+                            node_index_t node_idx,
+                            uint32_t shard_idx) {
+  thrift::NodesStateRequest req;
+  thrift::NodesFilter filter;
+  thrift::NodeID node;
+  node.set_node_index(node_idx);
+  filter.set_node(std::move(node));
+  req.set_filter(std::move(filter));
+  thrift::NodesStateResponse resp;
+  // Under stress runs, the initial initialization might take a while, let's
+  // be patient and increase the timeout here.
+  auto rpc_options = apache::thrift::RpcOptions();
+  rpc_options.setTimeout(std::chrono::minutes(1));
+  admin_client.sync_getNodesState(rpc_options, resp, req);
+  const std::vector<thrift::NodeState>& states = resp.get_states();
+  // We expect this to match exactly one node (or none).
+  if (states.size() != 1) {
+    ld_warning("Node %u doesn't exist", node_idx);
+    return thrift::ShardOperationalState::UNKNOWN;
+  }
+  auto node_state = states[0];
+  const auto& shards = node_state.shard_states_ref().value_or({});
+  if (shard_idx >= 0 && shard_idx < shards.size()) {
+    auto shard = shards[shard_idx];
+    return shard.get_current_operational_state();
+  }
+  ld_warning("Shard %u doesn't exist on node %u", shard_idx, node_idx);
+  return thrift::ShardOperationalState::UNKNOWN;
+}
 }} // namespace facebook::logdevice

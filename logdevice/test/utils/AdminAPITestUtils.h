@@ -34,4 +34,12 @@ void retry_until_ready(int32_t attempts,
  */
 lsn_t write_to_maintenance_log(Client& client,
                                maintenance::MaintenanceDelta& delta);
+/**
+ * Returns ShardOperationalState::UNKNOWN if the node does not exist. Otherwise
+ * will return the current ShardOperationalState for a given shard in a node.
+ */
+thrift::ShardOperationalState
+get_shard_operational_state(thrift::AdminAPIAsyncClient& admin_client,
+                            node_index_t node_idx,
+                            uint32_t shard_idx);
 }} // namespace facebook::logdevice
