@@ -22,6 +22,31 @@ using namespace facebook::logdevice::configuration;
 
 namespace facebook { namespace logdevice {
 
+/**
+ * Returns a retrying policy used by folly::futures::retrying. The policy
+ * VERSION_MISMATCH errors 5 times.
+ */
+std::function<folly::Future<bool>(size_t, const folly::exception_wrapper&)>
+get_ncm_retrying_policy() {
+  return folly::futures::retryingPolicyCappedJitteredExponentialBackoff(
+      /*max_tries=*/5,
+      /*backoff_min=*/std::chrono::milliseconds(50),
+      /*backoff_max*/ std::chrono::milliseconds(50),
+      /*jitter_param=*/0.5,
+      folly::ThreadLocalPRNG(),
+      [](size_t, const folly::exception_wrapper& wrapper) {
+        {
+          // Retry as long as it's an NCM VERSION_MISMATCH error. Don't retry
+          // otherwise.
+          auto ex =
+              wrapper.get_exception<thrift::NodesConfigurationManagerError>();
+          return (ex != nullptr &&
+                  *(ex->get_error_code()) ==
+                      static_cast<uint32_t>(Status::VERSION_MISMATCH));
+        }
+      });
+}
+
 bool match_by_address(const configuration::nodes::NodeServiceDiscovery& node_sd,
                       const thrift::SocketAddress& address) {
   // UNIX

@@ -10,8 +10,6 @@
 
 #include <chrono>
 
-#include <folly/futures/Retrying.h>
-
 #include "logdevice/admin/AdminAPIHandlerBase.h"
 #include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/admin/cluster_membership/AddNodesHandler.h"
@@ -33,29 +31,6 @@ using namespace facebook::logdevice::admin::cluster_membership;
 namespace facebook { namespace logdevice {
 
 namespace {
-/**
- * Returns a retrying policy used by folly::futures::retrying. The policy
- * VERSION_MISMATCH errors 5 times.
- */
-std::function<folly::Future<bool>(size_t, const folly::exception_wrapper&)>
-get_retrying_policy() {
-  return folly::futures::retryingPolicyCappedJitteredExponentialBackoff(
-      /*max_tries=*/5,
-      /*backoff_min=*/std::chrono::milliseconds(50),
-      /*backoff_max*/ std::chrono::milliseconds(50),
-      /*jitter_param=*/0.5,
-      folly::ThreadLocalPRNG(),
-      [](size_t, const folly::exception_wrapper& wrapper) {
-        // Retry as long as it's an NCM VERSION_MISMATCH error. Don't retry
-        // otherwise.
-        auto ex =
-            wrapper.get_exception<thrift::NodesConfigurationManagerError>();
-        return (ex != nullptr &&
-                *(ex->get_error_code()) ==
-                    static_cast<uint32_t>(Status::VERSION_MISMATCH));
-      });
-}
-
 template <class T>
 std::string debugString(T obj) {
   return facebook::logdevice::ThriftCodec::serialize<
@@ -71,7 +46,7 @@ ClusterMembershipAPIHandler::semifuture_removeNodes(
     return *failed;
   }
   return folly::futures::retrying(
-      get_retrying_policy(),
+      get_ncm_retrying_policy(),
       [req = std::move(request),
        processor = processor_,
        thread_manager = getThreadManager()](size_t trial)
@@ -116,7 +91,7 @@ ClusterMembershipAPIHandler::semifuture_addNodes(
   }
 
   return folly::futures::retrying(
-      get_retrying_policy(),
+      get_ncm_retrying_policy(),
       [req = std::move(request),
        processor = processor_,
        thread_manager = getThreadManager()](size_t trial)
@@ -167,7 +142,7 @@ ClusterMembershipAPIHandler::semifuture_updateNodes(
   }
 
   return folly::futures::retrying(
-      get_retrying_policy(),
+      get_ncm_retrying_policy(),
       [req = std::move(request),
        processor = processor_,
        thread_manager = getThreadManager()](size_t trial)
@@ -216,7 +191,7 @@ ClusterMembershipAPIHandler::semifuture_markShardsAsProvisioned(
   }
 
   return folly::futures::retrying(
-      get_retrying_policy(),
+      get_ncm_retrying_policy(),
       [req = std::move(request),
        processor = processor_,
        thread_manager = getThreadManager()](size_t trial)
@@ -254,7 +229,7 @@ ClusterMembershipAPIHandler::semifuture_bumpNodeGeneration(
     return *failed;
   }
   return folly::futures::retrying(
-      get_retrying_policy(),
+      get_ncm_retrying_policy(),
       [req = std::move(request),
        processor = processor_,
        thread_manager = getThreadManager()](size_t trial)
@@ -288,7 +263,7 @@ folly::SemiFuture<std::unique_ptr<thrift::BootstrapClusterResponse>>
 ClusterMembershipAPIHandler::semifuture_bootstrapCluster(
     std::unique_ptr<thrift::BootstrapClusterRequest> request) {
   return folly::futures::retrying(
-      get_retrying_policy(),
+      get_ncm_retrying_policy(),
       [req = std::move(request),
        processor = processor_,
        thread_manager = getThreadManager()](size_t trial)

@@ -8,11 +8,13 @@
 
 #include "logdevice/admin/MaintenanceAPIHandler.h"
 
+#include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/admin/Conv.h"
 #include "logdevice/admin/maintenance/APIUtils.h"
 #include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
 #include "logdevice/admin/maintenance/MaintenanceManager.h"
 #include "logdevice/admin/maintenance/MaintenanceManagerTracer.h"
+#include "logdevice/common/ThriftCodec.h"
 #include "logdevice/common/request_util.h"
 
 using namespace facebook::logdevice::thrift;
@@ -25,6 +27,15 @@ using ListMaintenanceDefs =
     folly::Expected<std::vector<MaintenanceDefinition>, MaintenanceError>;
 
 namespace facebook { namespace logdevice {
+
+namespace {
+template <class T>
+std::string debugString(T obj) {
+  return facebook::logdevice::ThriftCodec::serialize<
+      apache::thrift::SimpleJSONSerializer>(obj);
+}
+
+} // namespace
 // get maintenances
 folly::SemiFuture<std::unique_ptr<MaintenanceDefinitionResponse>>
 MaintenanceAPIHandler::semifuture_getMaintenances(
@@ -391,22 +402,43 @@ MaintenanceAPIHandler::semifuture_markAllShardsUnrecoverable(
   }
 
   ld_check(maintenance_manager_);
-  return maintenance_manager_
-      ->markAllShardsUnrecoverable(request->get_user(), request->get_reason())
-      .via(this->getThreadManager())
-      .thenValue([](auto&& value) {
-        if (value.hasError()) {
-          MaintenanceError(value.error()).throwThriftException();
-          ld_assert(false);
-        }
-        std::vector<thrift::ShardID> shards_succeeded;
-        std::vector<thrift::ShardID> shards_failed;
-        auto response = std::make_unique<MarkAllShardsUnrecoverableResponse>();
-        response->set_shards_succeeded(
-            toThrift<thrift::ShardID>(value.value().first));
-        response->set_shards_failed(
-            toThrift<thrift::ShardID>(value.value().second));
-        return response;
+  return folly::futures::retrying(
+      get_ncm_retrying_policy(),
+      [this, request = std::move(request), thread_manager = getThreadManager()](
+          size_t trial)
+          -> folly::SemiFuture<
+              std::unique_ptr<MarkAllShardsUnrecoverableResponse>> {
+        ld_info("Handling markAllShardsUnrecoverable request (trial #%ld): %s",
+                trial,
+                debugString(*request).c_str());
+        return maintenance_manager_
+            ->markAllShardsUnrecoverable(
+                request->get_user(), request->get_reason())
+            .via(thread_manager)
+            .thenValue([trial](auto&& value) {
+              if (value.hasError() && value.error() == E::VERSION_MISMATCH) {
+                // We want to retry this, NCM needs to be updated.
+                ld_info("NCM version was updated before we were able to mark "
+                        "the shards unrecoverable. Retrying %lu.",
+                        trial);
+                thrift::NodesConfigurationManagerError err;
+                err.set_message(error_description(value.error()));
+                err.set_error_code(static_cast<int32_t>(value.error()));
+                throw err;
+              } else if (value.hasError()) {
+                MaintenanceError(value.error()).throwThriftException();
+                ld_assert(false);
+              }
+              std::vector<thrift::ShardID> shards_succeeded;
+              std::vector<thrift::ShardID> shards_failed;
+              auto response =
+                  std::make_unique<MarkAllShardsUnrecoverableResponse>();
+              response->set_shards_succeeded(
+                  toThrift<thrift::ShardID>(value.value().first));
+              response->set_shards_failed(
+                  toThrift<thrift::ShardID>(value.value().second));
+              return response;
+            });
       });
 }
 
