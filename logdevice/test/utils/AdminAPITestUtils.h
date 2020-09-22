@@ -34,12 +34,55 @@ void retry_until_ready(int32_t attempts,
  */
 lsn_t write_to_maintenance_log(Client& client,
                                maintenance::MaintenanceDelta& delta);
+
+bool wait_until_service_state(thrift::AdminAPIAsyncClient& admin_client,
+                              const std::vector<node_index_t>& nodes,
+                              thrift::ServiceState state,
+                              std::chrono::steady_clock::time_point deadline =
+                                  std::chrono::steady_clock::time_point::max());
+
+/**
+ * Returns the ShardState object for a given shard. Returns folly::none if not
+ * found.
+ */
+folly::Optional<thrift::ShardState>
+get_shard_state(const thrift::NodesStateResponse& response,
+                const ShardID& shard);
+
+/**
+ * A helper to query the admin server for NodesState.
+ */
+thrift::NodesStateResponse
+get_nodes_state(thrift::AdminAPIAsyncClient& admin_client);
+
+/**
+ * Returns ShardOperationalState::UNKNOWN if the node does not exist. Otherwise
+ * will return the current ShardOperationalState for a given shard in a node.
+ */
+thrift::ShardOperationalState
+get_shard_operational_state(const thrift::NodesStateResponse& response,
+                            const ShardID& shard);
+
 /**
  * Returns ShardOperationalState::UNKNOWN if the node does not exist. Otherwise
  * will return the current ShardOperationalState for a given shard in a node.
  */
 thrift::ShardOperationalState
 get_shard_operational_state(thrift::AdminAPIAsyncClient& admin_client,
-                            node_index_t node_idx,
-                            uint32_t shard_idx);
+                            const ShardID& shard);
+
+/**
+ * Returns ShardDataHealth::UNKNOWN if the node does not exist. Otherwise
+ * will return the current ShardOperationalState for a given shard in a node.
+ */
+thrift::ShardDataHealth
+get_shard_data_health(const thrift::NodesStateResponse& response,
+                      const ShardID& shard);
+/**
+ * Returns ShardDataHealth::UNKNOWN if the node does not exist. Otherwise
+ * will return the current ShardOperationalState for a given shard in a node.
+ */
+thrift::ShardDataHealth
+get_shard_data_health(const thrift::AdminAPIAsyncClient& admin_client,
+                      const ShardID& shard);
 }} // namespace facebook::logdevice

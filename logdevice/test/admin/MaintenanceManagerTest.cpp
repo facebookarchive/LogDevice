@@ -130,7 +130,7 @@ TEST_P(MaintenanceManagerTest, BasicDrain) {
   write_to_maintenance_log(*client, *maintenanceDelta);
   auto admin_client = cluster_->getAdminServer()->createAdminClient();
   wait_until("ShardOperationalState is DRAINED", [&]() {
-    auto state = get_shard_operational_state(*admin_client, 3, 0);
+    auto state = get_shard_operational_state(*admin_client, ShardID(3, 0));
     return state == thrift::ShardOperationalState::DRAINED;
   });
 
@@ -150,7 +150,7 @@ TEST_P(MaintenanceManagerTest, BasicDrain) {
   write_to_maintenance_log(*client, *maintenanceDelta);
 
   wait_until("ShardOperationalState is MAY_DISAPPEAR", [&]() {
-    auto state = get_shard_operational_state(*admin_client, 3, 0);
+    auto state = get_shard_operational_state(*admin_client, ShardID(3, 0));
     return state == thrift::ShardOperationalState::MAY_DISAPPEAR;
   });
 
@@ -168,7 +168,7 @@ TEST_P(MaintenanceManagerTest, BasicDrain) {
   write_to_maintenance_log(*client, *maintenanceDelta);
 
   wait_until("ShardOperationalState is ENABLED", [&]() {
-    auto state = get_shard_operational_state(*admin_client, 3, 0);
+    auto state = get_shard_operational_state(*admin_client, ShardID(3, 0));
     return state == thrift::ShardOperationalState::ENABLED;
   });
 
@@ -176,7 +176,7 @@ TEST_P(MaintenanceManagerTest, BasicDrain) {
   // set to DRAINED
   cluster_->getNode(3).kill();
   wait_until("ShardOperationalState is DRAINED", [&]() {
-    auto state = get_shard_operational_state(*admin_client, 3, 0);
+    auto state = get_shard_operational_state(*admin_client, ShardID(3, 0));
     return state == thrift::ShardOperationalState::DRAINED;
   });
 
@@ -184,7 +184,7 @@ TEST_P(MaintenanceManagerTest, BasicDrain) {
   cluster_->getNode(3).start();
   cluster_->getNode(3).waitUntilAvailable();
   wait_until("ShardOperationalState is ENABLED", [&]() {
-    auto state = get_shard_operational_state(*admin_client, 3, 0);
+    auto state = get_shard_operational_state(*admin_client, ShardID(3, 0));
     return state == thrift::ShardOperationalState::ENABLED;
   });
 }
@@ -221,7 +221,7 @@ TEST_P(MaintenanceManagerTest, BasicPassiveDrain) {
   auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
   wait_until("ShardOperationalState is PASSIVE_DRAINING", [&]() {
-    auto state = get_shard_operational_state(*admin_client, 0, 0);
+    auto state = get_shard_operational_state(*admin_client, ShardID(0, 0));
     return state == thrift::ShardOperationalState::PASSIVE_DRAINING;
   });
 
@@ -241,7 +241,7 @@ TEST_P(MaintenanceManagerTest, BasicPassiveDrain) {
   write_to_maintenance_log(*client, *maintenanceDelta);
 
   wait_until("ShardOperationalState is ENABLED", [&]() {
-    auto state = get_shard_operational_state(*admin_client, 0, 0);
+    auto state = get_shard_operational_state(*admin_client, ShardID(0, 0));
     return state == thrift::ShardOperationalState::ENABLED;
   });
 }
@@ -318,7 +318,7 @@ TEST_P(MaintenanceManagerTest, Snapshotting) {
   auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
   wait_until("N3's ShardOperationalState is DRAINED", [&]() {
-    auto state = get_shard_operational_state(*admin_client, 3, 0);
+    auto state = get_shard_operational_state(*admin_client, ShardID(3, 0));
     return state == thrift::ShardOperationalState::DRAINED;
   });
 
@@ -344,7 +344,7 @@ TEST_P(MaintenanceManagerTest, Snapshotting) {
   write_to_maintenance_log(*client, *maintenanceDelta);
 
   wait_until("N2's ShardOperationalState is MAY_DISAPPEAR", [&]() {
-    auto state = get_shard_operational_state(*admin_client, 2, 0);
+    auto state = get_shard_operational_state(*admin_client, ShardID(2, 0));
     return state == thrift::ShardOperationalState::MAY_DISAPPEAR;
   });
 
@@ -370,7 +370,7 @@ TEST_P(MaintenanceManagerTest, Snapshotting) {
   write_to_maintenance_log(*client, *maintenanceDelta);
 
   wait_until("N2's ShardOperationalState is ENABLED", [&]() {
-    auto state = get_shard_operational_state(*admin_client, 2, 0);
+    auto state = get_shard_operational_state(*admin_client, ShardID(2, 0));
     return state == thrift::ShardOperationalState::ENABLED;
   });
 
@@ -388,7 +388,7 @@ TEST_P(MaintenanceManagerTest, Snapshotting) {
   write_to_maintenance_log(*client, *maintenanceDelta);
 
   wait_until("N3's ShardOperationalState is ENABLED", [&]() {
-    auto state = get_shard_operational_state(*admin_client, 3, 0);
+    auto state = get_shard_operational_state(*admin_client, ShardID(3, 0));
     return state == thrift::ShardOperationalState::ENABLED;
   });
 }
@@ -464,7 +464,7 @@ TEST_P(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
 
   auto admin_client = cluster_->getAdminServer()->createAdminClient();
   wait_until("ShardOperationalState is MIGRATING_DATA", [&]() {
-    auto state = get_shard_operational_state(*admin_client, 1, 0);
+    auto state = get_shard_operational_state(*admin_client, ShardID(1, 0));
     return state == thrift::ShardOperationalState::MIGRATING_DATA;
   });
 
@@ -474,7 +474,7 @@ TEST_P(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
 
   cluster_->getNode(1).waitUntilAvailable();
   wait_until("ShardOperationalState is ENABLED", [&]() {
-    auto state = get_shard_operational_state(*admin_client, 1, 0);
+    auto state = get_shard_operational_state(*admin_client, ShardID(1, 0));
     return state == thrift::ShardOperationalState::ENABLED;
   });
 
@@ -500,7 +500,7 @@ TEST_P(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
 
   // Wait until maintenance completes
   wait_until("ShardOperationalState is DRAINED", [&]() {
-    auto state = get_shard_operational_state(*admin_client, 1, 0);
+    auto state = get_shard_operational_state(*admin_client, ShardID(1, 0));
     return state == thrift::ShardOperationalState::DRAINED;
   });
 }
