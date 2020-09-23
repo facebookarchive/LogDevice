@@ -39,7 +39,6 @@ namespace facebook { namespace logdevice {
  *       messages carrying information about availability of other nodes.
  */
 
-class Connection;
 class GOSSIP_Message;
 class ServerProcessor;
 class StatsHolder;
@@ -615,7 +614,10 @@ class FailureDetector {
   bool senderUsingHealthMonitor(node_index_t sender_idx,
                                 GOSSIP_Message::node_list_t node_list);
 
-  virtual Connection* getServerConnection(node_index_t idx);
+  virtual void resetServerSocketConnectThrottle(node_index_t);
+
+  virtual int checkServerConnection(node_index_t);
+
   virtual StatsHolder* getStats();
 
   friend class MockFailureDetector;

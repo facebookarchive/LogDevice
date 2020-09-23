@@ -16,7 +16,6 @@
 #include <folly/small_vector.h>
 
 #include "logdevice/common/ClusterState.h"
-#include "logdevice/common/Connection.h"
 #include "logdevice/common/GetClusterStateRequest.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/Sender.h"
@@ -1267,10 +1266,7 @@ void FailureDetector::updateNodeState(node_index_t idx,
       // Node's state is no longer DEAD. Reset connection throttling
       // on a server socket to that node to allow subsequent gossip
       // messages to be immediately sent to it.
-      Connection* conn = getServerConnection(idx);
-      if (conn) {
-        conn->resetConnectThrottle();
-      }
+      resetServerSocketConnectThrottle(idx);
     } else {
       // This node should transition itself to DEAD.
       if (self) {
@@ -1331,14 +1327,7 @@ bool FailureDetector::isValidDestination(node_index_t node_idx) {
     }
   }
 
-  Connection* conn = getServerConnection(node_idx);
-  if (!conn) {
-    // If a connection to the node doesn't exist yet, consider it as a valid
-    // destination.
-    return true;
-  }
-
-  int rv = conn->checkServerConnection();
+  int rv = checkServerConnection(node_idx);
   if (rv != 0) {
     if (err == E::DISABLED || err == E::NOBUFS) {
       ld_spew("Can't gossip to N%u: %s", node_idx, error_description(err));
@@ -1595,8 +1584,12 @@ FailureDetector::getNodeBoycottObject(node_index_t node_index) {
   return it->second;
 }
 
-Connection* FailureDetector::getServerConnection(node_index_t idx) {
-  return Worker::onThisThread()->sender().findServerConnection(idx);
+void FailureDetector::resetServerSocketConnectThrottle(node_index_t node_idx) {
+  Worker::onThisThread()->sender().resetServerSocketConnectThrottle(node_idx);
+}
+
+int FailureDetector::checkServerConnection(node_index_t node_idx) {
+  return Worker::onThisThread()->sender().checkServerConnection(node_idx);
 }
 
 void FailureDetector::setBlacklisted(node_index_t idx, bool blacklisted) {

@@ -554,10 +554,8 @@ void Sender::deliverCompletedMessages() {
   }
 }
 
-void Sender::resetServerSocketConnectThrottle(NodeID node_id) {
-  ld_check(node_id.isNodeID());
-
-  auto conn = findServerConnection(node_id.index());
+void Sender::resetServerSocketConnectThrottle(node_index_t node_id) {
+  auto conn = findServerConnection(node_id);
   if (conn != nullptr) {
     conn->resetConnectThrottle();
   }
@@ -772,20 +770,14 @@ bool Sender::isClosed(const Address& addr) const {
   return false;
 }
 
-int Sender::checkServerConnection(NodeID nid) const {
-  if (!nid.isNodeID()) {
-    ld_check(false);
-    err = E::INVALID_PARAM;
-    return -1;
-  }
-
-  Connection* c = findServerConnection(nid.index());
-  if (!c || !c->getInfo().peer_name.asNodeID().equalsRelaxed(nid)) {
+int Sender::checkServerConnection(node_index_t node) const {
+  Connection* c = findServerConnection(node);
+  if (!c || c->getInfo().peer_name.asNodeID().index() != node) {
     err = E::NOTFOUND;
     return -1;
   }
 
-  if (!c->isSSL() && useSSLWith(nid)) {
+  if (!c->isSSL() && useSSLWith(node)) {
     // We have a plaintext connection, but we need an encrypted one.
     err = E::SSLREQUIRED;
     return -1;
@@ -835,7 +827,7 @@ int Sender::connect(NodeID nid) {
   return c->connect();
 }
 
-bool Sender::useSSLWith(NodeID nid,
+bool Sender::useSSLWith(node_index_t node_id,
                         bool* cross_boundary_out,
                         bool* authentication_out) const {
   // Determine whether we need to use SSL by comparing our location with the
@@ -844,7 +836,7 @@ bool Sender::useSSLWith(NodeID nid,
   NodeLocationScope diff_level = settings_->ssl_boundary;
 
   cross_boundary = configuration::nodes::getNodeSSL(
-      *nodes_, my_location_, nid.index(), diff_level);
+      *nodes_, my_location_, node_id, diff_level);
 
   auto server_config = worker_->getServerConfig();
   // Determine whether we need to use an SSL Connection for authentication.
@@ -886,7 +878,7 @@ Connection* Sender::initServerConnection(NodeID nid, SocketType sock_type) {
     //     the ssl_on_gossip_port is false.
     const bool should_create_new = it->second->isClosed() ||
         (sock_type != SocketType::GOSSIP && !it->second->isSSL() &&
-         useSSLWith(nid)) ||
+         useSSLWith(nid.index())) ||
         (it->second->isSSL() != Worker::settings().ssl_on_gossip_port &&
          sock_type == SocketType::GOSSIP);
 
@@ -933,7 +925,8 @@ Connection* Sender::initServerConnection(NodeID nid, SocketType sock_type) {
 
     bool cross_boundary = false;
     bool ssl_authentication = false;
-    bool use_ssl = useSSLWith(nid, &cross_boundary, &ssl_authentication);
+    bool use_ssl =
+        useSSLWith(nid.index(), &cross_boundary, &ssl_authentication);
     if (sock_type == SocketType::GOSSIP) {
       ld_check(is_gossip_sender_);
       if (Worker::settings().send_to_gossip_port) {

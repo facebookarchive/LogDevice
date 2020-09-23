@@ -92,8 +92,10 @@ class MockFailureDetector : public FailureDetector {
     return cluster_state_.get();
   }
 
-  Connection* getServerConnection(node_index_t /*idx*/) override {
-    return nullptr;
+  void resetServerSocketConnectThrottle(node_index_t) override {}
+
+  int checkServerConnection(node_index_t) override {
+    return 0;
   }
 
   std::vector<std::pair<NodeID, std::unique_ptr<GOSSIP_Message>>> messages_;

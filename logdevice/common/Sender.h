@@ -456,7 +456,7 @@ class Sender : public SenderBase {
    *                     unsuccessful connection attempt INVALID_PARAM  nid is
    *                     invalid (debug build asserts)
    */
-  int checkServerConnection(NodeID nid) const;
+  int checkServerConnection(node_index_t node) const;
 
   /**
    * Check if a working connection to a give client exists. If peer_is_client is
@@ -703,9 +703,10 @@ class Sender : public SenderBase {
   ClientID getOurNameAtPeer(node_index_t node_index) const;
 
   /**
-   * Resets the server Connection's connect throttle.
+   * Resets the server Connection's connect throttle. If connection does not
+   * exist does nothing.
    */
-  void resetServerSocketConnectThrottle(NodeID node_id);
+  void resetServerSocketConnectThrottle(node_index_t node_id);
 
   /**
    * Sets the server Connection's peer_shuttingdown_ to true
@@ -935,7 +936,7 @@ class Sender : public SenderBase {
    * whether SSL should be used for data encryption or for authentication
    * accordingly.
    */
-  bool useSSLWith(NodeID nid,
+  bool useSSLWith(node_index_t node_id,
                   bool* cross_boundary = nullptr,
                   bool* authentication = nullptr) const;
 

@@ -128,12 +128,12 @@ NodeAvailabilityChecker::checkNode(NodeSetState* nodeset_state,
 int NodeAvailabilityChecker::checkConnection(NodeID nid,
                                              ClientID* our_name_at_peer) const {
   auto& sender = Worker::onThisThread()->sender();
-  int rv = sender.checkServerConnection(nid);
+  int rv = sender.checkServerConnection(nid.index());
   if (rv != 0) {
-    return rv;
+    return -1;
   }
   if (our_name_at_peer) {
-    const auto* info = sender.getConnectionInfo(Address(NodeID(nid)));
+    const auto* info = sender.getConnectionInfo(Address(nid));
     ld_check(info);
     *our_name_at_peer = info->our_name_at_peer.value_or(ClientID::INVALID);
   }

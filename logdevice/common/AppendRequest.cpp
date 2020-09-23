@@ -694,7 +694,8 @@ void AppendRequest::onTimeout() {
 }
 
 void AppendRequest::resetServerSocketConnectThrottle(NodeID node_id) {
-  Worker::onThisThread()->sender().resetServerSocketConnectThrottle(node_id);
+  Worker::onThisThread()->sender().resetServerSocketConnectThrottle(
+      node_id.index());
 }
 
 bool AppendRequest::checkPayloadSize(size_t payload_size,
