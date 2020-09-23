@@ -413,7 +413,7 @@ class SelectCommand(Command):
         except RuntimeError as e:
             print()
             cprint("[ERROR] A runtime error occured: {}".format(str(e)), "red")
-            return "Invalid Statement"
+            return "Unexpected Runtime Error"
         except StatementError as e:
             print()
             cprint("[ERROR] Invalid Statement: {}".format(str(e)), "red")
@@ -421,7 +421,7 @@ class SelectCommand(Command):
         except LDQueryError as e:
             print()
             cprint("[ERROR] Something went wrong in ldquery: {}".format(str(e)), "red")
-            return "Unexpected Error"
+            return "Unexpected Query Error"
 
     def run_interactive(self, cmd, input, query):
         try:
