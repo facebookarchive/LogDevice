@@ -356,7 +356,7 @@ void RecoveryNode::onMessageSent(MessageType type,
 
   switch (status) {
     case Status::OK:
-      rv = recovery_->getDeps().registerOnSocketClosed(
+      rv = recovery_->getDeps().registerOnConnectionClosed(
           Address(nid_), socket_callback_);
       // cannot fail to register an on-close callback if we just successfully
       // sent a message to that Address.

@@ -96,7 +96,7 @@ LOGS_CONFIG_API_onReceived(LOGS_CONFIG_API_Message* msg,
       // This callback commits suicide with 'delete this' after being called.
       LogsConfigApiMessageServerSocketClosedCallback* onclose =
           new LogsConfigApiMessageServerSocketClosedCallback(cid);
-      int rv = w->sender().registerOnSocketClosed(from, *onclose);
+      int rv = w->sender().registerOnConnectionClosed(from, *onclose);
       if (rv != 0) {
         (*onclose)(E::FAILED, from);
       }

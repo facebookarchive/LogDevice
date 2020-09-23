@@ -369,17 +369,20 @@ class OnClientCloseTestRequest : public Request {
                                    ConnectionKind::DATA);
     EXPECT_EQ(0, rv);
 
-    rv = w->sender().registerOnSocketClosed(Address(cid_), *(new OnClose()));
+    rv =
+        w->sender().registerOnConnectionClosed(Address(cid_), *(new OnClose()));
     EXPECT_EQ(0, rv);
 
-    rv = w->sender().registerOnSocketClosed(Address(cid_), *(new OnClose()));
+    rv =
+        w->sender().registerOnConnectionClosed(Address(cid_), *(new OnClose()));
     EXPECT_EQ(0, rv);
 
     const ClientID nonexisting_client(100);
 
     OnClose* cb2 = new OnClose();
 
-    rv = w->sender().registerOnSocketClosed(Address(nonexisting_client), *cb2);
+    rv = w->sender().registerOnConnectionClosed(
+        Address(nonexisting_client), *cb2);
 
     delete cb2;
 

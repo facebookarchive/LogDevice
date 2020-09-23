@@ -24,7 +24,7 @@ Request::Execution ClusterStateUpdatedRequest::execute() {
 
   for (const auto& kv : *sd_config) {
     if (cs->getNodeState(kv.first) == ClusterState::NodeState::DEAD) {
-      worker->sender().closeServerSocket(kv.first, E::PEER_UNAVAILABLE);
+      worker->sender().closeConnection(Address(kv.first), E::PEER_UNAVAILABLE);
     }
   }
   return Execution::COMPLETE;

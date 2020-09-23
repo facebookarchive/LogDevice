@@ -1075,7 +1075,7 @@ class Appender : public IntrusiveUnorderedMapHook {
                        std::chrono::steady_clock::time_point until_time,
                        NodeSetState::NotAvailableReason reason);
   virtual StatsHolder* getStats();
-  virtual int registerOnSocketClosed(NodeID nid, SocketCallback& cb);
+  virtual int registerOnConnectionClosed(NodeID nid, SocketCallback& cb);
   virtual void replyToAppendRequest(APPENDED_Header& replyhdr);
   virtual void schedulePeriodicReleases();
   // Sends a new wave when previous one fails. We keep this as separate virtual

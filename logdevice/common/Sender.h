@@ -378,7 +378,7 @@ class Sender : public SenderBase {
    * INVALID_PARAM  if cb is already on
    * some callback list (debug build asserts)
    */
-  int registerOnSocketClosed(const Address& addr, SocketCallback& cb);
+  int registerOnConnectionClosed(const Address& addr, SocketCallback& cb);
 
   /**
    * Close the Connection for this server
@@ -389,29 +389,7 @@ class Sender : public SenderBase {
    * @return 0 on success, or -1 if there is no Connection for address `peer`,
    * in which case err is set to E::NOTFOUND.
    */
-  int closeSocket(Address peer, Status reason);
-
-  /**
-   * Close the Connection for this server
-   *
-   * @param peer   Node index for which to close the Connection.
-   * @param reason Reason for closing the Connection.
-   *
-   * @return 0 on success, or -1 if there is no Connection for address `peer`,
-   * in which case err is set to E::NOTFOUND.
-   */
-  int closeServerSocket(node_index_t peer, Status reason);
-
-  /**
-   * Close the Connection for a client.
-   *
-   * @param cid    Client for which to close the Connection.
-   * @param reason Reason for closing the Connection.
-   *
-   * @return 0 on success, or -1 if there is no Connection for client `cid`, in
-   *         which case err is set to E::NOTFOUND.
-   */
-  int closeClientSocket(ClientID cid, Status reason);
+  int closeConnection(Address peer, Status reason);
 
   /**
    * Flushes buffered data to network and disallows initiating new connections
@@ -825,6 +803,28 @@ class Sender : public SenderBase {
    * Unconditionally close all server and clients Connections.
    */
   void closeAllSockets();
+
+  /**
+   * Close the Connection for this server
+   *
+   * @param peer   Node index for which to close the Connection.
+   * @param reason Reason for closing the Connection.
+   *
+   * @return 0 on success, or -1 if there is no Connection for address `peer`,
+   * in which case err is set to E::NOTFOUND.
+   */
+  int closeServerSocket(node_index_t peer, Status reason);
+
+  /**
+   * Close the Connection for a client.
+   *
+   * @param cid    Client for which to close the Connection.
+   * @param reason Reason for closing the Connection.
+   *
+   * @return 0 on success, or -1 if there is no Connection for client `cid`, in
+   *         which case err is set to E::NOTFOUND.
+   */
+  int closeClientSocket(ClientID cid, Status reason);
 
   /**
    * A helper method for sending a message to a connected Connection.

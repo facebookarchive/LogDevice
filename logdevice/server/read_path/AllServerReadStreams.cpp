@@ -121,7 +121,7 @@ AllServerReadStreams::insertOrGet(ClientID client_id,
       if (on_worker_thread_) { // may be false in unit tests
         it->second.disconnect_callback.owner = this;
         Worker* worker = Worker::onThisThread();
-        int rv = worker->sender().registerOnSocketClosed(
+        int rv = worker->sender().registerOnConnectionClosed(
             Address(client_id), it->second.disconnect_callback);
         ld_check(rv == 0);
         // Since this is a new client, let's send it our view of the rebuilding

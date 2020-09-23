@@ -358,7 +358,8 @@ class MockAppender : public Appender {
     return epoch_sequencer_->getState() == EpochSequencer::State::DRAINING;
   }
 
-  int registerOnSocketClosed(NodeID /*nid*/, SocketCallback& /*cb*/) override {
+  int registerOnConnectionClosed(NodeID /*nid*/,
+                                 SocketCallback& /*cb*/) override {
     return 0;
   }
 

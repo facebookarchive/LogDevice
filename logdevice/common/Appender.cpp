@@ -2181,9 +2181,9 @@ StatsHolder* Appender::getStats() {
   return Worker::stats();
 }
 
-int Appender::registerOnSocketClosed(NodeID nid, SocketCallback& cb) {
+int Appender::registerOnConnectionClosed(NodeID nid, SocketCallback& cb) {
   Sender& sender = Worker::onThisThread()->sender();
-  int rv = sender.registerOnSocketClosed(Address(nid), cb);
+  int rv = sender.registerOnConnectionClosed(Address(nid), cb);
   return rv;
 }
 

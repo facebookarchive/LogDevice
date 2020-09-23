@@ -568,7 +568,8 @@ void Sender::setPeerShuttingDown(node_index_t node_id) {
   }
 }
 
-int Sender::registerOnSocketClosed(const Address& addr, SocketCallback& cb) {
+int Sender::registerOnConnectionClosed(const Address& addr,
+                                       SocketCallback& cb) {
   Connection* conn;
 
   if (addr.isClientAddress()) {
@@ -616,7 +617,7 @@ void Sender::flushOutputAndClose(Status reason) {
          "Number of open Connections : %d",
          open_socket_count);
 }
-int Sender::closeSocket(Address addr, Status reason) {
+int Sender::closeConnection(Address addr, Status reason) {
   if (addr.isClientAddress()) {
     return closeClientSocket(addr.asClientID(), reason);
   } else {

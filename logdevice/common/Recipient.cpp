@@ -22,7 +22,7 @@ void Recipient::SocketClosedCallback::operator()(Status st,
 }
 
 void Recipient::SocketClosedCallback::activate() {
-  int rv = appender_->registerOnSocketClosed(shard_.asNodeID(), *this);
+  int rv = appender_->registerOnConnectionClosed(shard_.asNodeID(), *this);
   ld_check(rv == 0);
 }
 

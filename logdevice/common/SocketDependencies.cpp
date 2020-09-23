@@ -179,7 +179,7 @@ void executeOnWorker(Worker* worker,
         auto rv = cb(msg.get(), from, *identity);
         switch (rv) {
           case Message::Disposition::ERROR:
-            worker->sender().closeSocket(from, err);
+            worker->sender().closeConnection(from, err);
             break;
           case Message::Disposition::KEEP:
             // Ownership transferred.

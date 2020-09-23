@@ -76,7 +76,8 @@ class EpochRecoveryDependencies {
   virtual std::unique_ptr<Timer>
   createTimer(std::function<void()> cb = nullptr);
 
-  virtual int registerOnSocketClosed(const Address& addr, SocketCallback& cb);
+  virtual int registerOnConnectionClosed(const Address& addr,
+                                         SocketCallback& cb);
 
   virtual int setLastCleanEpoch(logid_t logid,
                                 epoch_t lce,

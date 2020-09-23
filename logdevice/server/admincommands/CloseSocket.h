@@ -111,7 +111,7 @@ class CloseSocket : public AdminCommand {
         }
       }
       for (const auto& address : addresses) {
-        int rv = sender.closeSocket(address, E::PEER_CLOSED);
+        int rv = sender.closeConnection(address, E::PEER_CLOSED);
         if (rv != 0) {
           ld_error("Failed to close connection %s due to %s",
                    address.toString().c_str(),

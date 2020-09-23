@@ -156,7 +156,7 @@ ClientDigests* AllCachedDigests::insertOrGet(ClientID client_id) {
 
     Worker* worker = Worker::onThisThread(false);
     if (worker != nullptr) {
-      int rv = worker->sender().registerOnSocketClosed(
+      int rv = worker->sender().registerOnConnectionClosed(
           Address(client_id), *disconnect_callback);
       ld_check(rv == 0);
     }

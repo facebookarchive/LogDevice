@@ -219,8 +219,9 @@ class AppenderTest : public ::testing::Test {
  private:
   // Map a NodeID to a list of SocketCallback. (this mocks some logic in
   // Recipient which registers a socket callback to the socket by calling
-  // registerOnSocketClosed()). Tests can call triggerOnSocketClosed(ShardID) to
-  // simulate the callback being called for a NodeID.
+  // registerOnConnectionClosed()). Tests can call
+  // triggerOnSocketClosed(ShardID) to simulate the callback being called for a
+  // NodeID.
   std::unordered_map<
       NodeID,
       folly::IntrusiveList<SocketCallback, &SocketCallback::listHook_>,
@@ -632,7 +633,7 @@ class AppenderTest::MockAppender : public Appender {
     return &stats_;
   }
 
-  int registerOnSocketClosed(NodeID nid, SocketCallback& cb) override {
+  int registerOnConnectionClosed(NodeID nid, SocketCallback& cb) override {
     test_->on_close_cb_map_[nid].push_back(cb);
     return 0;
   }

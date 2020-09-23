@@ -1518,8 +1518,8 @@ void LogRecoveryRequest::onConnectionClosed(ShardID shard, Status status) {
 
   // Re-register the callback.
   SocketClosedCallback& cb = node_status.socket_close_callback;
-  const int rv = Worker::onThisThread()->sender().registerOnSocketClosed(
-      Address(NodeID(shard.node())), cb);
+  const int rv = Worker::onThisThread()->sender().registerOnConnectionClosed(
+      Address(shard.node()), cb);
   if (rv != 0) {
     ld_check(err == E::NOTFOUND);
     // TODO (#4408213): handle cluster shrinking)

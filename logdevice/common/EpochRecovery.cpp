@@ -1933,9 +1933,9 @@ EpochRecoveryDependencies::createTimer(std::function<void()> cb) {
   return timer;
 }
 
-int EpochRecoveryDependencies::registerOnSocketClosed(const Address& addr,
-                                                      SocketCallback& cb) {
-  return Worker::onThisThread()->sender().registerOnSocketClosed(addr, cb);
+int EpochRecoveryDependencies::registerOnConnectionClosed(const Address& addr,
+                                                          SocketCallback& cb) {
+  return Worker::onThisThread()->sender().registerOnConnectionClosed(addr, cb);
 }
 
 int EpochRecoveryDependencies::setLastCleanEpoch(logid_t logid,
