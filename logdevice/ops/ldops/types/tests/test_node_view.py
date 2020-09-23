@@ -216,6 +216,8 @@ class TestNodeView(TestCase):
             self.assertEqual(nv.num_shards, 0)
             self.assertTupleEqual(nv.shard_states, ())
 
+        self.assertEqual(nv.tags, {})
+
     @async_test
     async def test_mismatch(self):
         async with MockAdminAPI() as client:

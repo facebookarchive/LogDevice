@@ -208,3 +208,7 @@ class NodeView:
     @property
     def shards_metadata_state_count(self) -> Counter[MetaDataStorageState]:
         return collections.Counter(self.shards_metadata_state)
+
+    @property
+    def tags(self) -> Mapping[str, str]:
+        return self.node_config.tags

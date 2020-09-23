@@ -27,7 +27,6 @@ from ldops.types.node import Node
 from ldops.types.socket_address import SocketAddress
 from logdevice.admin.clients import AdminAPI
 from logdevice.admin.exceptions.types import NotSupported
-from logdevice.admin.logtree.types import ReplicationInfo
 from logdevice.admin.nodes.types import (
     NodeConfig,
     NodesConfigResponse,
