@@ -72,7 +72,7 @@ source ./staging/usr/local/bin/activate
 > `source ./staging/usr/local/bin/activate`
 
 ```shell-session
-python3 -m pip install --upgrade setuptools wheel cython==0.28.6
+python3 -m pip install --upgrade setuptools wheel cython
 ```
 
 ## Start the build
