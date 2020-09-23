@@ -249,7 +249,9 @@ class AppenderTest::TestCopySetSelectorDeps
   }
 
  private:
-  int checkConnection(NodeID nid, ClientID* our_name_at_peer) const override {
+  int checkConnection(node_index_t id,
+                      ClientID* our_name_at_peer) const override {
+    NodeID nid(id);
     auto it = node_status_.find(nid);
     if (it != node_status_.end() &&
         it->second.connection_state_ != Status::OK) {
@@ -287,7 +289,7 @@ class AppenderTest::TestCopySetSelectorDeps
     return true;
   }
 
-  int connect(NodeID /*nid*/) const override {
+  int connect(node_index_t /*nid*/) const override {
     // Called by when checkNode() sees a node that's not
     // connected. Ignored.
     return 0;

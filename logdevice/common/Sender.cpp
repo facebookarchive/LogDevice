@@ -538,7 +538,7 @@ Sender::getSocketProtocolVersion(node_index_t idx) const {
 }
 
 ClientID Sender::getOurNameAtPeer(node_index_t node_index) const {
-  const auto* info = getConnectionInfo(Address(NodeID(node_index)));
+  const auto* info = getConnectionInfo(Address(node_index));
   folly::Optional<ClientID> name = info ? info->our_name_at_peer : folly::none;
   return name.value_or(ClientID::INVALID);
 }
@@ -561,10 +561,8 @@ void Sender::resetServerSocketConnectThrottle(node_index_t node_id) {
   }
 }
 
-void Sender::setPeerShuttingDown(NodeID node_id) {
-  ld_check(node_id.isNodeID());
-
-  auto conn = findServerConnection(node_id.index());
+void Sender::setPeerShuttingDown(node_index_t node_id) {
+  auto conn = findServerConnection(node_id);
   if (conn != nullptr) {
     conn->setPeerShuttingDown();
   }
@@ -622,7 +620,7 @@ int Sender::closeSocket(Address addr, Status reason) {
   if (addr.isClientAddress()) {
     return closeClientSocket(addr.asClientID(), reason);
   } else {
-    return closeServerSocket(addr.asNodeID(), reason);
+    return closeServerSocket(addr.asNodeID().index(), reason);
   }
 }
 
@@ -639,8 +637,8 @@ int Sender::closeClientSocket(ClientID cid, Status reason) {
   return 0;
 }
 
-int Sender::closeServerSocket(NodeID peer, Status reason) {
-  Connection* c = findServerConnection(peer.index());
+int Sender::closeServerSocket(node_index_t peer, Status reason) {
+  Connection* c = findServerConnection(peer);
   if (!c) {
     err = E::NOTFOUND;
     return -1;
@@ -813,13 +811,13 @@ int Sender::checkClientConnection(ClientID cid, bool check_peer_is_node) {
   return 0;
 }
 
-int Sender::connect(NodeID nid) {
+int Sender::connect(node_index_t nid) {
   if (shutting_down_) {
     err = E::SHUTDOWN;
     return -1;
   }
 
-  Connection* c = initServerConnection(nid, SocketType::DATA);
+  Connection* c = initServerConnection(NodeID(nid), SocketType::DATA);
   if (!c) {
     return -1;
   }

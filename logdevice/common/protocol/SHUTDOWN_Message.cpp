@@ -44,7 +44,7 @@ Message::Disposition SHUTDOWN_Message::onReceived(const Address& from) {
   }
 
   Worker* w = Worker::onThisThread();
-  w->sender().setPeerShuttingDown(from.asNodeID());
+  w->sender().setPeerShuttingDown(from.asNodeID().index());
 
   return Disposition::NORMAL;
 }

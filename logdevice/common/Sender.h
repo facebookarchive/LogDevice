@@ -394,13 +394,13 @@ class Sender : public SenderBase {
   /**
    * Close the Connection for this server
    *
-   * @param peer   NodeID for which to close the Connection.
+   * @param peer   Node index for which to close the Connection.
    * @param reason Reason for closing the Connection.
    *
    * @return 0 on success, or -1 if there is no Connection for address `peer`,
    * in which case err is set to E::NOTFOUND.
    */
-  int closeServerSocket(NodeID peer, Status reason);
+  int closeServerSocket(node_index_t peer, Status reason);
 
   /**
    * Close the Connection for a client.
@@ -482,7 +482,7 @@ class Sender : public SenderBase {
    *                       configured for nid
    *         see Connection::connect() for the rest of possible error codes
    */
-  int connect(NodeID nid);
+  int connect(node_index_t nid);
 
   /**
    * Returns connection info for the connection with given address. Retuned
@@ -589,7 +589,7 @@ class Sender : public SenderBase {
     return describeConnection(Address(node));
   }
   static std::string describeConnection(node_index_t node) {
-    return describeConnection(Address(NodeID(node, 0)));
+    return describeConnection(Address(node));
   }
 
   /**
@@ -712,7 +712,7 @@ class Sender : public SenderBase {
    * Sets the server Connection's peer_shuttingdown_ to true
    * indicating that peer is going to go down soon
    */
-  void setPeerShuttingDown(NodeID node_id);
+  void setPeerShuttingDown(node_index_t);
 
   /**
    * Called when configuration has changed.  Sender closes any open

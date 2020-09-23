@@ -57,7 +57,8 @@ class NodeAvailabilityChecker {
 
  protected:
   // Proxy for Sender::checkConnection(). override in tests
-  virtual int checkConnection(NodeID nid, ClientID* our_name_at_peer) const;
+  virtual int checkConnection(node_index_t nid,
+                              ClientID* our_name_at_peer) const;
 
   // Proxy for NodeSetState::checkNotAvailableUntil(). override in tests.
   // @param now is provided for test override.
@@ -86,7 +87,7 @@ class NodeAvailabilityChecker {
   getNodesConfiguration() const;
 
   // Proxy for Sender::connect(). override in tests
-  virtual int connect(NodeID nid) const;
+  virtual int connect(node_index_t nid) const;
 };
 
 }} // namespace facebook::logdevice

@@ -26,6 +26,7 @@ static_assert(sizeof(NodeID) == sizeof(uint32_t),
 
 struct Address {
   explicit Address(NodeID node_id) : id_(node_id) {}
+  explicit Address(node_index_t node_id) : id_(NodeID(node_id)) {}
   explicit Address(ClientID client_id) : id_(client_id) {}
   // Invalid address.
   Address() : Address(ClientID()) {}
