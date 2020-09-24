@@ -57,10 +57,4 @@ std::string convertToJson(Client& client, std::string serialized_dump);
  */
 int takeSnapshot(Client& client);
 
-/**
- * Returns true if the LogsConfigStateMachine could return an LSN
- * (i.e both base snapshot and the delta was read) within the specified timeout
- */
-bool isConfigLogReadable(Client& client);
-
 }}}} // namespace facebook::logdevice::ops::LogsConfig
