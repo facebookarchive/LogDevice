@@ -103,6 +103,10 @@ class LastCleanEpochZRQ : public ZookeeperEpochStoreRequest {
     }
   }
 
+  bool allowedToTriggerNewFormatMigration() const override {
+    return false;
+  }
+
   static constexpr const char* znodeNameDataLog = "lce";
   static constexpr const char* znodeNameMetaDataLog = "metadatalog_lce";
 

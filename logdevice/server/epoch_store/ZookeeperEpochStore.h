@@ -185,11 +185,22 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
    */
   void provisionLogZnodes(RequestContext&& context, std::string znode_value);
 
-  folly::SemiFuture<ZnodeReadResult>
-  readLegacyZnode(const RequestContext&);
+  folly::SemiFuture<ZnodeReadResult> readLegacyZnode(const RequestContext&);
 
   folly::SemiFuture<folly::Optional<ZnodeReadResult>>
   readMigrationZnode(const RequestContext&);
+
+  void writeZnode(RequestContext&& context,
+                  std::string legacy_znode_value,
+                  zk::version_t legacy_znode_version,
+                  folly::Optional<zk::version_t> migration_znode_version);
+  void legacyWriteZnode(RequestContext&& context,
+                        std::string legacy_znode_value,
+                        zk::version_t legacy_znode_version);
+  void doubleWriteZnode(RequestContext&& context,
+                        std::string legacy_znode_value,
+                        zk::version_t legacy_znode_version,
+                        zk::version_t migration_znode_version);
 };
 
 }} // namespace facebook::logdevice

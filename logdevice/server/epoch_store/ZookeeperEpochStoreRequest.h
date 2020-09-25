@@ -106,6 +106,12 @@ class ZookeeperEpochStoreRequest {
                                 char* buf,
                                 size_t size) const = 0;
 
+  /**
+   * Whether this request is allowed to be the first request that triggers
+   * the migration to the new serialization format.
+   */
+  virtual bool allowedToTriggerNewFormatMigration() const = 0;
+
   // id of log on whose metadata this request operates, passed to cf_
   const logid_t logid_;
 

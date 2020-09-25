@@ -229,9 +229,25 @@ int ZookeeperClientInMemory::multiOp(int count,
         } else {
           return fill_result(ZNONODE);
         }
+      } else if (ops[i].type == ZOO_SETDATA_OP) {
+        const auto& op = ops[i].set_op;
+        if (!mapContainsParents(new_map, op.path)) {
+          return fill_result(ZNONODE);
+        }
+        if (new_map.find(op.path) == new_map.end()) {
+          return fill_result(ZNONODE);
+        }
+        auto& znode = new_map[op.path];
+        auto& znode_version = znode.second.version_;
+        if (znode_version != op.version && op.version != -1) {
+          return fill_result(ZBADVERSION);
+        }
+        new_map[op.path] = std::make_pair(
+            std::string(op.data, op.datalen),
+            zk::Stat{.version_ = op.version + 1, .mtime_ = mtime});
       } else {
         // no other ops supported currently
-        ld_critical("Only create/delete operations supported in multi-ops");
+        ld_critical("Only set/create/delete operations supported in multi-ops");
         ld_check(false);
         return -1;
       }

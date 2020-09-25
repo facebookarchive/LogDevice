@@ -186,6 +186,10 @@ class EpochMetaDataZRQ : public ZookeeperEpochStoreRequest {
         log_metadata.current_epoch_metadata, buf, size, node_id_to_write);
   }
 
+  bool allowedToTriggerNewFormatMigration() const override {
+    return true;
+  }
+
   static constexpr const char* znodeName = "sequencer";
 
  private:

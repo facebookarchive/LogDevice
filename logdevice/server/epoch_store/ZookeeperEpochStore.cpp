@@ -14,8 +14,10 @@
 #include <folly/small_vector.h>
 
 #include "logdevice/common/ConstructorFailed.h"
+#include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/ZookeeperClient.h"
+#include "logdevice/common/ZookeeperClientBase.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/Stats.h"
@@ -125,6 +127,9 @@ Status ZookeeperEpochStore::completionStatus(int rc, logid_t logid) {
 
 std::string ZookeeperEpochStore::znodePathForLog(logid_t logid) const {
   ld_check(logid != LOGID_INVALID);
+  if (MetaDataLog::isMetaDataLog(logid)) {
+    logid = MetaDataLog::dataLogID(logid);
+  }
   return rootPath() + "/" + std::to_string(logid.val_);
 }
 
@@ -136,7 +141,11 @@ void ZookeeperEpochStore::provisionLogZnodes(RequestContext&& context,
 
   std::vector<zk::Op> ops;
   // Creating root znode for this log
-  ops.emplace_back(ZookeeperClientBase::makeCreateOp(logroot, ""));
+  ops.emplace_back(ZookeeperClientBase::makeCreateOp(
+      logroot,
+      context.settings.double_write
+          ? LogMetaDataCodec::serialize(context.log_metadata)
+          : ""));
   // Creating the epoch metadata znode with the supplied znode_value
   ops.emplace_back(ZookeeperClientBase::makeCreateOp(
       logroot + "/" + EpochMetaDataZRQ::znodeName, znode_value));
@@ -215,6 +224,75 @@ void ZookeeperEpochStore::provisionLogZnodes(RequestContext&& context,
   zkclient_->multiOp(std::move(ops), std::move(cb));
 }
 
+void ZookeeperEpochStore::writeZnode(
+    RequestContext&& context,
+    std::string legacy_znode_value,
+    zk::version_t legacy_znode_version,
+    folly::Optional<zk::version_t> migration_znode_version) {
+  if (context.settings.double_write && migration_znode_version.has_value()) {
+    doubleWriteZnode(std::move(context),
+                     std::move(legacy_znode_value),
+                     legacy_znode_version,
+                     *migration_znode_version);
+  } else {
+    legacyWriteZnode(std::move(context),
+                     std::move(legacy_znode_value),
+                     legacy_znode_version);
+  }
+}
+
+void ZookeeperEpochStore::legacyWriteZnode(RequestContext&& context,
+                                           std::string legacy_znode_value,
+                                           zk::version_t legacy_znode_version) {
+  std::string znode_path = context.zrq->getZnodePath(rootPath());
+  // setData() below succeeds only if the current version number of
+  // znode at znode_path matches the version that the znode had
+  // when we read its value. Zookeeper atomically increments the version
+  // number of znode on every write to that znode. If the versions do not
+  // match zkSetCf() will be called with status ZBADVERSION. This ensures
+  // that if our read-modify-write of znode_path succeeds, it was atomic.
+  auto cb = [this, context = std::move(context)](int res, zk::Stat) mutable {
+    auto logid = context.zrq->logid_;
+    postRequestCompletion(completionStatus(res, logid), std::move(context));
+  };
+  zkclient_->setData(std::move(znode_path),
+                     std::move(legacy_znode_value),
+                     std::move(cb),
+                     legacy_znode_version);
+}
+
+void ZookeeperEpochStore::doubleWriteZnode(
+    RequestContext&& context,
+    std::string legacy_znode_value,
+    zk::version_t legacy_znode_version,
+    zk::version_t migration_znode_version) {
+  // For the double writes to succeed both the legacy and migration znode
+  // shouldn't have changed since the read. We also need to make sure that
+  // either both of them succeed or both of them fail.
+
+  auto migration_znode_path = znodePathForLog(context.zrq->logid_);
+  auto serialized_log_metadata =
+      LogMetaDataCodec::serialize(context.log_metadata);
+
+  auto legacy_znode_path = context.zrq->getZnodePath(rootPath());
+
+  std::vector<zk::Op> ops{
+      ZookeeperClientBase::makeSetOp(std::move(migration_znode_path),
+                                     std::move(serialized_log_metadata),
+                                     migration_znode_version),
+      ZookeeperClientBase::makeSetOp(std::move(legacy_znode_path),
+                                     std::move(legacy_znode_value),
+                                     legacy_znode_version),
+  };
+
+  auto cb = [this, context = std::move(context)](
+                int rc, std::vector<zk::OpResponse> /* results */) mutable {
+    auto logid = context.zrq->logid_;
+    postRequestCompletion(completionStatus(rc, logid), std::move(context));
+  };
+  zkclient_->multiOp(std::move(ops), std::move(cb));
+}
+
 void ZookeeperEpochStore::onGetZnodeComplete(
     RequestContext&& context,
     ZnodeReadResult legacy_znode,
@@ -256,24 +334,35 @@ void ZookeeperEpochStore::onGetZnodeComplete(
       goto err;
     }
 
-    // Value can be empty if we've just started the migration. In that case
-    // we treat it as NOTFOUND as well.
-    if (migration_st == E::OK && !migration_znode->value.empty()) {
-      std::shared_ptr<const LogMetaData> deserialized_log_metadata =
-          LogMetaDataCodec::deserialize(migration_znode->value);
+    if (migration_st == E::OK) {
+      // If migration_znode->value is empty, it means that this log will be
+      // migrated as part of this request. Only EpochMetaDataZRQ is allowed to
+      // trigger a migration as we can't serialize a LogMetaData with an
+      // invalid current_epoch_metadata.
+      if (!migration_znode->value.empty()) {
+        std::shared_ptr<const LogMetaData> deserialized_log_metadata =
+            LogMetaDataCodec::deserialize(migration_znode->value);
 
-      if (!deserialized_log_metadata) {
-        RATELIMIT_ERROR(std::chrono::seconds(1),
-                        1,
-                        "Failed to deserialize log metadata for log %lu",
-                        zrq->logid_.val_);
-        st = E::BADMSG;
-        goto err;
+        if (!deserialized_log_metadata) {
+          RATELIMIT_ERROR(std::chrono::seconds(1),
+                          1,
+                          "Failed to deserialize log metadata for log %lu",
+                          zrq->logid_.val_);
+          st = E::BADMSG;
+          goto err;
+        }
+
+        // This is a copy unfortunatly because the deserialization returns a
+        // const object.
+        log_metadata = *deserialized_log_metadata;
+      } else if (!zrq->allowedToTriggerNewFormatMigration()) {
+        // We're not allowed to trigger a migration as part of this request.
+        // Let's disable double writing and act as if we didn't read this znode.
+        migration_znode.reset();
+        context.settings.double_write = false;
+      } else {
+        // Migration is going to happen as part of this request. Congrats!
       }
-
-      // This is a copy unfortunatly because the deserialization returns a const
-      // object.
-      log_metadata = *deserialized_log_metadata;
     }
   }
 
@@ -345,22 +434,12 @@ void ZookeeperEpochStore::onGetZnodeComplete(
       provisionLogZnodes(std::move(context), std::move(znode_value_str));
       return;
     } else {
-      std::string znode_path = zrq->getZnodePath(rootPath());
-      // setData() below succeeds only if the current version number of
-      // znode at znode_path matches the version that the znode had
-      // when we read its value. Zookeeper atomically increments the version
-      // number of znode on every write to that znode. If the versions do not
-      // match zkSetCf() will be called with status ZBADVERSION. This ensures
-      // that if our read-modify-write of znode_path succeeds, it was atomic.
-      auto cb = [this, context = std::move(context)](
-                    int res, zk::Stat) mutable {
-        auto logid = context.zrq->logid_;
-        postRequestCompletion(completionStatus(res, logid), std::move(context));
-      };
-      zkclient_->setData(std::move(znode_path),
-                         std::move(znode_value_str),
-                         std::move(cb),
-                         legacy_znode.stat.version_);
+      writeZnode(std::move(context),
+                 std::move(znode_value_str),
+                 legacy_znode.stat.version_,
+                 migration_znode.has_value()
+                     ? migration_znode->stat.version_
+                     : folly::Optional<zk::version_t>(folly::none));
       return;
     }
   }
