@@ -22,6 +22,8 @@
 #include "logdevice/include/Err.h"
 #include "logdevice/server/epoch_store/EpochMetaDataZRQ.h"
 #include "logdevice/server/epoch_store/GetLastCleanEpochZRQ.h"
+#include "logdevice/server/epoch_store/LogMetaData.h"
+#include "logdevice/server/epoch_store/LogMetaDataCodec.h"
 #include "logdevice/server/epoch_store/SetLastCleanEpochZRQ.h"
 #include "logdevice/server/epoch_store/ZookeeperEpochStoreRequest.h"
 
@@ -216,30 +218,71 @@ void ZookeeperEpochStore::provisionLogZnodes(RequestContext&& context,
 void ZookeeperEpochStore::onGetZnodeComplete(
     RequestContext&& context,
     ZnodeReadResult legacy_znode,
-    folly::Optional<ZnodeReadResult> /* migration_znode */) {
+    folly::Optional<ZnodeReadResult> migration_znode) {
   auto& zrq = context.zrq;
   auto& log_metadata = context.log_metadata;
   ZookeeperEpochStoreRequest::NextStep next_step;
   bool do_provision = false;
   ld_check(zrq);
 
-  Status st = completionStatus(legacy_znode.zk_return_code, zrq->logid_);
-  bool value_existed = false;
-  switch (st) {
-    case E::OK:
-      value_existed = true;
-      st = zrq->legacyDeserializeIntoLogMetaData(
-          std::move(legacy_znode.value), log_metadata);
-      if (st != Status::OK) {
+  Status legacy_st = completionStatus(legacy_znode.zk_return_code, zrq->logid_);
+  Status st = legacy_st;
+  bool value_existed = (legacy_st == E::OK);
+  if (legacy_st != E::OK && legacy_st != E::NOTFOUND) {
+    goto err;
+  }
+
+  if (migration_znode.has_value()) {
+    Status migration_st =
+        completionStatus(migration_znode->zk_return_code, zrq->logid_);
+    if (migration_st != E::OK && migration_st != E::NOTFOUND) {
+      goto err;
+    }
+
+    // At this point, both legacy and migration znode statuses are either OK
+    // or NOTFOUND. Given that we provision them in a transaction they either
+    // both exist or don't. So their statuses must be equal.
+    if (legacy_st != migration_st) {
+      RATELIMIT_ERROR(
+          std::chrono::seconds(1),
+          1,
+          "INTERNAL ERROR: expected status code of legacy znode (%s) to be "
+          "equal to migration znode status (%s) but it's not the case "
+          "for log %lu",
+          error_name(legacy_st),
+          error_name(migration_st),
+          zrq->logid_.val_);
+      st = E::INTERNAL;
+      goto err;
+    }
+
+    // Value can be empty if we've just started the migration. In that case
+    // we treat it as NOTFOUND as well.
+    if (migration_st == E::OK && !migration_znode->value.empty()) {
+      std::shared_ptr<const LogMetaData> deserialized_log_metadata =
+          LogMetaDataCodec::deserialize(migration_znode->value);
+
+      if (!deserialized_log_metadata) {
+        RATELIMIT_ERROR(std::chrono::seconds(1),
+                        1,
+                        "Failed to deserialize log metadata for log %lu",
+                        zrq->logid_.val_);
+        st = E::BADMSG;
         goto err;
       }
-      break;
-    case E::NOTFOUND:
-      // Do nothing.
-      break;
-    default:
-      // Anything else is considered an error.
+
+      // This is a copy unfortunatly because the deserialization returns a const
+      // object.
+      log_metadata = *deserialized_log_metadata;
+    }
+  }
+
+  if (value_existed) {
+    st = zrq->legacyDeserializeIntoLogMetaData(
+        std::move(legacy_znode.value), log_metadata);
+    if (st != Status::OK) {
       goto err;
+    }
   }
 
   next_step = zrq->applyChanges(log_metadata, value_existed);
@@ -344,8 +387,7 @@ void ZookeeperEpochStore::postRequestCompletion(Status st,
 
 folly::SemiFuture<ZookeeperEpochStore::ZnodeReadResult>
 ZookeeperEpochStore::readLegacyZnode(const RequestContext& context) {
-  auto [promise, future] =
-      folly::makePromiseContract<ZnodeReadResult>();
+  auto [promise, future] = folly::makePromiseContract<ZnodeReadResult>();
   std::string legacy_znode_path = context.zrq->getZnodePath(rootPath());
   auto legacy_znode_cb = [p = std::move(promise)](
                              int rc, std::string value, zk::Stat stat) mutable {
