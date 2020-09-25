@@ -114,7 +114,12 @@ sidebar_label: Settings
 | time-delay-before-force-abort | Time delay before force abort of remaining work is attempted during shutdown. The value is in 50ms time periods. The quiescence condition is checked once every 50ms time period. When the timer expires for the first time, all pending requests are aborted and the timer is restarted. On second expiration all remaining TCP connections are reset (RST packets sent). | 400 | server&nbsp;only |
 | unmap-caches | unmap RocksDB block cache before dumping core (reduces core file size) | true | server&nbsp;only |
 | user | user to switch to if server is run as root |  | requires&nbsp;restart, server&nbsp;only |
-| zk-create-root-znodes | If "false", the root znodes for a tier should be pre-created externally before logdevice can do any ZooKeeper epoch store operations | true | **experimental**, server&nbsp;only |
+
+## Epoch Store
+|   Name    |   Description   |  Default  |   Notes   |
+|-----------|-----------------|:---------:|-----------|
+| epoch-store-double-write-new-serialization-format | If set, epoch stores will double write any data it modifies to its corresponding znode and the data serialized with the new serialization format to the parent znode | false | server&nbsp;only |
+| zk-create-root-znodes | If "false", the root znodes for a tier should be pre-created externally before logdevice can do any ZooKeeper epoch store operations | true | server&nbsp;only |
 
 ## Failure detector
 |   Name    |   Description   |  Default  |   Notes   |

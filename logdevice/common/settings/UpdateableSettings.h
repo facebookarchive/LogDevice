@@ -80,6 +80,7 @@ constexpr const char* Testing = "Testing";
 constexpr const char* WritePath = "Write path";
 constexpr const char* AdminAPI = "Admin API/server";
 constexpr const char* NodeRegistration = "Node Registration";
+constexpr const char* EpochStore = "Epoch Store";
 }; // namespace SettingsCategory
 
 // Every bandle must implement this interface.

@@ -1960,8 +1960,17 @@ void Settings::defineSettings(SettingEasyInit& init) {
       nullptr, // no validation
       "If \"false\", the root znodes for a tier should be pre-created "
       "externally before logdevice can do any ZooKeeper epoch store operations",
-      SERVER | EXPERIMENTAL,
-      SettingsCategory::Core);
+      SERVER,
+      SettingsCategory::EpochStore);
+  init("epoch-store-double-write-new-serialization-format",
+       &epoch_store_double_write_new_serialization_format,
+       "false",
+       nullptr, // no validation
+       "If set, epoch stores will double write any data it modifies to its "
+       "corresponding znode and the data serialized with the new serialization "
+       "format to the parent znode",
+       SERVER,
+       SettingsCategory::EpochStore);
   init("ssl-load-client-cert",
        &ssl_load_client_cert,
        "false",

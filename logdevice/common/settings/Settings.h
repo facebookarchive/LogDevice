@@ -839,6 +839,11 @@ struct Settings : public SettingsBundle {
   // the root znodes should be created by external tooling.
   bool zk_create_root_znodes;
 
+  // If set, epoch stores will double write any data it modifies to its
+  // corresponding znode and the data serialized with the new serialization
+  // format to the parent znode.
+  bool epoch_store_double_write_new_serialization_format;
+
   // Maximum amount of memory that can be allocated by read storage tasks.
   size_t read_storage_tasks_max_mem_bytes;
 

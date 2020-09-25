@@ -14,6 +14,7 @@
 #include <boost/noncopyable.hpp>
 #include <folly/Optional.h>
 #include <folly/concurrency/AtomicSharedPtr.h>
+#include <folly/futures/Future.h>
 #include <zookeeper/zookeeper.h>
 
 #include "logdevice/common/EpochStore.h"
@@ -132,6 +133,26 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
   // had been destroyed
   std::atomic<bool> shutting_down_;
 
+  struct ZnodeReadResult {
+    int zk_return_code;
+    std::string value;
+    zk::Stat stat;
+  };
+
+  // Settings that are persisted along with the request so that you don't change
+  // over the lifetime of the request.
+  struct RequestSettings {
+    // If true, the epoch store handling the request will double write the old
+    // and new serialization format.
+    bool double_write{false};
+  };
+
+  struct RequestContext {
+    std::unique_ptr<ZookeeperEpochStoreRequest> zrq;
+    LogMetaData log_metadata;
+    RequestSettings settings;
+  };
+
   /**
    * Run a zoo_aget() on a znode, optionally followed by a modify and a
    * version-conditional zoo_aset() of a new value into the same znode.
@@ -149,25 +170,26 @@ class ZookeeperEpochStore : public EpochStore, boost::noncopyable {
    * Schedules a request on the Processor after a Zookeeper modification
    * completes.
    */
-  void postRequestCompletion(Status st,
-                             std::unique_ptr<ZookeeperEpochStoreRequest> zrq,
-                             LogMetaData&& log_metadata);
+  void postRequestCompletion(Status st, RequestContext&& context);
 
   /**
    * The callback executed when a znode has been fetched.
    */
-  void onGetZnodeComplete(int rc,
-                          std::string value,
-                          const zk::Stat& stat,
-                          std::unique_ptr<ZookeeperEpochStoreRequest> zrq);
+  void onGetZnodeComplete(RequestContext&& context,
+                          ZnodeReadResult legacy_znode,
+                          folly::Optional<ZnodeReadResult> migration_znode);
 
   /**
    * Provisions znodes for a log that a particular zrq runs on. Executes
    * a zookeeper multiOp.
    */
-  void provisionLogZnodes(std::unique_ptr<ZookeeperEpochStoreRequest> zrq,
-                          LogMetaData&& log_metadata,
-                          std::string znode_value);
+  void provisionLogZnodes(RequestContext&& context, std::string znode_value);
+
+  folly::SemiFuture<ZnodeReadResult>
+  readLegacyZnode(const RequestContext&);
+
+  folly::SemiFuture<folly::Optional<ZnodeReadResult>>
+  readMigrationZnode(const RequestContext&);
 };
 
 }} // namespace facebook::logdevice
