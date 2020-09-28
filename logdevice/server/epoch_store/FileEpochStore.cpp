@@ -47,7 +47,7 @@ FileEpochStore::FileEpochStore(
 
 int FileEpochStore::getLastCleanEpoch(logid_t log_id,
                                       EpochStore::CompletionLCE cf) {
-  LogMetaData log_metadata;
+  auto log_metadata = LogMetaData::forNewLog(log_id);
   auto zrq = std::unique_ptr<ZookeeperEpochStoreRequest>(
       new GetLastCleanEpochZRQ(log_id, cf));
   int rv = updateEpochStore(zrq, log_metadata);
@@ -73,7 +73,7 @@ int FileEpochStore::setLastCleanEpoch(logid_t log_id,
     return -1;
   }
 
-  LogMetaData log_metadata;
+  auto log_metadata = LogMetaData::forNewLog(log_id);
   auto zrq = std::unique_ptr<ZookeeperEpochStoreRequest>(
       new SetLastCleanEpochZRQ(log_id, lce, tail_record, cf));
   int rv = updateEpochStore(zrq, log_metadata);
@@ -93,7 +93,7 @@ int FileEpochStore::createOrUpdateMetaData(
     return -1;
   }
 
-  LogMetaData log_metadata;
+  auto log_metadata = LogMetaData::forNewLog(log_id);
   auto zrq = std::unique_ptr<ZookeeperEpochStoreRequest>(
       new EpochMetaDataZRQ(log_id,
                            cf,
@@ -116,7 +116,7 @@ int FileEpochStore::provisionMetaDataLog(
     return -1;
   }
 
-  LogMetaData log_metadata;
+  auto log_metadata = LogMetaData::forNewLog(log_id);
   auto zrq = std::unique_ptr<ZookeeperEpochStoreRequest>(
       new EpochMetaDataZRQ(log_id,
                            [](auto, auto, auto, auto) {},

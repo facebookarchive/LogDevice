@@ -8,6 +8,10 @@
 
 #include "logdevice/server/epoch_store/LogMetaData.h"
 
+#include "logdevice/common/MetaDataLog.h"
+#include "logdevice/common/types_internal.h"
+#include "logdevice/include/types.h"
+
 namespace facebook { namespace logdevice {
 
 LogMetaData::Version LogMetaData::getVersion() const {
@@ -46,6 +50,34 @@ std::string LogMetaData::toString() const {
 void LogMetaData::touch() {
   version = Version(version.val_ + 1);
   last_changed_timestamp = SystemTimestamp::now();
+}
+
+/* static */ LogMetaData LogMetaData::forNewLog(logid_t log_id) {
+  // For backward comptability, new logs should have a valid dummy TailRecord.
+  const auto build_dummy_tail_record = [](logid_t logid) {
+    OffsetMap offsets;
+    offsets.setCounter(BYTE_OFFSET, EPOCH_INVALID.val());
+    return TailRecord{TailRecordHeader{logid,
+                       LSN_INVALID,
+                       EPOCH_INVALID.val(),
+                       {BYTE_OFFSET_INVALID /* deprecated, offsets_within_epoch used instead */},
+                       /*flags*/ 0,
+                       {}},
+                       std::move(offsets),
+                       PayloadHolder()};
+  };
+
+  LogMetaData log_metadata;
+
+  log_metadata.data_last_clean_epoch = EPOCH_INVALID;
+  log_metadata.data_tail_record =
+      build_dummy_tail_record(MetaDataLog::dataLogID(log_id));
+
+  log_metadata.metadata_last_clean_epoch = EPOCH_INVALID;
+  log_metadata.metadata_tail_record =
+      build_dummy_tail_record(MetaDataLog::metaDataLogID(log_id));
+
+  return log_metadata;
 }
 
 }} // namespace facebook::logdevice

@@ -38,6 +38,13 @@ class LogMetaData {
   std::string toString() const;
 
   /**
+   * For backward comptability with existing deserializers, we need to guarantee
+   * that for a newly provisioned LogMetaData, we have a valid LCE information
+   * (more specifically valid dummy TailRecord).
+   */
+  static LogMetaData forNewLog(logid_t);
+
+  /**
    * Increments the version and updates the last changed timestamp.
    */
   void touch();

@@ -498,9 +498,10 @@ ZookeeperEpochStore::readMigrationZnode(const RequestContext& context) {
 int ZookeeperEpochStore::runRequest(
     std::unique_ptr<ZookeeperEpochStoreRequest> zrq) {
   ld_check(zrq);
+  auto logid = zrq->logid_;
   RequestContext context{
       std::move(zrq),
-      LogMetaData(),
+      LogMetaData::forNewLog(logid),
       RequestSettings{
           /* double_write */ settings_
               ->epoch_store_double_write_new_serialization_format,
