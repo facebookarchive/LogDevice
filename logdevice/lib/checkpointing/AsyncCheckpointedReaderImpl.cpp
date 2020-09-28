@@ -96,9 +96,6 @@ int AsyncCheckpointedReaderImpl::resumeReading(logid_t log_id) {
   return reader_->resumeReading(log_id);
 }
 
-void AsyncCheckpointedReaderImpl::setMonitoringTier(MonitoringTier tier) {
-  return reader_->setMonitoringTier(tier);
-}
 void AsyncCheckpointedReaderImpl::addMonitoringTag(std::string tag) {
   return reader_->addMonitoringTag(std::move(tag));
 }

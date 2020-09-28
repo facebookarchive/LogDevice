@@ -90,10 +90,6 @@ void SyncCheckpointedReaderImpl::waitOnlyWhenNoData() {
   reader_->waitOnlyWhenNoData();
 }
 
-void SyncCheckpointedReaderImpl::setMonitoringTier(MonitoringTier tier) {
-  reader_->setMonitoringTier(tier);
-}
-
 void SyncCheckpointedReaderImpl::addMonitoringTag(std::string tag) {
   reader_->addMonitoringTag(std::move(tag));
 }

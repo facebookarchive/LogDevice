@@ -454,7 +454,6 @@ class ClientReadStream : boost::noncopyable {
                    std::shared_ptr<UpdateableConfig> config,
                    ReaderBridge* reader = nullptr,
                    const ReadStreamAttributes* attrs = nullptr,
-                   MonitoringTier tier = MonitoringTier::MEDIUM_PRI,
                    const std::set<std::string>& monitoring_tags = {},
                    folly::Optional<SCDCopysetReordering>
                        scd_copyset_reordering = folly::none);

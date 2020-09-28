@@ -290,7 +290,6 @@ read_stream_id_t ReplicatedStateMachine<T, D>::createBasicReadStream(
       processor->config_,
       nullptr,
       nullptr,
-      MonitoringTier::MEDIUM_PRI,
       std::set<std::string>{},
       SCDCopysetReordering(processor->settings()->rsm_scd_copyset_reordering));
 

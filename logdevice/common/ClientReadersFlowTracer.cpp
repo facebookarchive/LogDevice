@@ -217,9 +217,6 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
         "waiting_for_node", readerIsStuck() ? owner_->waitingForNodeStr() : "");
     sample->addNormalValue("reading_mode", owner_->readingModeStr());
     sample->addNormalValue("state", toString(last_reported_state_));
-    sample->addNormalValue(
-        "monitoring_tier",
-        folly::join(",", owner_->monitoring_tags_)); // deprecated
     sample->addSetValue("monitoring_tags",
                         std::set<std::string>(owner_->monitoring_tags_.begin(),
                                               owner_->monitoring_tags_.end()));

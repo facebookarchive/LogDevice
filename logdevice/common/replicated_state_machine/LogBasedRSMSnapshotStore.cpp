@@ -99,7 +99,6 @@ read_stream_id_t LogBasedRSMSnapshotStore::createBasicReadStream(
       processor_->config_,
       nullptr,
       nullptr,
-      MonitoringTier::MEDIUM_PRI,
       std::set<std::string>{},
       SCDCopysetReordering(processor_->settings()->rsm_scd_copyset_reordering));
 

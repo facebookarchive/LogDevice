@@ -36,8 +36,6 @@ class MockReader : public Reader {
 
   MOCK_METHOD0(waitOnlyWhenNoData, void());
 
-  MOCK_METHOD1(setMonitoringTier, void(MonitoringTier));
-
   MOCK_METHOD1(addMonitoringTag, void(std::string));
 
   MOCK_METHOD0(withoutPayload, void());

@@ -30,16 +30,6 @@ LOGDEVICE_STRONG_TYPEDEF(uint64_t, logid_t);
 // Used by VersionedConfigStore
 LOGDEVICE_STRONG_TYPEDEF(uint64_t, vcs_config_version_t);
 
-// Used by Stats and client APIs
-enum class MonitoringTier : uint8_t {
-  HIGH_PRI = 0,
-  MEDIUM_PRI = 1,
-  LOW_PRI = 2,
-  MAX = 3
-};
-
-std::string toString(MonitoringTier);
-
 constexpr logid_t LOGID_INVALID(0);
 constexpr logid_t LOGID_INVALID2(~0);
 

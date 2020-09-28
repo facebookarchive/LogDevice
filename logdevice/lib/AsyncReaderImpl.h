@@ -40,7 +40,6 @@ class AsyncReaderImpl : public AsyncReader {
                    const ReadStreamAttributes* attrs = nullptr) override;
   int stopReading(logid_t log_id, std::function<void()> callback) override;
   int resumeReading(logid_t log_id) override;
-  void setMonitoringTier(MonitoringTier tier) override;
   void addMonitoringTag(std::string) override;
   void withoutPayload() override;
   void payloadHashOnly();
@@ -97,7 +96,6 @@ class AsyncReaderImpl : public AsyncReader {
   std::function<void(logid_t)> done_callback_;
   std::function<void(logid_t, HealthChangeType)> health_change_callback_;
 
-  MonitoringTier monitoring_tier_{MonitoringTier::MEDIUM_PRI};
   std::set<std::string> monitoring_tags_{};
 
   // Indicates withoutPayload() was called

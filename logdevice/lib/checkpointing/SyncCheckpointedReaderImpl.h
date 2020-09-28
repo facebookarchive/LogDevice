@@ -46,8 +46,6 @@ class SyncCheckpointedReaderImpl : public SyncCheckpointedReader {
 
   void waitOnlyWhenNoData() override;
 
-  void setMonitoringTier(MonitoringTier tier) override;
-
   void addMonitoringTag(std::string) override;
 
   void withoutPayload() override;

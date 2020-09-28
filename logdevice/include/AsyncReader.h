@@ -192,14 +192,6 @@ class AsyncReader {
   virtual int resumeReading(logid_t log_id) = 0;
 
   /**
-   * Defines monitoring tier for this reader. Each tier is tracked separately,
-   * allowing for different alarming, SLAs, etc for each.
-   *
-   * Only affects subsequent startReading() calls.
-   */
-  virtual void setMonitoringTier(MonitoringTier tier) = 0;
-
-  /**
    * Adds a monitoring tag to this reader. Monitoring tags are used to help
    * identify readers that belong to a particular user, use case, function, etc
    * for monitoring purposes.

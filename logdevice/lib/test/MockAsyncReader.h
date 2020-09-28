@@ -37,8 +37,6 @@ class MockAsyncReader : public AsyncReader {
 
   MOCK_METHOD1(resumeReading, int(logid_t log_id));
 
-  MOCK_METHOD1(setMonitoringTier, void(MonitoringTier));
-
   MOCK_METHOD1(addMonitoringTag, void(std::string));
 
   MOCK_METHOD0(withoutPayload, void());

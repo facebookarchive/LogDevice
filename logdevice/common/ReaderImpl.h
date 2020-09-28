@@ -50,7 +50,6 @@ class ReaderImpl : public Reader {
                std::vector<std::unique_ptr<DataRecord>>* data_out,
                GapRecord* gap_out) override;
   void waitOnlyWhenNoData() override;
-  void setMonitoringTier(MonitoringTier tier) override;
   void addMonitoringTag(std::string) override;
   void withoutPayload() override;
   void payloadHashOnly();
@@ -369,7 +368,6 @@ class ReaderImpl : public Reader {
   // because we want every gap to wake blocking reads.
   std::atomic<int64_t> gap_count_{0};
 
-  MonitoringTier monitoring_tier_{MonitoringTier::MEDIUM_PRI};
   std::set<std::string> monitoring_tags_{};
 
   // Maintain a few tidbids for each log being read from

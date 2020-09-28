@@ -106,10 +106,6 @@ void AsyncReaderImpl::setHealthChangeCallback(
   health_change_callback_ = std::move(cb);
 }
 
-void AsyncReaderImpl::setMonitoringTier(MonitoringTier tier) {
-  monitoring_tier_ = tier;
-}
-
 void AsyncReaderImpl::addMonitoringTag(std::string tag) {
   monitoring_tags_.emplace(std::move(tag));
 }
@@ -339,7 +335,6 @@ int AsyncReaderImpl::startReading(logid_t log_id,
       processor_->config_,
       nullptr,
       attrs,
-      monitoring_tier_,
       monitoring_tags_);
 
   if (without_payload_) {

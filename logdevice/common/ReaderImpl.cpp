@@ -325,7 +325,6 @@ int ReaderImpl::startReadingImpl(logid_t log_id,
       processor_->config_,
       bridge_.get(),
       attrs,
-      monitoring_tier_,
       monitoring_tags_);
 
   if (without_payload_) {
@@ -626,10 +625,6 @@ void ReaderImpl::read_handleData(
   // the payload will get freed when the application deletes the DataRecord.
   data_out->push_back(entry.releaseData());
   ++nread_;
-}
-
-void ReaderImpl::setMonitoringTier(MonitoringTier tier) {
-  monitoring_tier_ = tier;
 }
 
 void ReaderImpl::addMonitoringTag(std::string tag) {

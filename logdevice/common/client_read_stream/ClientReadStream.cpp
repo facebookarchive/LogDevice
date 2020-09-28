@@ -111,7 +111,6 @@ ClientReadStream::ClientReadStream(
     std::shared_ptr<UpdateableConfig> config,
     ReaderBridge* reader,
     const ReadStreamAttributes* attrs,
-    MonitoringTier tier,
     const std::set<std::string>& monitoring_tags,
     folly::Optional<SCDCopysetReordering> scd_copyset_reordering)
     : id_(id),
@@ -142,7 +141,6 @@ ClientReadStream::ClientReadStream(
   if (attrs != nullptr) {
     attrs_ = *attrs;
   }
-  monitoring_tags_.emplace_back(toString(tier));
 
   calcWindowHigh();
   calcNextLSNToSlideWindow();
