@@ -11,7 +11,7 @@
 
 #include "folly/Random.h"
 #include "logdevice/common/Connection.h"
-#include "logdevice/common/Sender.h"
+#include "logdevice/common/SocketSender.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/stats/Stats.h"
 
@@ -42,8 +42,10 @@ OverloadDetectorDependencies::getNodesConfiguration() {
   return Worker::onThisThread()->getNodesConfiguration();
 }
 
-Connection* OverloadDetectorDependencies::getConnectionFor(node_index_t nid) {
-  return Worker::onThisThread()->sender().findServerConnection(nid);
+Connection* FOLLY_NULLABLE
+OverloadDetectorDependencies::getConnectionFor(node_index_t nid) {
+  auto* sender = Worker::onThisThread()->socketSender();
+  return sender ? sender->findServerConnection(nid) : nullptr;
 }
 
 ssize_t OverloadDetectorDependencies::getTcpRecvBufOccupancy(node_index_t nid) {

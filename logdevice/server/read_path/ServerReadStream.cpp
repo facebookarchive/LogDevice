@@ -11,6 +11,7 @@
 #include <string>
 
 #include "logdevice/common/AdminCommandTable.h"
+#include "logdevice/common/SocketSender.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
@@ -282,8 +283,10 @@ void ServerReadStream::getDebugInfo(InfoReadersTable& table) const {
   size_t current_meter_level = getCurrentMeterLevel();
   table.set<22>(current_meter_level);
 
-  ssize_t send_buf_occupancy =
-      worker->sender().getTcpSendBufOccupancyForClient(client_id_);
+  const auto* socket_sender = worker->socketSender();
+  ssize_t send_buf_occupancy = socket_sender
+      ? socket_sender->getTcpSendBufOccupancyForClient(client_id_)
+      : -1;
   table.set<25>(send_buf_occupancy);
 }
 

@@ -7,7 +7,7 @@
  */
 #pragma once
 
-#include "logdevice/common/Sender.h"
+#include "logdevice/common/SocketSender.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/server/admincommands/AdminCommand.h"
@@ -23,9 +23,14 @@ class DumpQueuedMessagesRequest : public Request {
 
   Execution execute() override {
     Worker* w = Worker::onThisThread();
-    ld_info("Messages queued in all sockets on %s: %s",
-            w->getName().c_str(),
-            w->sender().dumpQueuedMessages(Address(ClientID::INVALID)).c_str());
+    auto* sender = w->socketSender();
+    if (sender) {
+      ld_info("Messages queued in all sockets on %s: %s",
+              w->getName().c_str(),
+              sender->dumpQueuedMessages(Address(ClientID::INVALID)).c_str());
+    } else {
+      ld_error("Operation not supported");
+    }
     return Execution::COMPLETE;
   }
 

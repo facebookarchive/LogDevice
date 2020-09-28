@@ -12,8 +12,8 @@
 
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Request.h"
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/ShapingContainer.h"
+#include "logdevice/common/SocketSender.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/NodeLocation.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
@@ -244,13 +244,16 @@ bool TrafficShaper::dispatchUpdateNw() {
 
   processor_->applyToWorkers(
       [&](Worker& w) {
-        if (w.sender().getNwShapingContainer()->applyFlowGroupsUpdate(
-                *nw_update_, stats_)) {
-          std::unique_ptr<Request> run_req =
-              std::make_unique<RunFlowGroupsRequest>(
-                  w.sender().getNwShapingContainer(),
-                  RequestType::TRAFFIC_SHAPER_RUN_FLOW_GROUPS);
-          processor_->postImportant(run_req, w.worker_type_, w.idx_.val());
+        auto* sender = w.socketSender();
+        if (sender) {
+          auto* shaping_container = sender->getNwShapingContainer();
+          if (shaping_container->applyFlowGroupsUpdate(*nw_update_, stats_)) {
+            std::unique_ptr<Request> run_req =
+                std::make_unique<RunFlowGroupsRequest>(
+                    shaping_container,
+                    RequestType::TRAFFIC_SHAPER_RUN_FLOW_GROUPS);
+            processor_->postImportant(run_req, w.worker_type_, w.idx_.val());
+          }
         }
       },
       Processor::Order::RANDOM);

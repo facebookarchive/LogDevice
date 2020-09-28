@@ -25,8 +25,8 @@
 #include "logdevice/common/PayloadHolder.h"
 #include "logdevice/common/PeriodicReleases.h"
 #include "logdevice/common/Processor.h"
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/Sequencer.h"
+#include "logdevice/common/SocketSender.h"
 #include "logdevice/common/TailRecord.h"
 #include "logdevice/common/TraceLogger.h"
 #include "logdevice/common/Worker.h"
@@ -2130,11 +2130,12 @@ NodeID Appender::getMyNodeID() const {
 }
 
 std::string Appender::describeConnection(const Address& addr) const {
-  return Worker::onThisThread()->sender().describeConnection(addr);
+  return Sender::describeConnection(addr);
 }
 
 bool Appender::bytesPendingLimitReached(const PeerType peer_type) const {
-  return Worker::onThisThread()->sender().bytesPendingLimitReached(peer_type);
+  auto* socket_sender = Worker::onThisThread()->socketSender();
+  return socket_sender && socket_sender->bytesPendingLimitReached(peer_type);
 }
 
 bool Appender::isAcceptingWork() const {

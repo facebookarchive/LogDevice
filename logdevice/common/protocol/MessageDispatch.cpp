@@ -7,7 +7,6 @@
  */
 #include "logdevice/common/protocol/MessageDispatch.h"
 
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/protocol/MessageTracer.h"

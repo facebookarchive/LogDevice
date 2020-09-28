@@ -21,9 +21,9 @@
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Semaphore.h"
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/SocketCallback.h"
 #include "logdevice/common/SocketDependencies.h"
+#include "logdevice/common/SocketSender.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/network/AsyncSocketAdapter.h"
@@ -105,7 +105,7 @@ struct SocketConnectRequest : public Request {
                    flow_group,
                    std::make_unique<SocketDependencies>(
                        Worker::onThisThread()->processor_,
-                       &Worker::onThisThread()->sender()),
+                       Worker::onThisThread()->socketSender()),
                    std::make_unique<AsyncSocketAdapter>(base.getEventBase()));
     } catch (const ConstructorFailed&) {
       constructor_failed = true;
@@ -118,7 +118,7 @@ struct SocketConnectRequest : public Request {
     try {
       auto deps = std::make_unique<SocketDependencies>(
           Worker::onThisThread()->processor_,
-          &Worker::onThisThread()->sender());
+          Worker::onThisThread()->socketSender());
       const auto throttle_settings = deps->getSettings().connect_throttle;
       connect_throttle = std::make_unique<ConnectThrottle>(throttle_settings);
       SocketConnectRequest::conn = std::make_unique<Connection>(
@@ -949,7 +949,8 @@ struct SendMessageOnCloseRequest : public Request {
   Request::Execution execute() override {
     ThreadID::set(ThreadID::SERVER_WORKER, "");
     Worker* w = Worker::onThisThread();
-    auto& sender = w->sender();
+    SocketSender* sender = w->socketSender();
+    EXPECT_TRUE(sender);
     auto msg = std::make_unique<VarLengthTestMessage>(
         Compatibility::MAX_PROTOCOL_SUPPORTED, 10);
     if (first_msg_) {
@@ -961,15 +962,15 @@ struct SendMessageOnCloseRequest : public Request {
         std::unique_ptr<Request> rq(std::move(onclose_req));
         EXPECT_EQ(0, Worker::onThisThread()->tryPost(rq));
       });
-      int rv = sender.sendMessage(std::move(msg), firstNodeID);
+      int rv = sender->sendMessage(std::move(msg), firstNodeID);
       EXPECT_EQ(0, rv);
       EXPECT_FALSE(msg);
     } else {
       auto on_close = new OnClose;
-      int rv = sender.sendMessage(std::move(msg), firstNodeID, on_close);
+      int rv = sender->sendMessage(std::move(msg), firstNodeID, on_close);
       EXPECT_EQ(0, rv);
       EXPECT_FALSE(msg);
-      auto conn = sender.findServerConnection(firstNodeID.index());
+      auto conn = sender->findServerConnection(firstNodeID.index());
       EXPECT_GT(conn->getBufferedBytesSize(), 0);
       conn->close(E::INTERNAL);
       EXPECT_EQ(conn->getBufferedBytesSize(), 0);
@@ -986,14 +987,15 @@ struct SendMessageOnCloseRequest : public Request {
     void operator()(Status st, const Address& /*name*/) override {
       ASSERT_EQ(st, E::INTERNAL);
       Worker* w = Worker::onThisThread();
-      auto& sender = w->sender();
-      auto conn = sender.findServerConnection(firstNodeID.index());
+      auto* sender = w->socketSender();
+      ASSERT_TRUE(sender);
+      auto conn = sender->findServerConnection(firstNodeID.index());
       int rv =
-          sender.sendMessage(std::make_unique<VarLengthTestMessage>(
-                                 Compatibility::MAX_PROTOCOL_SUPPORTED, 10),
-                             firstNodeID);
+          sender->sendMessage(std::make_unique<VarLengthTestMessage>(
+                                  Compatibility::MAX_PROTOCOL_SUPPORTED, 10),
+                              firstNodeID);
       EXPECT_EQ(0, rv);
-      EXPECT_NE(conn, sender.findServerConnection(firstNodeID.index()));
+      EXPECT_NE(conn, sender->findServerConnection(firstNodeID.index()));
       delete this;
     }
   };

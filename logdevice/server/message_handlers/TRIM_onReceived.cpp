@@ -143,9 +143,8 @@ send_reply(TRIM_Message* msg,
   }
 
   // Check if socket still exists.
-  const auto identity = worker->sender().getPrincipal(from);
-  auto sock_addr = worker->sender().getSockaddr(from);
-  if (!identity || sock_addr == Sockaddr::INVALID) {
+  const auto* info = worker->sender().getConnectionInfo(from);
+  if (!info) {
     RATELIMIT_INFO(std::chrono::seconds(1),
                    3,
                    "Got TRIM_Message for log %lu but "
@@ -172,14 +171,14 @@ send_reply(TRIM_Message* msg,
 
   // queue a task that'll write trim_point to the log store, update the
   // state map and send a reply to the client
-  auto task =
-      std::make_unique<WriteTrimMetadataTask>(header.log_id,
-                                              header.trim_point,
-                                              from,
-                                              header.client_rqid,
-                                              Sender::describeConnection(from),
-                                              sock_addr.toStringNoPort(),
-                                              *identity);
+  auto task = std::make_unique<WriteTrimMetadataTask>(
+      header.log_id,
+      header.trim_point,
+      from,
+      header.client_rqid,
+      Sender::describeConnection(from),
+      info->peer_address.toStringNoPort(),
+      *info->principal);
   worker->getStorageTaskQueueForShard(shard_idx)->putTask(std::move(task));
 
   return Message::Disposition::NORMAL;

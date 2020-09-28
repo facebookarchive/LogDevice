@@ -8,7 +8,6 @@
 #include "logdevice/common/RecipientSet.h"
 
 #include "logdevice/common/Appender.h"
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/protocol/STORE_Message.h"
 
 namespace facebook { namespace logdevice {

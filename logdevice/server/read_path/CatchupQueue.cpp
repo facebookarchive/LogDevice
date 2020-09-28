@@ -13,8 +13,8 @@
 #include "logdevice/common/BackoffTimer.h"
 #include "logdevice/common/ExponentialBackoffTimer.h"
 #include "logdevice/common/LocalLogStoreRecordFormat.h"
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/ShapingContainer.h"
+#include "logdevice/common/SocketSender.h"
 #include "logdevice/common/Timer.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
@@ -762,9 +762,11 @@ size_t CatchupQueueDependencies::getMaxRecordBytesQueued(ClientID client) {
   // socket's sendbuf size.  The rationale is to keep the TCP connection
   // sufficiently busy while not reading faster than necessary and buffering
   // excessively.
-  ssize_t max_record_bytes_queued = Worker::settings().output_max_records_kb > 0
+  const auto* sender = w->socketSender();
+  ssize_t max_record_bytes_queued =
+      Worker::settings().output_max_records_kb > 0 || !sender
       ? Worker::settings().output_max_records_kb * 1024
-      : w->sender().getTcpSendBufSizeForClient(client);
+      : sender->getTcpSendBufSizeForClient(client);
   if (max_record_bytes_queued <= 0) {
     // This ought to have tripped an assert in
     // Sender::getTcpSendBufSizeForClient() but no reason to crash production

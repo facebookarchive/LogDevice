@@ -21,8 +21,8 @@
 #include "logdevice/common/ConnectionKind.h"
 #include "logdevice/common/NoopTraceLogger.h"
 #include "logdevice/common/Processor.h"
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/SocketCallback.h"
+#include "logdevice/common/SocketSender.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
@@ -361,12 +361,14 @@ class OnClientCloseTestRequest : public Request {
     snprintf(port, sizeof(port), "%d", cid_.getIdx());
 
     Worker* w = Worker::onThisThread();
-    int rv = w->sender().addClient(sock_,
-                                   Sockaddr("127.0.0.1", port),
-                                   ResourceBudget::Token(),
-                                   SocketType::DATA,
-                                   ConnectionType::PLAIN,
-                                   ConnectionKind::DATA);
+    auto* sender = w->socketSender();
+    EXPECT_TRUE(sender);
+    int rv = sender->addClient(sock_,
+                               Sockaddr("127.0.0.1", port),
+                               ResourceBudget::Token(),
+                               SocketType::DATA,
+                               ConnectionType::PLAIN,
+                               ConnectionKind::DATA);
     EXPECT_EQ(0, rv);
 
     rv =
@@ -515,7 +517,9 @@ TEST(MessagingTest, ConnectionLimit) {
           sem_(sem),
           token_(std::move(token)) {}
     Request::Execution execute() override {
-      int rv = Worker::onThisThread()->sender().addClient(
+      auto* socket_sender = Worker::onThisThread()->socketSender();
+      EXPECT_TRUE(socket_sender);
+      int rv = socket_sender->addClient(
           fd_,
           Sockaddr("127.0.0.1", folly::to<std::string>(fd_).c_str()),
           std::move(token_),

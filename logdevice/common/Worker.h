@@ -129,6 +129,7 @@ class RebuildingCoordinatorInterface;
 class Request;
 class SSLFetcher;
 class Sender;
+class SocketSender;
 class SequencerBackgroundActivator;
 class ServerConfig;
 class ShapingContainer;
@@ -399,6 +400,9 @@ class Worker : public WorkContext {
   // An interface for sending Messages on this Worker. This object owns all
   // Connections on this Worker.
   Sender& sender() const;
+
+  // Returns pointer to SocketSender if the worker supports raw socket API
+  SocketSender* FOLLY_NULLABLE socketSender() const;
 
   /**
    * Creates an instance of Thrift client for sending RPC to given node.

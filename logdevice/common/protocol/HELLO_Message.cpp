@@ -355,7 +355,8 @@ sendReply(ACK_Header& ackhdr,
 
   // log the handshake result
   if (should_log) {
-    auto conn_type = worker->sender().getSockConnType(from);
+    const auto* info = worker->sender().getConnectionInfo(from);
+    auto conn_type = info ? info->connection_type : ConnectionType::NONE;
     ClientHelloInfoTracer logger(worker->getTraceLogger());
 
     logger.traceClientHelloInfo(

@@ -9,7 +9,6 @@
 #include <gtest/gtest.h>
 
 #include "common/fb303/if/gen-cpp2/FacebookService.h"
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/if/gen-cpp2/LogDeviceAPIAsyncClient.h"
 #include "logdevice/common/request_util.h"

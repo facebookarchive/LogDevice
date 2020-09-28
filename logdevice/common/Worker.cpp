@@ -8,6 +8,7 @@
 #include "logdevice/common/Worker.h"
 
 #include <algorithm>
+#include <memory>
 #include <pthread.h>
 #include <string>
 #include <unistd.h>
@@ -55,6 +56,7 @@
 #include "logdevice/common/SequencerBackgroundActivator.h"
 #include "logdevice/common/ServerConfigUpdatedRequest.h"
 #include "logdevice/common/ShapingContainer.h"
+#include "logdevice/common/SocketSender.h"
 #include "logdevice/common/SyncSequencerRequest.h"
 #include "logdevice/common/TraceLogger.h"
 #include "logdevice/common/TrimRequest.h"
@@ -116,20 +118,21 @@ class WorkerImpl {
   WorkerImpl(Worker* w,
              const std::shared_ptr<UpdateableConfig>& config,
              StatsHolder* stats)
-      : sender_(w,
-                w->processor_,
-                w->immutable_settings_,
-                w->getEventBase(),
-                config->get()->serverConfig()->getTrafficShapingConfig(),
-                &w->processor_->clientIdxAllocator(),
-                w->worker_type_ == WorkerType::FAILURE_DETECTOR,
-                config->getNodesConfiguration(),
-                getMyNodeIndex(w),
-                getMyLocation(config, w),
-                std::unique_ptr<IConnectionFactory>(
-                    new AsyncSocketConnectionFactory(
-                        w->getEvBase().getEventBase())),
-                stats),
+      : sender_(std::make_unique<SocketSender>(
+            w,
+            w->processor_,
+            w->immutable_settings_,
+            w->getEventBase(),
+            config->get()->serverConfig()->getTrafficShapingConfig(),
+            &w->processor_->clientIdxAllocator(),
+            w->worker_type_ == WorkerType::FAILURE_DETECTOR,
+            config->getNodesConfiguration(),
+            getMyNodeIndex(w),
+            getMyLocation(config, w),
+            std::unique_ptr<IConnectionFactory>(
+                new AsyncSocketConnectionFactory(
+                    w->getEvBase().getEventBase())),
+            stats)),
         activeAppenders_(w->immutable_settings_->server ? N_APPENDER_MAP_BUCKETS
                                                         : 1),
         // AppenderBuffer queue capacity is the system-wide per-log limit
@@ -159,7 +162,7 @@ class WorkerImpl {
   }
 
   ShardAuthoritativeStatusManager shardStatusManager_;
-  Sender sender_;
+  std::unique_ptr<Sender> sender_;
   FindKeyRequestMap runningFindKey_;
   FireAndForgetRequestMap runningFireAndForgets_;
   TrimRequestMap runningTrimRequests_;
@@ -457,7 +460,7 @@ void Worker::onSettingsUpdated() {
     impl_->sequencerBackgroundActivator_->onSettingsUpdated();
   }
 
-  impl_->sender_.onSettingsUpdated(immutable_settings_);
+  impl_->sender_->onSettingsUpdated(immutable_settings_);
 }
 
 void Worker::initializeSubscriptions() {
@@ -1114,7 +1117,11 @@ void Worker::unpackRunContext(
 //
 
 Sender& Worker::sender() const {
-  return impl_->sender_;
+  return *impl_->sender_;
+}
+
+SocketSender* FOLLY_NULLABLE Worker::socketSender() const {
+  return dynamic_cast<SocketSender*>(impl_->sender_.get());
 }
 
 ThriftRouter* Worker::getThriftRouter() const {

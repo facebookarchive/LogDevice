@@ -8,8 +8,8 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/SSLFetcher.h"
 #include "logdevice/common/SSLPrincipalParser.h"
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/Sockaddr.h"
+#include "logdevice/common/SocketSender.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/Worker.h"
@@ -31,7 +31,8 @@ using folly::SSLContext;
 using namespace std::placeholders;
 // SocketDependencies is created during socket creation from worker context.
 // Save off all the fields that need explicit worker access.
-SocketDependencies::SocketDependencies(Processor* processor, Sender* sender)
+SocketDependencies::SocketDependencies(Processor* processor,
+                                       SocketSender* sender)
     : processor_(processor),
       sender_(sender),
       worker_(Worker::onThisThread(false /*enforce_worker*/)) {}

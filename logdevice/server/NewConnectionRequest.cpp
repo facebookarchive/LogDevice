@@ -7,7 +7,7 @@
  */
 #include "logdevice/server/NewConnectionRequest.h"
 
-#include "logdevice/common/Sender.h"
+#include "logdevice/common/SocketSender.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
 
@@ -23,12 +23,14 @@ Request::Execution NewConnectionRequest::execute() {
     conntype_ = ConnectionType::SSL;
   }
 
-  int rv = w->sender().addClient(fd_,
-                                 client_addr_,
-                                 std::move(conn_token_),
-                                 sock_type_,
-                                 conntype_,
-                                 connection_kind_);
+  auto* sender = w->socketSender();
+  ld_check(sender);
+  int rv = sender->addClient(fd_,
+                             client_addr_,
+                             std::move(conn_token_),
+                             sock_type_,
+                             conntype_,
+                             connection_kind_);
 
   if (rv == 0) {
     ld_debug("A new connection from %s is running on "

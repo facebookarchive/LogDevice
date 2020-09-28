@@ -18,7 +18,7 @@
 #include "logdevice/common/ClusterState.h"
 #include "logdevice/common/GetClusterStateRequest.h"
 #include "logdevice/common/NodeID.h"
-#include "logdevice/common/Sender.h"
+#include "logdevice/common/SocketSender.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/request_util.h"
@@ -1585,7 +1585,10 @@ FailureDetector::getNodeBoycottObject(node_index_t node_index) {
 }
 
 void FailureDetector::resetServerSocketConnectThrottle(node_index_t node_idx) {
-  Worker::onThisThread()->sender().resetServerSocketConnectThrottle(node_idx);
+  auto* socket_sender = Worker::onThisThread()->socketSender();
+  if (socket_sender) {
+    socket_sender->resetServerSocketConnectThrottle(node_idx);
+  }
 }
 
 int FailureDetector::checkServerConnection(node_index_t node_idx) {

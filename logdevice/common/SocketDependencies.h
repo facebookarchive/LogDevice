@@ -19,13 +19,13 @@ class NodesConfiguration;
 }} // namespace configuration::nodes
 
 class Processor;
-class Sender;
 class Configuration;
 class SSLPrincipalParser;
 class ServerConfig;
 class StatsHolder;
 struct Settings;
 class Sockaddr;
+class SocketSender;
 class SSLSessionCache;
 class Worker;
 
@@ -36,7 +36,7 @@ class SocketDependencies {
  public:
   using SSLCtxPtr = std::shared_ptr<folly::SSLContext>;
 
-  SocketDependencies(Processor* processor, Sender* sender);
+  SocketDependencies(Processor* processor, SocketSender* sender);
   virtual const Settings& getSettings() const;
   virtual StatsHolder* getStats() const;
   virtual std::shared_ptr<Configuration> getConfig() const;
@@ -113,7 +113,7 @@ class SocketDependencies {
 
  private:
   Processor* const processor_;
-  Sender* sender_;
+  SocketSender* sender_;
   Worker* const worker_;
 };
 }} // namespace facebook::logdevice

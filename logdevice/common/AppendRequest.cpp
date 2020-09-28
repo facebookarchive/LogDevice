@@ -16,8 +16,8 @@
 #include "logdevice/common/AppendProbeController.h"
 #include "logdevice/common/MetaDataLog.h"
 #include "logdevice/common/Processor.h"
-#include "logdevice/common/Sender.h"
 #include "logdevice/common/SequencerLocator.h"
+#include "logdevice/common/SocketSender.h"
 #include "logdevice/common/StreamAppendRequest.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
@@ -694,8 +694,10 @@ void AppendRequest::onTimeout() {
 }
 
 void AppendRequest::resetServerSocketConnectThrottle(NodeID node_id) {
-  Worker::onThisThread()->sender().resetServerSocketConnectThrottle(
-      node_id.index());
+  auto* socket_sender = Worker::onThisThread()->socketSender();
+  if (socket_sender) {
+    socket_sender->resetServerSocketConnectThrottle(node_id.index());
+  }
 }
 
 bool AppendRequest::checkPayloadSize(size_t payload_size,
