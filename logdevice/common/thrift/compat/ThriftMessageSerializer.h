@@ -10,7 +10,7 @@
 
 #include <folly/io/IOBuf.h>
 
-#include "logdevice/common/if/gen-cpp2/api_model_types.h"
+#include "logdevice/common/if/gen-cpp2/ApiModel_types.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/protocol/ProtocolHeader.h"
 

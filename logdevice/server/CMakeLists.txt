@@ -25,7 +25,7 @@ add_library(logdevice_server_core STATIC ${hfiles} ${files})
 
 target_link_libraries(logdevice_server_core
   common
-  api_service-cpp2
+  ApiService-cpp2
   EpochStore-cpp2
   ldclient_static
   logdevice_admin_settings

@@ -7,29 +7,28 @@
  */
 
 include "common/fb303/if/fb303.thrift"
-include "logdevice/common/if/api_model.thrift"
+include "logdevice/common/if/ApiModel.thrift"
 
 namespace cpp2 facebook.logdevice.thrift
 
 // *** LogDevice server API
 service LogDeviceAPI extends fb303.FacebookService {
-
   // Compatibility part of API starts
   //
   // These methods used as a temporary solution to enable Thrift migration and
   // emulate existing RPC protocol on top the Thrift.
 
-   /**
+  /**
     * Opens stream enabling the server to send messages back to
     * the client outside of normal RPC request-response rounds
     */
-   api_model.SessionResponse, stream<api_model.Message> createSession(1:
-      api_model.SessionRequest request);
+  ApiModel.SessionResponse, stream<ApiModel.Message> createSession(
+    1: ApiModel.SessionRequest request
+  );
 
-   /**
+  /**
     * Sends single message from the client to the server
     */
-   api_model.MessageReceipt sendMessage(1: api_model.Message message);
-
-   // Compatibility part of API ends
+  ApiModel.MessageReceipt sendMessage(1: ApiModel.Message message);
+// Compatibility part of API ends
 }

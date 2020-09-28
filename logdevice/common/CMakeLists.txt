@@ -25,7 +25,7 @@ add_subdirectory(replicated_state_machine/if)
 
 add_library(common STATIC ${hfiles} ${files})
 add_dependencies(common folly flatbuffers)
-add_dependencies(common api_service-cpp2-target)
+add_dependencies(common ApiService-cpp2-target)
 add_dependencies(common NodesConfiguration-cpp2-target)
 add_dependencies(common ConfigurationCodec-cpp2-target)
 add_dependencies(common AllReadStreamsDebugConfig-cpp2-target)
@@ -35,7 +35,7 @@ set_target_properties(common
 
 target_link_libraries(common
   common-cpp2
-  api_service-cpp2
+  ApiService-cpp2
   logsconfig-cpp2
   Membership-cpp2
   NodesConfiguration-cpp2

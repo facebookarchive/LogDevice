@@ -48,7 +48,7 @@ thrift_library(
 
 # API Model thrift
 thrift_library(
-  "api_model"
+  "ApiModel"
   ""
   "cpp2"
   "json"
@@ -57,16 +57,16 @@ thrift_library(
   "${_common_if_inc_prefix}"
   THRIFT_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/.."
  )
-add_dependencies(api_model-cpp2-target fbthrift)
+add_dependencies(ApiModel-cpp2-target fbthrift)
 set_target_properties(
-         api_model-cpp2-obj
+         ApiModel-cpp2-obj
          PROPERTIES POSITION_INDEPENDENT_CODE True
 )
-target_link_libraries(api_model-cpp2 ${THRIFT_DEPS})
+target_link_libraries(ApiModel-cpp2 ${THRIFT_DEPS})
 
 # API Service thrift
 thrift_library(
-  "api_service"
+  "ApiService"
   "LogDeviceAPI"
   "cpp2"
   "json"
@@ -77,20 +77,20 @@ thrift_library(
     "${CMAKE_SOURCE_DIR}/.."
     "${FB303_INCLUDE_DIR}"
  )
-add_dependencies(api_service-cpp2-target fbthrift)
+add_dependencies(ApiService-cpp2-target fbthrift)
 set_target_properties(
-         api_service-cpp2-obj
+         ApiService-cpp2-obj
          PROPERTIES POSITION_INDEPENDENT_CODE True
 )
 target_link_libraries(
-  api_service-cpp2
-  api_model-cpp2
+  ApiService-cpp2
+  ApiModel-cpp2
   ${THRIFT_DEPS}
   "fb303-cpp2"
 )
 
 # Setup language specific dependencies
-add_dependencies(api_service-cpp2-target fb303-cpp2-target)
+add_dependencies(ApiService-cpp2-target fb303-cpp2-target)
 
 target_link_libraries(
   common-cpp2
