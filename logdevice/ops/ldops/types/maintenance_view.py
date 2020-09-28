@@ -114,7 +114,8 @@ class MaintenanceView:
         if self._maintenance.created_on is None:
             return None
         else:
-            # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
+            # pyre-fixme[58]: `//` is not supported for operand types
+            #  `Optional[int]` and `int`.
             return datetime.fromtimestamp(self._maintenance.created_on // 1000)
 
     @property
@@ -122,7 +123,8 @@ class MaintenanceView:
         if self._maintenance.expires_on is None:
             return None
         else:
-            # pyre-fixme[6]: Expected `int` for 1st param but got `Optional[int]`.
+            # pyre-fixme[58]: `//` is not supported for operand types
+            #  `Optional[int]` and `int`.
             return datetime.fromtimestamp(self._maintenance.expires_on // 1000)
 
     @property
@@ -130,7 +132,7 @@ class MaintenanceView:
         if self.expires_on is None:
             return None
         else:
-            # pyre-fixme[6]: `-` is not supported for operand types
+            # pyre-fixme[58]: `-` is not supported for operand types
             #  `Optional[datetime]` and `datetime`.
             return self.expires_on - datetime.now()
 
