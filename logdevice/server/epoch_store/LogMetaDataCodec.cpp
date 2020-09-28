@@ -8,6 +8,7 @@
 
 #include "logdevice/server/epoch_store/LogMetaDataCodec.h"
 
+#include "logdevice/common/PayloadHolder.h"
 #include "logdevice/common/ThriftCommonStructConverter.h"
 
 namespace facebook { namespace logdevice {
@@ -227,7 +228,10 @@ TailRecord LogMetaDataThriftConverter::tailRecordFromThrift(
     offset_map.setCounter(k, v);
   }
 
-  return TailRecord(std::move(hdr), std::move(offset_map), nullptr);
+  // The fact that TailRecord has a payload is being deprecated and not
+  // currently used. LogMetaData doesn't serialize the TailRecord's payload
+  // and uses a dummy payload when the HAS_PAYLOAD flag is set.
+  return TailRecord(std::move(hdr), std::move(offset_map), PayloadHolder());
 }
 
 epoch_store::thrift::TailRecord

@@ -31,7 +31,7 @@ TailRecord create_dummy_tail_record() {
   map.setCounter(123, 321);
   map.setCounter(124, 322);
 
-  return TailRecord(std::move(hdr), std::move(map), nullptr);
+  return TailRecord(std::move(hdr), std::move(map), PayloadHolder());
 }
 } // namespace
 
@@ -52,14 +52,34 @@ TEST(LogMetaDataCodecTest, Basic) {
   log_metadata.epoch_store_properties.last_writer_node_id = NodeID(10, 2);
   log_metadata.data_last_clean_epoch = epoch_t(2);
   log_metadata.data_tail_record = create_dummy_tail_record();
-  log_metadata.metadata_last_clean_epoch = epoch_t(2);
+  log_metadata.metadata_last_clean_epoch = epoch_t(3);
   log_metadata.metadata_tail_record = create_dummy_tail_record();
   log_metadata.version = LogMetaData::Version(10);
   log_metadata.last_changed_timestamp =
       SystemTimestamp::from(std::chrono::seconds(100000));
 
-  auto thrift = LogMetaDataThriftConverter::toThrift(log_metadata);
-  auto new_log_metadata = LogMetaDataThriftConverter::fromThrift(thrift);
+  auto serialized_thrift = LogMetaDataCodec::serialize(log_metadata);
+  auto new_log_metadata = LogMetaDataCodec::deserialize(serialized_thrift);
+
+  ASSERT_NE(nullptr, new_log_metadata);
+  EXPECT_EQ(log_metadata, *new_log_metadata)
+      << "Expected: " << log_metadata.toString()
+      << ", got: " << new_log_metadata->toString();
+}
+
+TEST(LogMetaDataCodecTest, MinimalLogMetaData) {
+  LogMetaData log_metadata;
+  log_metadata.current_epoch_metadata =
+      EpochMetaData({ShardID(0, 1), ShardID(10, 10), ShardID(100, 2)},
+                    ReplicationProperty{{NodeLocationScope::NODE, 2}},
+                    epoch_t(101),
+                    epoch_t(100),
+                    {0.1, 0.2, 0.3});
+  log_metadata.last_changed_timestamp =
+      SystemTimestamp::from(std::chrono::seconds(100000));
+
+  auto serialized_thrift = LogMetaDataCodec::serialize(log_metadata);
+  auto new_log_metadata = LogMetaDataCodec::deserialize(serialized_thrift);
 
   ASSERT_NE(nullptr, new_log_metadata);
   EXPECT_EQ(log_metadata, *new_log_metadata)
