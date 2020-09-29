@@ -34,18 +34,7 @@ namespace fs = boost::filesystem;
 
 namespace {
 
-enum class FlushMode { ROCKSDB, LD };
-
-// Enable/Disable --filter-relocate-shards
-enum class FilterMode { DEFAULT, FILTER_RELOCATE };
-
-enum class RebuildingDirection { OLD_TO_NEW, NEW_TO_OLD };
-
-struct TestMode {
-  FlushMode f;
-  FilterMode filter_mode;
-  RebuildingDirection d;
-};
+struct TestMode {};
 
 const int NUM_DB_SHARDS = 2;
 // More logs than shards, so that at least one shard gets multiple logs.
@@ -301,16 +290,7 @@ class RebuildingTest : public IntegrationTestBase,
           .setNumDBShards(NUM_DB_SHARDS)
           .setNumLogs(3)
           .useDefaultTrafficShapingConfig(false)
-          .setParam("--rocksdb-ld-managed-flushes",
-                    test_param.f == FlushMode::LD ? "true" : "false")
           .setParam("--event-log-grace-period", "10ms")
-          .setParam("--filter-relocate-shards",
-                    test_param.filter_mode == FilterMode::FILTER_RELOCATE
-                        ? "true"
-                        : "false")
-          .setParam("--rebuilding-new-to-old",
-                    test_param.d == RebuildingDirection::NEW_TO_OLD ? "true"
-                                                                    : "false")
           // Reduce the copyset block size so we get a copyset shuffle every ~6
           // records.
           .setParam("--sticky-copysets-block-size", "128");
@@ -334,10 +314,8 @@ class RebuildingTest : public IntegrationTestBase,
                                uint32_t shard,
                                SHARD_NEEDS_REBUILD_flags_t flags = 0,
                                RebuildingRangesMetadata* rrm = nullptr) {
-    auto effective_flags = GetParam().filter_mode == FilterMode::FILTER_RELOCATE
-        ? SHARD_NEEDS_REBUILD_Header::FILTER_RELOCATE_SHARDS
-        : 0;
-    effective_flags |= flags;
+    auto effective_flags =
+        flags | SHARD_NEEDS_REBUILD_Header::FILTER_RELOCATE_SHARDS;
     return IntegrationTestUtils::requestShardRebuilding(
         client, node, shard, effective_flags, rrm);
   }
@@ -3188,14 +3166,7 @@ TEST_P(RebuildingTest, UndrainDeadNode) {
   }
 }
 
-std::vector<TestMode> test_params{
-    {FlushMode::LD, FilterMode::DEFAULT, RebuildingDirection::OLD_TO_NEW},
-    {FlushMode::LD,
-     FilterMode::FILTER_RELOCATE,
-     RebuildingDirection::OLD_TO_NEW},
-    {FlushMode::LD,
-     FilterMode::FILTER_RELOCATE,
-     RebuildingDirection::NEW_TO_OLD}};
+std::vector<TestMode> test_params{{}};
 INSTANTIATE_TEST_CASE_P(RebuildingTest,
                         RebuildingTest,
                         ::testing::ValuesIn(test_params));
