@@ -686,15 +686,6 @@ class Connection : public TrafficShappingSocket {
   std::unique_ptr<folly::IOBuf> serializeMessage(const Message& msg);
 
   /**
-   * Allow the async message error simulator to optionally take ownership of
-   * this message just before it is sent.
-   *
-   * @return  True if the simulator has taken ownership of and handled the
-   *          envelope.
-   */
-  bool injectAsyncMessageError(std::unique_ptr<Envelope>&& msg);
-
-  /**
    * Invoked by connect() to initiate the connection to peer.
    * Returns Future that is fulfilled once the connection completes.
    */
@@ -933,33 +924,10 @@ class Connection : public TrafficShappingSocket {
   // the value here is valid only if socket-health-check-period is non-zero.
   double cached_socket_throughput_{0};
 
-  // true if the message error injection code has decided to rewind
-  // a message stream. All traffic for this socket will be diverted until
-  // the end of the event loop, at which time the messages will be delivered
-  // with the error code specified by Sender::getMessageErrorInjectionErrorCode
-  // via the onSent() callback.
-  bool message_error_injection_rewinding_stream_ = false;
-
-  // event signalling the need to terminate the current simulated stream
-  // rewind event as soon as control is returned to the event loop.
-  EvTimer end_stream_rewind_event_;
-
-  // The number of messages that were asynchronously failed with NOBUFS
-  // duing the current simulated stream rewind event.
-  uint64_t message_error_injection_rewound_count_ = 0;
-
-  // The number of messages that have been processed normally since the last
-  // simulated stream rewind event.
-  uint64_t message_error_injection_pass_count_ = 0;
-
   // These two members are used to correctly maintain the number of available
   // fds for all accepted and client-only connections.
   ResourceBudget::Token conn_incoming_token_;
   ResourceBudget::Token conn_external_token_;
-
-  // called by endStreamRewindCallback to terminate the rewind on a parituclar
-  // socket instance.
-  void endStreamRewind();
 
   static void handshakeTimeoutCallback(void*, short);
 

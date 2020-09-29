@@ -115,7 +115,6 @@ Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
       num_messages_sent_(0),
       num_messages_received_(0),
       num_bytes_received_(0),
-      end_stream_rewind_event_(deps_->getEvBase()),
       info_(peer_name, peer_sockaddr, type, conntype),
       retry_receipt_of_message_(deps_->getEvBase()),
       sched_write_chain_(deps_->getEvBase()),
@@ -137,18 +136,6 @@ Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
                       "Invalid address for %s.",
                       info_.peer_name.toString().c_str());
     }
-    throw ConstructorFailed();
-  }
-
-  end_stream_rewind_event_.attachCallback([this] {
-    bumpEventHandersCalled();
-    endStreamRewind();
-    bumpEventHandlersCompleted();
-  });
-
-  int rv = end_stream_rewind_event_.setPriority(EventLoop::PRIORITY_HIGH);
-  if (rv != 0) {
-    err = E::INTERNAL;
     throw ConstructorFailed();
   }
 }
@@ -745,8 +732,6 @@ void Connection::close(Status reason) {
              deps_->getBytesPending() - getBytesPending());
   }
 
-  endStreamRewind();
-
   bool connection_failed = reason != E::SHUTDOWN && reason != E::IDLE;
   // Mark down the server only if
   // 1) connection has been broken or
@@ -786,7 +771,6 @@ void Connection::markDisconnectedOnClose() {
   handshaken_ = false;
 
   handshake_timeout_event_->cancelTimeout();
-  end_stream_rewind_event_.cancelTimeout();
 }
 
 void Connection::clearConnQueues(Status close_reason) {
@@ -982,38 +966,6 @@ int Connection::serializeMessage(std::unique_ptr<Envelope>&& envelope) {
   return 0;
 }
 
-bool Connection::injectAsyncMessageError(std::unique_ptr<Envelope>&& e) {
-  auto error_chance_percent =
-      getSettings().message_error_injection_chance_percent;
-  auto error_status = getSettings().message_error_injection_status;
-  if (error_chance_percent != 0 &&
-      error_status != E::CBREGISTERED && // Must be synchronously delivered
-      !isHandshakeMessage(e->message().type_) && !closing_ &&
-      !message_error_injection_rewinding_stream_) {
-    if (folly::Random::randDouble(0, 100.0) <= error_chance_percent) {
-      message_error_injection_rewinding_stream_ = true;
-      // Turn off the rewind when the deferred event queue is drained.
-      // Ensure this happens even if no other deferred events are added
-      // for this socket during the current event loop cycle.
-      end_stream_rewind_event_.activate(EV_WRITE, 0);
-      ld_error("Rewinding Stream on Socket (%p) - %jd passed, %01.8f%% chance",
-               this,
-               (intmax_t)message_error_injection_pass_count_,
-               error_chance_percent);
-      message_error_injection_pass_count_ = 0;
-    }
-  }
-
-  if (message_error_injection_rewinding_stream_) {
-    message_error_injection_rewound_count_++;
-    onSent(std::move(e), error_status, Message::CompletionMethod::DEFERRED);
-    return true;
-  }
-
-  message_error_injection_pass_count_++;
-  return false;
-}
-
 int Connection::preSendCheck(const Message& msg) {
   if (isClosed()) {
     err = E::NOTCONN;
@@ -1095,13 +1047,6 @@ void Connection::send(std::unique_ptr<Envelope> envelope) {
           conn_description_.c_str());
       err = E::TOOBIG;
       onSent(std::move(envelope), err);
-      return;
-    }
-
-    // Offer up the message for error injection first. If the message
-    // is accepted for injected error delivery, our responsibility for
-    // sending the message ends.
-    if (injectAsyncMessageError(std::move(envelope))) {
       return;
     }
 
@@ -1322,16 +1267,6 @@ void Connection::drainSendQueue() {
   if (close_reason_ != E::UNKNOWN && cb.write_chains.size() == 0 &&
       !sendChain_) {
     close(close_reason_);
-  }
-}
-
-void Connection::endStreamRewind() {
-  if (message_error_injection_rewinding_stream_) {
-    ld_error("Ending Error Injection on Socket (%p) - %jd diverted",
-             this,
-             (intmax_t)message_error_injection_rewound_count_);
-    message_error_injection_rewound_count_ = 0;
-    message_error_injection_rewinding_stream_ = false;
   }
 }
 
