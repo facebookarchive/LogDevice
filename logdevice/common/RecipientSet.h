@@ -47,9 +47,9 @@ class RecipientSet {
     return size() == 0;
   }
 
-  void reset(copyset_size_t replication, copyset_size_t extra) {
+  void reset(copyset_size_t replication) {
     replication_ = replication;
-    recipients_.reserve(replication_ + extra);
+    recipients_.reserve(replication_);
   }
 
   copyset_size_t getReplication() const {
@@ -116,8 +116,6 @@ class RecipientSet {
   /**
    * @return true if the record is fully replicated, ie replication_ recipients
    *         acknowledged that they stored a copy.
-   * TODO: This is incorrect when extras are enabled: it ignores cross-domain
-   *       replication requirements.
    */
   bool isFullyReplicated() const;
 
@@ -128,19 +126,6 @@ class RecipientSet {
    * @param out Array where to write these recipients.
    */
   void getReleaseSet(copyset_custsz_t<4>& out);
-
-  /**
-   * Fills in the ids of nodes that have not yet acknowledged their STORE
-   * messages and should be sent a DELETE message. The output set will also
-   * include nodes that replied with a failure code and need not be sent a
-   * DELETE, but for now we will treat them the same.
-   *
-   * @param out Size of nodeids_out. This function will assert that
-   *            nodeids_out is big enough to contain the maximum possible number
-   *            of nodes that can receive a DELETE, which is equal to the number
-   *            of extras.
-   */
-  void getDeleteSet(copyset_custsz_t<4>& out);
 
   // dump the failure state of the recipient set for debug
   std::string dumpRecipientSet();

@@ -107,13 +107,6 @@ void RecipientSet::getReleaseSet(copyset_custsz_t<4>& out) {
   }
 }
 
-void RecipientSet::getDeleteSet(copyset_custsz_t<4>& out) {
-  out.resize(recipients_.size() - stored_);
-  for (copyset_size_t i = stored_; i < recipients_.size(); i++) {
-    out[i - stored_] = recipients_[i].getShardID();
-  }
-}
-
 void RecipientSet::checkConsistency() {
   if (folly::kIsDebug) {
     ld_check(recipients_.size() >= stored_);

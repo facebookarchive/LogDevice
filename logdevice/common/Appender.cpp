@@ -337,7 +337,6 @@ void Appender::forgetThePreviousWave(const copyset_size_t cfg_synced) {
 
 int Appender::trySendingWavesOfStores(
     const copyset_size_t cfg_synced,
-    const copyset_size_t cfg_extras,
     const CopySetManager::AppendContext& append_ctx) {
   // copyset to put in record headers
   StoreChainLink* copyset = nullptr;
@@ -368,8 +367,8 @@ int Appender::trySendingWavesOfStores(
 
     forgetThePreviousWave(cfg_synced);
 
-    int ncopies = std::min(recipients_.getReplication() + cfg_extras,
-                           static_cast<int>(COPYSET_SIZE_MAX));
+    int ncopies = recipients_.getReplication();
+    ld_check(ncopies <= static_cast<int>(COPYSET_SIZE_MAX));
 
     if (!copyset) {
       copyset = (StoreChainLink*)alloca(ncopies * sizeof(StoreChainLink));
@@ -377,7 +376,7 @@ int Appender::trySendingWavesOfStores(
 
     copyset_size_t ndest = 0;
     folly::Optional<lsn_t> block_starting_lsn;
-    auto result = copyset_manager_->getCopySet(cfg_extras,
+    auto result = copyset_manager_->getCopySet(0 /* extras */,
                                                copyset,
                                                &ndest,
                                                &chain,
@@ -387,22 +386,9 @@ int Appender::trySendingWavesOfStores(
 
     switch (result) {
       case CopySetSelector::Result::PARTIAL:
-        ld_check(ndest < ncopies);
-        ld_check(ndest >= recipients_.getReplication());
-        // We do not have enough available destinations to store r+x copies,
-        // but we do have at least r destinations. We should still attempt the
-        // write with a reduced number of extra copies. It would be silly to
-        // fail just because we cannot send extra copies, which are a
-        // latency-saving mechanism.
-        ncopies = ndest;
-
-        RATELIMIT_WARNING(std::chrono::seconds(10),
-                          1,
-                          "There are not enough nodes to store all %d extra "
-                          "copies for log %lu (%d nodes selected).",
-                          cfg_extras,
-                          store_hdr_.rid.logid.val_,
-                          ndest);
+        // Unexpected PARTIAL result from CopySetSelector despite the fact that
+        // we don't use extras.
+        ld_assert(false);
         break;
       case CopySetSelector::Result::FAILED:
         // Not enough destinations available at the moment. Will start a
@@ -432,7 +418,7 @@ int Appender::trySendingWavesOfStores(
     // STORED replies 'nsynced_' out of them will be to STORE messages that
     // had its SYNC flag set.
     const int nsync =
-        cfg_synced > 0 ? std::min(cfg_synced + cfg_extras, ncopies) : 0;
+        cfg_synced > 0 ? std::min(static_cast<int>(cfg_synced), ncopies) : 0;
 
     timeout_.assign(selectStoreTimeout(copyset, ncopies));
     store_hdr_.copyset_size = ncopies;
@@ -547,7 +533,6 @@ int Appender::sendWave() {
 
   // cache these on the stack to have a consistent value throughout this
   // call. These Sequencer attributes can change at any time.
-  const copyset_size_t cfg_extras = getExtras();
   const copyset_size_t cfg_synced =
       std::min(getSynced(), recipients_.getReplication());
 
@@ -563,7 +548,7 @@ int Appender::sendWave() {
 
   cancelStoreTimer();
 
-  int rv = trySendingWavesOfStores(cfg_synced, cfg_extras, append_ctx);
+  int rv = trySendingWavesOfStores(cfg_synced, append_ctx);
 
   if (replies_expected_ < recipients_.getReplication()) {
     // We failed to send a complete wave. Up the current wave id so that
@@ -646,7 +631,7 @@ int Appender::start(std::shared_ptr<EpochSequencer> epoch_sequencer,
 
   const auto logcfg = cfg->getLogGroupByIDShared(store_hdr_.rid.logid);
 
-  recipients_.reset(replication, getExtras());
+  recipients_.reset(replication);
 
   ld_check(store_hdr_.rid.logid != LOGID_INVALID);
 
@@ -1839,12 +1824,9 @@ bool Appender::onRecipientFailed(Recipient* recipient,
     return true;
   }
 
-  if (replies_expected_ >= recipients_.getReplication()) {
-    // This wave can still succeed.
-    return true;
-  }
+  ld_check(replies_expected_ < recipients_.getReplication());
 
-  // If we won't be able to make progress for this wave.
+  // We have to start another wave.
   cancelStoreTimer();
   store_timeout_set_ = false;
 
@@ -1865,34 +1847,6 @@ bool Appender::onRecipientFailed(Recipient* recipient,
 
 void Appender::sendRetryWave() {
   sendWave();
-}
-
-void Appender::deleteExtras() {
-  int rv;
-
-  ld_check(recipients_.isFullyReplicated());
-
-  copyset_custsz_t<4> delete_set;
-  recipients_.getDeleteSet(delete_set);
-
-  for (const ShardID& shard : delete_set) {
-    auto delete_msg = std::make_unique<DELETE_Message>(
-        DELETE_Header({store_hdr_.rid, store_hdr_.wave, shard.shard()}));
-
-    rv = sender_->sendMessage(std::move(delete_msg), shard.asNodeID());
-    if (rv != 0) {
-      RATELIMIT_INFO(
-          std::chrono::seconds(10),
-          10,
-          "Failed to send a DELETE for record %s (wave %u) to %s: %s. "
-          "Recipient set: %s",
-          store_hdr_.rid.toString().c_str(),
-          store_hdr_.wave,
-          shard.toString().c_str(),
-          error_description(err),
-          recipients_.dumpRecipientSet().c_str());
-    }
-  }
 }
 
 void Appender::sendReleases(const ShardID* dests,
@@ -1956,11 +1910,7 @@ bool Appender::isDone(uint8_t flag) {
 void Appender::onComplete(bool linked) {
   cancelStoreTimer();
 
-  if (recipients_.isFullyReplicated()) {
-    deleteExtras();
-  }
-
-  // Prevent replies from remaining extras to come back by removing ourselves
+  // Prevent further replies from coming back by removing ourselves
   // from w->activeAppenders().
   ld_check(!linked || is_linked());
   unlink();
@@ -2099,10 +2049,6 @@ NodeLocationScope Appender::getBiggestReplicationScope() const {
 NodeLocationScope Appender::getCurrentBiggestReplicationScope() const {
   return epoch_sequencer_->getMetaData()
       ->replication.getBiggestReplicationScope();
-}
-
-copyset_size_t Appender::getExtras() const {
-  return epoch_sequencer_->getImmutableOptions().extra_copies;
 }
 
 copyset_size_t Appender::getSynced() const {

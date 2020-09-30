@@ -38,8 +38,7 @@ namespace facebook { namespace logdevice {
  * @file an Appender is a state machine for appending a single record to a log.
  *      An Appender is responsible for sending STORE messages with copies of the
  *      record being appended to a set of storage nodes, called the "copyset".
- *      The size of the copyset is equal to the value of the replication factor
- *      plus the number of extras.
+ *      The size of the copyset is equal to the value of the replication factor.
  *
  *      The Appender resides in the EpochSequencer's SlidingWindow until it is
  *      reaped.
@@ -968,17 +967,6 @@ class Appender : public IntrusiveUnorderedMapHook {
   void onMemoryCorruption();
 
   /**
-   * Send DELETE messages to all nodes in recipients_ for which we do
-   * not have a positive acknowledgement of the record being stored.
-   *
-   * This method must be called only after we receive r positive STORE
-   * acknowledgements from recipients. Because DELETEs are just a space
-   * optimization they are sent best-effort and will not be redelivered
-   * after a failure.
-   */
-  void deleteExtras();
-
-  /**
    * Send RELEASE messages to the specified nodes.
    */
   virtual void sendReleases(const ShardID* dests,
@@ -1033,7 +1021,6 @@ class Appender : public IntrusiveUnorderedMapHook {
   // until a complete wave is sent, or copyset selector is unable to select
   // a copyset
   int trySendingWavesOfStores(const copyset_size_t cfg_synced,
-                              const copyset_size_t cfg_extras,
                               const CopySetManager::AppendContext& append_ctx);
 
   void forgetThePreviousWave(const copyset_size_t cfg_synced);
@@ -1047,7 +1034,6 @@ class Appender : public IntrusiveUnorderedMapHook {
   virtual void checkWorkerThread();
 
   virtual lsn_t getLastKnownGood() const;
-  virtual copyset_size_t getExtras() const;
   virtual copyset_size_t getSynced() const;
   virtual std::shared_ptr<CopySetManager> getCopySetManager() const;
   virtual NodeLocationScope getBiggestReplicationScope() const;

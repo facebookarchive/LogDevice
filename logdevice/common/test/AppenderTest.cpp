@@ -482,10 +482,6 @@ class AppenderTest::MockAppender : public Appender {
     return NodeLocationScope::NODE;
   }
 
-  copyset_size_t getExtras() const override {
-    return 0;
-  }
-
   std::shared_ptr<CopySetManager> getCopySetManager() const override {
     return test_->copyset_manager_;
   }
