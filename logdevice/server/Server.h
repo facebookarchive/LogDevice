@@ -265,6 +265,10 @@ class Server {
     }
   }
 
+  bool isShuttingDown() {
+    return is_shut_down_.load();
+  }
+
  private:
   ServerParameters* params_;
 

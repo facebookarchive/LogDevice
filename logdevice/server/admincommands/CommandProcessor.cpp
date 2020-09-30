@@ -41,11 +41,19 @@ CommandProcessor::CommandProcessor(Server* server)
 std::unique_ptr<folly::IOBuf>
 CommandProcessor::processCommand(const char* command_line,
                                  const folly::SocketAddress& address) {
+  auto buffer = std::make_unique<folly::IOBuf>();
+  folly::io::Appender output(buffer.get(), 1024);
+  if (server_->isShuttingDown()) {
+    ld_warning("Dropping command from %s due to shutdown: %s",
+               address.describe().c_str(),
+               sanitize_string(command_line).c_str());
+    output.printf("Command not executed: server is being shut down\r\nEND\r\n");
+    return buffer;
+  }
+
   auto start_time = std::chrono::steady_clock::now();
   ld_debug("Processing command: %s", sanitize_string(command_line).c_str());
 
-  auto buffer = std::make_unique<folly::IOBuf>();
-  folly::io::Appender output(buffer.get(), 1024);
   std::vector<std::string> args;
   try {
     args = boost::program_options::split_unix(command_line);
