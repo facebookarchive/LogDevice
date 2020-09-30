@@ -105,7 +105,6 @@ sidebar_label: Settings
 | my-location | {client-only setting}. Specifies the location of the machine running the client. Used for determining whether to use SSL based on --ssl-boundary. Also used in local SCD reading. Format: "{region}.{dc}.{cluster}.{row}.{rack}". |  | requires&nbsp;restart, client&nbsp;only |
 | port | TCP port on which the server listens for non-SSL clients | 16111 | CLI&nbsp;only, requires&nbsp;restart, server&nbsp;only |
 | rsm-force-all-send-all | Forces ALL\_SEND\_ALL mode for read streams associated with RSM. | true | requires&nbsp;restart |
-| rsm-include-read-pointer-in-snapshot | Allow inclusion of read pointer in RSM snapshots. Note that if this is set to true IT IS UNSAFE TO CHANGE IT BACK TO FALSE! | true |  |
 | rsm-snapshot-enable-dual-writes | Decides whether snapshots should be written to log based store as well(to roll back from local store to log based in case of emergency | true | server&nbsp;only |
 | rsm-snapshot-store-type | One of the following: legacy (use legacy way of storing and retrieving snapshots from a log), log (use Log Based snapshot store and point queries to fetch snapshots instead of tailing), message (Message Based for bootstrapping RSM snapshot from a Remote cluster host)local-store (From snapshot stored in local store) | log | requires&nbsp;restart |
 | server-id | optional server ID, reported by INFO admin command |  | requires&nbsp;restart, server&nbsp;only |

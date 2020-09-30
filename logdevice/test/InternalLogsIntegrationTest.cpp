@@ -25,13 +25,11 @@ using namespace testing;
 
 class InternalLogsIntegrationTest
     : public IntegrationTestBase,
-      public ::testing::WithParamInterface<
-          std::tuple<bool /*rsm_trim_up_to_read_ptr*/, SnapshotStoreType>> {
+      public ::testing::WithParamInterface<SnapshotStoreType> {
  public:
   static const size_t NNODES = 3;
 
   ClusterFactory clusterFactory(
-      bool rsm_include_read_pointer_in_snapshot = false,
       std::string logsconfig_snapshotting_period =
           "2s", // default in settings is "1h"
       SnapshotStoreType snapshot_store_type = SnapshotStoreType::LEGACY) {
@@ -43,8 +41,6 @@ class InternalLogsIntegrationTest
                                  "ReplicatedStateMachine-inl.h:debug")
                        .doPreProvisionEpochMetaData();
 
-    factory.setParam("--rsm-include-read-pointer-in-snapshot",
-                     rsm_include_read_pointer_in_snapshot ? "true" : "false");
     // take local snapshots more often for tests
     if (logsconfig_snapshotting_period != "default") {
       factory.setParam(
@@ -144,14 +140,11 @@ class InternalLogsIntegrationTest
   std::shared_ptr<ClientImpl> client_impl;
 };
 
-INSTANTIATE_TEST_CASE_P(
-    Parametric,
-    InternalLogsIntegrationTest,
-    ::testing::Combine(
-        ::testing::Bool() /* rsm_include_read_pointer_in_snapshot */,
-        ::testing::Values(SnapshotStoreType::LEGACY,
-                          SnapshotStoreType::LOG,
-                          SnapshotStoreType::LOCAL_STORE)));
+INSTANTIATE_TEST_CASE_P(Parametric,
+                        InternalLogsIntegrationTest,
+                        testing::Values(SnapshotStoreType::LEGACY,
+                                        SnapshotStoreType::LOG,
+                                        SnapshotStoreType::LOCAL_STORE));
 
 TEST_F(InternalLogsIntegrationTest, ClientCannotWriteInternalLog) {
   buildClusterAndClient(clusterFactory());
@@ -208,10 +201,8 @@ TEST_F(InternalLogsIntegrationTest, ClientWriteInternalLog) {
  * be same as delta log read pointer.
  */
 TEST_P(InternalLogsIntegrationTest, TrimmingUpToDeltaLogReadPointer) {
-  const bool rsm_include_read_pointer_in_snapshot = std::get<0>(GetParam());
-  const SnapshotStoreType store_type = std::get<1>(GetParam());
-  buildClusterAndClient(
-      clusterFactory(rsm_include_read_pointer_in_snapshot, "2s", store_type));
+  const SnapshotStoreType store_type = GetParam();
+  buildClusterAndClient(clusterFactory("2s", store_type));
 
   /* write something to the delta log */
   auto dir = client->makeDirectorySync("/facebok_sneks", true);
@@ -271,20 +262,16 @@ TEST_P(InternalLogsIntegrationTest, TrimmingUpToDeltaLogReadPointer) {
 
   lsn_t trim_point =
       getTrimPointFor(configuration::InternalLogs::CONFIG_LOG_DELTAS);
-  if (rsm_include_read_pointer_in_snapshot) {
-    ASSERT_NE(trim_point, LSN_INVALID);
-    if (store_type == SnapshotStoreType::LEGACY) {
-      // for legacy rsm code we should have trimmed up to delta log read ptr
-      ASSERT_EQ(trim_point, tail_lsn - 1);
-    } else {
-      // Delta trimming is going to be conservative with snapshot store
-      // interface, as it only looks at durable version and not the delta log
-      // read ptr unlike legacy trim
-      ASSERT_LE(trim_point, tail_lsn - 1);
-    }
+
+  ASSERT_NE(trim_point, LSN_INVALID);
+  if (store_type == SnapshotStoreType::LEGACY) {
+    // for legacy rsm code we should have trimmed up to delta log read ptr
+    ASSERT_EQ(trim_point, tail_lsn - 1);
   } else {
-    // then we should have trimmed up to last applied delta
-    ASSERT_EQ(trim_point, last_delta);
+    // Delta trimming is going to be conservative with snapshot store
+    // interface, as it only looks at durable version and not the delta log
+    // read ptr unlike legacy trim
+    ASSERT_LE(trim_point, tail_lsn - 1);
   }
 
   /* now check logsconfig read availability */
@@ -386,7 +373,7 @@ TEST_F(InternalLogsIntegrationTest,
  * recover.
  */
 TEST_F(InternalLogsIntegrationTest, RecoverAfterStallingDueToTrimmingDeltaLog) {
-  auto factory = clusterFactory(true);
+  auto factory = clusterFactory();
 
   // Configure nodes. N0 is a sequencer+storage node, N1 and N2 are storage
   // nodes.
@@ -552,7 +539,7 @@ TEST_F(InternalLogsIntegrationTest, StallingBumpsStat) {
   // that means we call processSnapshot(which internally calls
   // cancelStallGracePeriod()) before stallGracePeriodTimer_(default 10s)
   // gets a chance to bump 'num_replicated_state_machines_stalled'.
-  auto factory = clusterFactory(true, "default" /* snapshotting period */);
+  auto factory = clusterFactory("default" /* snapshotting period */);
 
   Configuration::Nodes nodes;
   for (int i = 0; i < NNODES; ++i) {

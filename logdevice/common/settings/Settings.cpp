@@ -3346,9 +3346,9 @@ void Settings::defineSettings(SettingEasyInit& init) {
        &rsm_include_read_pointer_in_snapshot,
        "true",
        nullptr,
-       "Allow inclusion of read pointer in RSM snapshots. Note that if this is "
-       "set to true IT IS UNSAFE TO CHANGE IT BACK TO FALSE!",
-       SERVER | CLIENT,
+       "Deprecated! Allow inclusion of read pointer in RSM snapshots.  "
+       "Set to true by default always",
+       SERVER | CLIENT | DEPRECATED,
        SettingsCategory::Core);
 
   init("rsm-snapshot-request-timeout",

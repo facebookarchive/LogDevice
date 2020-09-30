@@ -465,9 +465,7 @@ class ReplicatedStateMachine {
 
   // Create a payload for a snapshot. The payload includes `data` serialized as
   // well as the version of that snapshot.
-  std::string createSnapshotPayload(const T& data,
-                                    lsn_t version,
-                                    bool rsm_include_read_pointer_in_snapshot);
+  std::string createSnapshotPayload(const T& data, lsn_t version);
 
   // Some metadata included inside delta records.
   struct DeltaHeader {

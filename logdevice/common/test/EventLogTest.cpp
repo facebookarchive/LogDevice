@@ -234,8 +234,7 @@ class EventLogTest : public ::testing::TestWithParam<bool> {
 
   std::unique_ptr<DataRecord>
   genSnapshotRecord(const EventLogRebuildingSet& set, lsn_t v, lsn_t lsn) {
-    std::string buf = evlog_->createSnapshotPayload(
-        set, v, settings_->rsm_include_read_pointer_in_snapshot);
+    std::string buf = evlog_->createSnapshotPayload(set, v);
 
     return std::make_unique<DataRecordOwnsPayload>(
         configuration::InternalLogs::EVENT_LOG_SNAPSHOTS,
