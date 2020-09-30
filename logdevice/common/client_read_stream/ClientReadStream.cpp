@@ -42,7 +42,6 @@
 #include "logdevice/common/client_read_stream/ClientReadStreamBufferFactory.h"
 #include "logdevice/common/client_read_stream/ClientReadStreamConnectionHealth.h"
 #include "logdevice/common/client_read_stream/ClientReadStreamScd.h"
-#include "logdevice/common/client_read_stream/ClientReadStreamTracer.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogRebuildingSet.h"
@@ -136,7 +135,6 @@ ClientReadStream::ClientReadStream(
       window_update_pending_(false),
       gap_tracer_(std::make_unique<ClientGapTracer>(nullptr)),
       read_tracer_(std::make_unique<ClientReadTracer>(nullptr)),
-      events_tracer_(std::make_unique<ClientReadStreamTracer>(nullptr)),
       scd_copyset_reordering_(scd_copyset_reordering) {
   if (attrs != nullptr) {
     attrs_ = *attrs;
@@ -448,9 +446,6 @@ void ClientReadStream::start() {
       worker_ ? worker_->getTraceLogger() : nullptr);
 
   read_tracer_ = std::make_unique<ClientReadTracer>(
-      worker_ ? worker_->getTraceLogger() : nullptr);
-
-  events_tracer_ = std::make_unique<ClientReadStreamTracer>(
       worker_ ? worker_->getTraceLogger() : nullptr);
 
   connection_health_tracker_ =
@@ -4176,20 +4171,6 @@ void ClientReadStream::scheduleRewind(RewindReason reason,
 void ClientReadStream::rewind(std::string reason) {
   // Clear the buffer and reset gap parameters.
 
-  events_tracer_->traceEvent(log_id_,
-                             deps_->getReadStreamID(),
-                             ClientReadStreamTracer::Events::REWIND,
-                             reason,
-                             start_lsn_,
-                             until_lsn_,
-                             last_delivered_lsn_,
-                             last_in_record_ts_,
-                             last_received_ts_,
-                             epoch_metadata_str_factory_,
-                             unavailable_shards_str_factory_,
-                             currentEpoch(),
-                             trim_point_,
-                             readSetSize());
   ld_debug("Rewinding stream for log %lu: %s", log_id_.val(), reason.c_str());
 
   for (auto it = storage_set_states_.begin(); it != storage_set_states_.end();

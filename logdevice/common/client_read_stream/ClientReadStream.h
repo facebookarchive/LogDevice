@@ -44,7 +44,6 @@ class ClientGapTracer;
 class ClientReadStreamBuffer;
 class ClientReadStreamConnectionHealth;
 class ClientReadStreamScd;
-class ClientReadStreamTracer;
 class ClientReadTracer;
 class ClientReadersFlowTracer;
 class ClientStalledReadTracer;
@@ -1575,8 +1574,6 @@ class ClientReadStream : boost::noncopyable {
   std::unique_ptr<ClientReadTracer> read_tracer_;
   // a Throttled tracelogger for tracing tailer reads
   std::unique_ptr<ClientReadersFlowTracer> readers_flow_tracer_;
-  // a Throttled tracelogger for tracing events
-  std::unique_ptr<ClientReadStreamTracer> events_tracer_;
 
   // Tracks the health of the connection, ie whether we have a healthy TCP
   // connection to an f-majority of shards in the read set. Uses a tracer to log
