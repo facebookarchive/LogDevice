@@ -272,7 +272,7 @@ WeightedCopySetSelectorTest::select(std::vector<ShardID>& out,
   copyset_size_t cs_size;
   bool chain = !test_disabling_chain_;
 
-  auto result = selector.select(0, cs.data(), &cs_size, &chain, nullptr, rng_);
+  auto result = selector.select(cs.data(), &cs_size, &chain, nullptr, rng_);
 
   if (result == CopySetSelector::Result::FAILED) {
     // Check that there aren't enough available nodes to pick a copyset.
@@ -280,7 +280,6 @@ WeightedCopySetSelectorTest::select(std::vector<ShardID>& out,
     return result;
   }
 
-  EXPECT_NE(CopySetSelector::Result::PARTIAL, result);
   EXPECT_EQ(replication_.getReplicationFactor(), cs_size);
 
   // Fill `out`, check that all nodes are available, check `chain`.
@@ -317,7 +316,6 @@ WeightedCopySetSelectorTest::augment(std::vector<ShardID>& copyset,
     return result;
   }
 
-  EXPECT_NE(CopySetSelector::Result::PARTIAL, result);
   EXPECT_GE(new_size, replication_factor);
 
   copyset.resize(new_size);

@@ -61,7 +61,6 @@ class CopySetSelectorTest : public ::testing::Test {
 
   //// properties of log
   copyset_size_t replication_{3};
-  copyset_size_t extras_{0};
   NodeLocationScope sync_replication_scope_{NodeLocationScope::RACK};
 
   // append properties - its size and LSN
@@ -204,8 +203,7 @@ class MockStickyCopySetManager : public StickyCopySetManager {
     };
 
     explicit SubSelector(CopySetSelectorTest* test) : test_(test) {}
-    Result select(copyset_size_t /*extras*/,
-                  StoreChainLink copyset_out[],
+    Result select(StoreChainLink copyset_out[],
                   copyset_size_t* copyset_size_out,
                   bool* chain_out,
                   CopySetSelector::State* /*selector_state*/,
@@ -359,14 +357,8 @@ inline void CopySetSelectorTest::verifyCopySet(CopySetSelector::Result result,
                                                bool chain_result) const {
   ASSERT_NE(CopySetSelector::Result::FAILED, result);
   // check copyset size
-  if (result == CopySetSelector::Result::SUCCESS) {
-    ASSERT_EQ(replication_ + extras_, size);
-  } else if (result == CopySetSelector::Result::PARTIAL) {
-    ASSERT_LE(size, replication_ + extras_);
-    ASSERT_GE(size, replication_);
-  } else {
-    ld_check(false);
-  }
+  ASSERT_EQ(CopySetSelector::Result::SUCCESS, result);
+  ASSERT_EQ(replication_, size);
 
   std::vector<ShardID> indices(size);
   std::transform(
@@ -509,8 +501,7 @@ inline void CopySetSelectorTest::verifySingleLocationScope(
 inline void CopySetSelectorTest::selectCopySet() {
   ASSERT_NE(nullptr, copyset_manager_);
   result_.chain_out = enable_chain_;
-  result_.rv = copyset_manager_->getCopySet(extras_,
-                                            result_.copyset.data(),
+  result_.rv = copyset_manager_->getCopySet(result_.copyset.data(),
                                             &result_.ndest,
                                             &result_.chain_out,
                                             append_ctx_,
@@ -593,7 +584,6 @@ inline void CopySetSelectorTest::augmentCopySetChain() {
 
 TEST_F(CopySetSelectorTest, SimpleRack) {
   replication_ = 3;
-  extras_ = 0;
   copyset_selector_type_ = CopySetSelectorType::CROSS_DOMAIN;
   setUp();
 
@@ -611,7 +601,6 @@ TEST_F(CopySetSelectorTest, SimpleRack) {
 
 TEST_F(CopySetSelectorTest, SimpleRackWithChaining) {
   replication_ = 3;
-  extras_ = 0;
   copyset_selector_type_ = CopySetSelectorType::CROSS_DOMAIN;
   enable_chain_ = true;
   setUp();
@@ -630,7 +619,6 @@ TEST_F(CopySetSelectorTest, SimpleRackWithChaining) {
 
 TEST_F(CopySetSelectorTest, SingleReplicationWithLocality) {
   replication_ = 1;
-  extras_ = 0;
   copyset_selector_type_ = CopySetSelectorType::CROSS_DOMAIN;
   sync_replication_scope_ = NodeLocationScope::REGION;
   // sequencer is on node 1
@@ -673,24 +661,6 @@ TEST_F(CopySetSelectorTest, SingleReplicationWithLocality) {
   ASSERT_EQ(1, countShardsWithDomainName(getNodeDomainName(5)));
 }
 
-// currently extras are ignored in implementation, but if it is set > 0,
-// CopySetSelector::Result::PARTIAL will be returned instead of
-// SUCCESS
-TEST_F(CopySetSelectorTest, TestExtras) {
-  replication_ = 3;
-  extras_ = 1;
-  copyset_selector_type_ = CopySetSelectorType::CROSS_DOMAIN;
-  sync_replication_scope_ = NodeLocationScope::REGION;
-  setUp();
-
-  selectCopySet();
-
-  ASSERT_EQ(CopySetSelector::Result::PARTIAL, result_.rv);
-  ASSERT_EQ(3, result_.ndest); // only 3 copies are selected
-  verifyCopySet();
-  ASSERT_EQ(2, countShardsWithDomainName(seq_domain_name_));
-}
-
 // despite that the location of sequencer is unknown, the selector should
 // still be able to select nodes with failure domain requirements
 TEST_F(CopySetSelectorTest, SequencerLocationUnknown) {
@@ -711,7 +681,6 @@ TEST_F(CopySetSelectorTest, SequencerLocationUnknown) {
 // nodes to satisfy the request
 TEST_F(CopySetSelectorTest, LocalDomainUnavailable) {
   replication_ = 3;
-  extras_ = 0;
   // sequencer node is in region 2
   seq_node_idx_ = 6;
   copyset_selector_type_ = CopySetSelectorType::CROSS_DOMAIN;
@@ -736,7 +705,6 @@ TEST_F(CopySetSelectorTest, LocalDomainUnavailable) {
 // are unavailable
 TEST_F(CopySetSelectorTest, OnlyOneRackAvailable) {
   replication_ = 3;
-  extras_ = 0;
   // sequencer node is in region 1
   seq_node_idx_ = 1;
   copyset_selector_type_ = CopySetSelectorType::CROSS_DOMAIN;
@@ -766,7 +734,6 @@ TEST_F(CopySetSelectorTest, OnlyOneRackAvailable) {
 
 TEST_F(CopySetSelectorTest, HighReplication) {
   replication_ = 5;
-  extras_ = 0;
   copyset_selector_type_ = CopySetSelectorType::CROSS_DOMAIN;
   sync_replication_scope_ = NodeLocationScope::REGION;
   setUp();
@@ -788,7 +755,6 @@ TEST_F(CopySetSelectorTest, HighReplication) {
 
 TEST_F(CopySetSelectorTest, HighReplicationChainSending) {
   replication_ = 5;
-  extras_ = 0;
   copyset_selector_type_ = CopySetSelectorType::CROSS_DOMAIN;
   sync_replication_scope_ = NodeLocationScope::CLUSTER;
   // sequencer node is in region 1, cluster 0
@@ -815,7 +781,6 @@ TEST_F(CopySetSelectorTest, HighReplicationChainSending) {
 
 TEST_F(CopySetSelectorTest, LinearSelectionCanFish) {
   replication_ = 3;
-  extras_ = 0;
   copyset_selector_type_ = CopySetSelectorType::LINEAR;
   setUp();
 
@@ -831,7 +796,6 @@ TEST_F(CopySetSelectorTest, LinearSelectionCanFish) {
 
 TEST_F(CopySetSelectorTest, CrossDomainSelectionCanFish) {
   replication_ = 3;
-  extras_ = 0;
   copyset_selector_type_ = CopySetSelectorType::CROSS_DOMAIN;
   sync_replication_scope_ = NodeLocationScope::REGION;
   setUp();
@@ -873,7 +837,6 @@ TEST_F(CopySetSelectorTest, AugmentLinear) {
 
 inline void CopySetSelectorTest::augmentTestBody() {
   replication_ = 5;
-  extras_ = 0;
   // sequencer node is in region 1
   seq_node_idx_ = 1;
   setUp();
@@ -930,7 +893,6 @@ inline void CopySetSelectorTest::augmentTestBody() {
 
 inline void CopySetSelectorTest::augmentChainTestBody() {
   replication_ = 5;
-  extras_ = 0;
   // sequencer node is in region 1
   seq_node_idx_ = 1;
   setUp();
@@ -988,7 +950,6 @@ inline void CopySetSelectorTest::augmentChainTestBody() {
 
 TEST_F(CopySetSelectorTest, CustomRNG) {
   replication_ = 5;
-  extras_ = 0;
   // sequencer node is in region 1
   seq_node_idx_ = 1;
   XorShift128PRNG rng;
@@ -1036,7 +997,6 @@ TEST_F(CopySetSelectorTest, CustomRNG) {
 
 TEST_F(CopySetSelectorTest, StickyCopySetManager) {
   replication_ = 3;
-  extras_ = 0;
 
   copyset_selector_type_ = CopySetSelectorType::CROSS_DOMAIN;
   sync_replication_scope_ = NodeLocationScope::REGION;
@@ -1142,7 +1102,6 @@ TEST_F(CopySetSelectorTest, StickyCopySetManager) {
 
 TEST_F(CopySetSelectorTest, CrossDomainCopysetSelectorDistribution) {
   replication_ = 3;
-  extras_ = 0;
   copyset_selector_type_ = CopySetSelectorType::CROSS_DOMAIN;
   sync_replication_scope_ = NodeLocationScope::REGION;
   setUp();

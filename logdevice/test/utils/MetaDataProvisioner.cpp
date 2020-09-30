@@ -306,7 +306,7 @@ copyset_t MetaDataProvisioner::genCopySet(const StorageSet& storage_set,
 
   std::vector<StoreChainLink> cs(selector.getReplicationFactor());
   copyset_size_t cs_sz;
-  auto rv = selector.select(0 /* extras */, cs.data(), &cs_sz);
+  auto rv = selector.select(cs.data(), &cs_sz);
   ld_check(rv == CopySetSelector::Result::SUCCESS);
 
   copyset_t copyset;

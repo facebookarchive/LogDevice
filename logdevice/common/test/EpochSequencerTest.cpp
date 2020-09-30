@@ -399,8 +399,7 @@ class MockAppender : public Appender {
 // copyset. ony useful for the config "sequencer_test.conf"
 class TestCopySetSelector : public CopySetSelector {
  public:
-  CopySetSelector::Result select(copyset_size_t, /* extras, unused */
-                                 StoreChainLink copyset_out[],
+  CopySetSelector::Result select(StoreChainLink copyset_out[],
                                  copyset_size_t* copyset_size_out,
                                  bool*, /* chain_out, unused */
                                  State* /*selector_state*/,

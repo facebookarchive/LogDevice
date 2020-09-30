@@ -18,8 +18,7 @@ namespace facebook { namespace logdevice {
 using NodeStatus = NodeAvailabilityChecker::NodeStatus;
 
 CopySetSelector::Result
-StickyCopySetManager::getCopySet(copyset_size_t extras,
-                                 StoreChainLink copyset_out[],
+StickyCopySetManager::getCopySet(StoreChainLink copyset_out[],
                                  copyset_size_t* copyset_size_out,
                                  bool* chain_out,
                                  const AppendContext& append_ctx,
@@ -36,7 +35,7 @@ StickyCopySetManager::getCopySet(copyset_size_t extras,
   // returns true if we have to change the copyset
   auto block_invalid = [&, this]() {
     return (invalid_block_seq_no == block_seq_no_) ||
-        shouldStartNewBlock(state, extras);
+        shouldStartNewBlock(state);
   };
 
   do {
@@ -51,7 +50,7 @@ StickyCopySetManager::getCopySet(copyset_size_t extras,
       // Re-checking the state after relock
       if (block_invalid()) {
         // trying to start a new block
-        if (!startNewBlock(state, append_ctx, extras, chain_out)) {
+        if (!startNewBlock(state, append_ctx, chain_out)) {
           return CopySetSelector::Result::FAILED;
         }
       }
@@ -78,22 +77,19 @@ StickyCopySetManager::getCopySet(copyset_size_t extras,
   }
 
   onCopySetAssigned(state, append_ctx);
-  ld_check(current_block_css_result_ == CopySetSelector::Result::PARTIAL ||
-           current_block_css_result_ == CopySetSelector::Result::SUCCESS);
+  ld_check(current_block_css_result_ == CopySetSelector::Result::SUCCESS);
   return current_block_css_result_;
 }
 
 CopySetSelector::Result StickyCopySetManager::getCopysetUsingUnderlyingSelector(
     logid_t log_id,
-    copyset_size_t extras,
     StoreChainLink copyset_out[],
     copyset_size_t* copyset_size_out) {
   ld_check(copyset_out != nullptr);
   ld_check(copyset_size_out != nullptr);
 
   std::shared_lock<folly::SharedMutex> lock(mutex_);
-  auto result =
-      underlying_selector_->select(extras, copyset_out, copyset_size_out);
+  auto result = underlying_selector_->select(copyset_out, copyset_size_out);
   lock.unlock();
 
   if (result == CopySetSelector::Result::FAILED) {
@@ -139,15 +135,9 @@ bool StickyCopySetManager::checkAndOutputNodes(StoreChainLink copyset_out[],
   return true;
 };
 
-bool StickyCopySetManager::shouldStartNewBlock(const State& state,
-                                               copyset_size_t extras) const {
+bool StickyCopySetManager::shouldStartNewBlock(const State& state) const {
   if (current_block_starting_lsn_ == LSN_INVALID) {
     // we should start a new block if we don't have a copyset
-    return true;
-  }
-
-  // We have to regenerate the copysets if the size of the copyset changes
-  if (extras != extras_) {
     return true;
   }
 
@@ -174,13 +164,12 @@ bool StickyCopySetManager::shouldStartNewBlock(const State& state,
 
 bool StickyCopySetManager::startNewBlock(State& csm_state,
                                          const AppendContext& /*append_ctx*/,
-                                         copyset_size_t extras,
                                          bool* chain_out) {
   StoreChainLink copyset[COPYSET_SIZE_MAX];
   copyset_size_t size = 0;
 
   auto result = underlying_selector_->select(
-      extras, copyset, &size, chain_out, csm_state.css_state.get());
+      copyset, &size, chain_out, csm_state.css_state.get());
   if (result == CopySetSelector::Result::FAILED) {
     return false;
   }
@@ -193,7 +182,6 @@ bool StickyCopySetManager::startNewBlock(State& csm_state,
     copyset_.push_back(copyset[i].destination);
   }
 
-  extras_ = extras;
   ++block_seq_no_;
 
   lsn_t max_lsn = max_lsn_seen_.load(); // Since this is happening under a lock,

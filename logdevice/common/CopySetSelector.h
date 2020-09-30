@@ -25,7 +25,7 @@ struct StoreChainLink;
 class CopySetSelector {
  public:
   // see the @return doc block of the select() function
-  enum class Result { SUCCESS, PARTIAL, FAILED };
+  enum class Result { SUCCESS, FAILED };
 
   /**
    * an abstraction that encapsulates the internal state of the copyset selector
@@ -50,11 +50,7 @@ class CopySetSelector {
    * Things like replication property and nodeset are given to CopySetSelector
    * at construction time.
    *
-   * @param extras        extra copies of the log record. extra storage nodes
-   *                      are selected for latency optimization but are not
-   *                      strictly required in the copyset.
-   * @param copyset_out   an array of size of at least
-   *                      (getReplicationFactor() + extras)
+   * @param copyset_out   an array of size of at least getReplicationFactor()
    *                      to store the result copyset. Elements of the array
    *                      is of type StoreChainLink, which consists of the
    *                      ShardID and ClientID (used for the destination node to
@@ -90,18 +86,13 @@ class CopySetSelector {
    *
    * @return                CopySetSelect::Result type indicating the outcome
    *                        of selection. Could be one of:
-   *                        SUCCESS    a copyset of (_replication_+_extras_)
-   *                                   nodes is successfully selected from
-   *                                   the nodeset
-   *                        PARTIAL    a copyset of at least _replication_ nodes
-   *                                   is selected, but there are not enough
-   *                                   nodes to store all _extras_
-   *                        FAILED     failed to select a copyset of at least
+   *                        SUCCESS    a copyset of _replication_ nodes is
+   *                                   successfully selected from the nodeset
+   *                        FAILED     failed to select a copyset of
    *                                   _replication_ nodes because there
    *                                   were not enough storage nodes available
    */
-  virtual Result select(copyset_size_t extras,
-                        StoreChainLink copyset_out[],
+  virtual Result select(StoreChainLink copyset_out[],
                         copyset_size_t* copyset_size_out,
                         bool* chain_out = nullptr,
                         State* selector_state = nullptr,
@@ -198,7 +189,7 @@ class CopySetSelector {
 
   /**
    * This CopySetSelector selects copysets of size
-   * getReplicationFactor() + `extras`.
+   * getReplicationFactor().
    */
   virtual copyset_size_t getReplicationFactor() const = 0;
 

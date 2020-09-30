@@ -59,8 +59,7 @@ class StickyCopySetManager : public CopySetManager {
 
   // see docblock in CopySetManager::getCopySet()
   CopySetSelector::Result
-  getCopySet(copyset_size_t extras,
-             StoreChainLink copyset_out[],
+  getCopySet(StoreChainLink copyset_out[],
              copyset_size_t* copyset_size_out,
              bool* chain_out,
              const AppendContext& append_ctx,
@@ -78,7 +77,6 @@ class StickyCopySetManager : public CopySetManager {
   // see docblock in CopySetManager::GetCopysetUsingUnderlyingSelector()
   CopySetSelector::Result
   getCopysetUsingUnderlyingSelector(logid_t log_id,
-                                    copyset_size_t extras,
                                     StoreChainLink copyset_out[],
                                     copyset_size_t* copyset_size_out) override;
 
@@ -89,8 +87,7 @@ class StickyCopySetManager : public CopySetManager {
   // returns true if a new block should be started - either because the current
   // copyset was generated with outdated inputs, or because block size
   // threshold has been exceeded
-  virtual bool shouldStartNewBlock(const State& state,
-                                   copyset_size_t extras) const;
+  virtual bool shouldStartNewBlock(const State& state) const;
 
   // Checks if nodes are up. Returns true and writes the copyset to the args if
   // all nodes are available. Otherwise returns false.
@@ -104,7 +101,6 @@ class StickyCopySetManager : public CopySetManager {
   // a copyset for the new block was successful
   bool startNewBlock(State& state,
                      const AppendContext& append_ctx,
-                     copyset_size_t extras,
                      bool* chain_out);
 
   // This is called when we assign a copyset to a particular record. Used to
@@ -120,9 +116,6 @@ class StickyCopySetManager : public CopySetManager {
 
   // When the age of a block exceeds this value, we start a new one.
   const std::chrono::milliseconds block_time_threshold_;
-
-  // Number of extras. Used to start a new block if this changes.
-  copyset_size_t extras_{0};
 
   // Starting LSN of the current block
   lsn_t current_block_starting_lsn_{LSN_INVALID};

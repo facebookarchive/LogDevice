@@ -43,20 +43,15 @@ class PassThroughCopySetManager : public CopySetManager {
       : CopySetManager(std::move(css), nodeset_state) {}
 
   CopySetSelector::Result
-  getCopySet(copyset_size_t extras,
-             StoreChainLink copyset_out[],
+  getCopySet(StoreChainLink copyset_out[],
              copyset_size_t* copyset_size_out,
              bool* chain_out,
              const AppendContext& /*append_ctx*/,
              folly::Optional<lsn_t>& block_starting_lsn_out,
              CopySetManager::State& csm_state) override {
     State& state = checked_downcast<State&>(csm_state);
-    CopySetSelector::Result res =
-        underlying_selector_->select(extras,
-                                     copyset_out,
-                                     copyset_size_out,
-                                     chain_out,
-                                     state.css_state.get());
+    CopySetSelector::Result res = underlying_selector_->select(
+        copyset_out, copyset_size_out, chain_out, state.css_state.get());
 
     // see docblock for CopySetManager::shuffleCopySet
     shuffleCopySet(
@@ -67,10 +62,9 @@ class PassThroughCopySetManager : public CopySetManager {
 
   CopySetSelector::Result
   getCopysetUsingUnderlyingSelector(logid_t /*log_id*/,
-                                    copyset_size_t extras,
                                     StoreChainLink copyset_out[],
                                     copyset_size_t* copyset_size_out) override {
-    return underlying_selector_->select(extras, copyset_out, copyset_size_out);
+    return underlying_selector_->select(copyset_out, copyset_size_out);
   }
 
   CopySetSelector::Result augmentCopySet(StoreChainLink inout_copyset[],

@@ -695,8 +695,7 @@ bool WeightedCopySetSelector::checkAvailabilityAndBlacklist(
 }
 
 CopySetSelector::Result
-WeightedCopySetSelector::select(copyset_size_t extras,
-                                StoreChainLink copyset_out[],
+WeightedCopySetSelector::select(StoreChainLink copyset_out[],
                                 copyset_size_t* copyset_size_out,
                                 bool* chain_out,
                                 State* selector_state,
@@ -749,8 +748,7 @@ WeightedCopySetSelector::select(copyset_size_t extras,
       if (worker) {
         worker->resetGraylist();
       }
-      return select(extras,
-                    copyset_out,
+      return select(copyset_out,
                     copyset_size_out,
                     chain_out,
                     selector_state,
@@ -946,8 +944,7 @@ WeightedCopySetSelector::select(copyset_size_t extras,
                                       copyset_out,
                                       chain_out)) {
       *copyset_size_out = replication_;
-      // TODO #8329263: support extras
-      return ret = extras ? Result::PARTIAL : Result::SUCCESS;
+      return ret = Result::SUCCESS;
     }
   }
 }

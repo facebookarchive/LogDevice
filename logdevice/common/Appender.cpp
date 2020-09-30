@@ -376,20 +376,10 @@ int Appender::trySendingWavesOfStores(
 
     copyset_size_t ndest = 0;
     folly::Optional<lsn_t> block_starting_lsn;
-    auto result = copyset_manager_->getCopySet(0 /* extras */,
-                                               copyset,
-                                               &ndest,
-                                               &chain,
-                                               append_ctx,
-                                               block_starting_lsn,
-                                               *csm_state_);
+    auto result = copyset_manager_->getCopySet(
+        copyset, &ndest, &chain, append_ctx, block_starting_lsn, *csm_state_);
 
     switch (result) {
-      case CopySetSelector::Result::PARTIAL:
-        // Unexpected PARTIAL result from CopySetSelector despite the fact that
-        // we don't use extras.
-        ld_assert(false);
-        break;
       case CopySetSelector::Result::FAILED:
         // Not enough destinations available at the moment. Will start a
         // timer to retry later.

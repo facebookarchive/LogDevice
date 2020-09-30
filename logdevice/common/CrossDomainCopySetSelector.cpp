@@ -102,8 +102,7 @@ std::string CrossDomainCopySetSelector::getName() const {
 }
 
 CopySetSelector::Result
-CrossDomainCopySetSelector::select(copyset_size_t extras,
-                                   StoreChainLink copyset_out[],
+CrossDomainCopySetSelector::select(StoreChainLink copyset_out[],
                                    copyset_size_t* copyset_size_out,
                                    bool* chain_out,
                                    CopySetSelector::State* selector_state,
@@ -111,15 +110,8 @@ CrossDomainCopySetSelector::select(copyset_size_t extras,
                                    bool retry) const {
   ld_check(copyset_out != nullptr);
   ld_check(copyset_size_out != nullptr);
-  ld_check(extras <= COPYSET_SIZE_MAX - replication_factor_);
+  ld_check(replication_factor_ <= COPYSET_SIZE_MAX);
 
-  // IMPORTANT Note: for the current implementation we do not consider
-  // extras and expect logs using this selection scheme to have extras
-  // set to 0. If extras is not 0, the selector will still try to find
-  // _replication_ number of storage nodes to store copies of record,
-  // and return CopySetSelector::Result::PARTIAL (instead of SUCCESS)
-  // if _replication_ nodes are found.
-  // TODO #8329263: support extras in Appender
   const copyset_size_t ncopies = replication_factor_;
 
   const NodeLocationHierarchy::Domain* primary_domain;
@@ -141,8 +133,7 @@ CrossDomainCopySetSelector::select(copyset_size_t extras,
     }
 
     if (retry) {
-      return select(extras,
-                    copyset_out,
+      return select(copyset_out,
                     copyset_size_out,
                     chain_out,
                     selector_state,
@@ -157,9 +148,7 @@ CrossDomainCopySetSelector::select(copyset_size_t extras,
   }
 
   *copyset_size_out = nodes_selected;
-  return nodes_selected < replication_factor_ + extras
-      ? CopySetSelector::Result::PARTIAL
-      : CopySetSelector::Result::SUCCESS;
+  return CopySetSelector::Result::SUCCESS;
 }
 
 copyset_size_t CrossDomainCopySetSelector::nodesInPrimaryDomain(

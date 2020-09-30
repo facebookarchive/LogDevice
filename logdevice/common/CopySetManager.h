@@ -69,8 +69,7 @@ class CopySetManager {
   // @param state
   //    state of the manager for a particular appender.
   virtual CopySetSelector::Result
-  getCopySet(copyset_size_t extras,
-             StoreChainLink copyset_out[],
+  getCopySet(StoreChainLink copyset_out[],
              copyset_size_t* copyset_size_out,
              bool* chain_out,
              const AppendContext& append_ctx,
@@ -85,7 +84,6 @@ class CopySetManager {
    */
   virtual CopySetSelector::Result
   getCopysetUsingUnderlyingSelector(logid_t log_id,
-                                    copyset_size_t extras,
                                     StoreChainLink copyset_out[],
                                     copyset_size_t* copyset_size_out) = 0;
 

@@ -53,8 +53,7 @@ class TestCopySetSelector : public CopySetSelector {
     ld_check(replication_ > 0 && replication_ <= COPYSET_SIZE_MAX);
   }
 
-  Result select(copyset_size_t /* unused */,
-                StoreChainLink[] /* unused */,
+  Result select(StoreChainLink[] /* unused */,
                 copyset_size_t* /* unused */,
                 bool* /* unused */,
                 State* /* unused */,

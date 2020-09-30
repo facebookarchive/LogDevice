@@ -46,8 +46,7 @@ class WeightedCopySetSelector : public CopySetSelector {
 
   std::string getName() const override;
 
-  Result select(copyset_size_t extras,
-                StoreChainLink copyset_out[],
+  Result select(StoreChainLink copyset_out[],
                 copyset_size_t* copyset_size_out,
                 bool* chain_out = nullptr,
                 State* selector_state = nullptr,

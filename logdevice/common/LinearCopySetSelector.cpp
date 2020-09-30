@@ -44,8 +44,7 @@ std::string LinearCopySetSelector::getName() const {
 }
 
 CopySetSelector::Result
-LinearCopySetSelector::select(copyset_size_t extras,
-                              StoreChainLink copyset_out[],
+LinearCopySetSelector::select(StoreChainLink copyset_out[],
                               copyset_size_t* copyset_size_out,
                               bool* chain_out,
                               CopySetSelector::State* selector_state,
@@ -53,8 +52,8 @@ LinearCopySetSelector::select(copyset_size_t extras,
                               bool retry) const {
   ld_check(copyset_out);
   ld_check(copyset_size_out);
-  ld_check(extras <= COPYSET_SIZE_MAX - replication_factor_);
-  copyset_size_t ndest = selectImpl(replication_factor_ + extras,
+  ld_check(replication_factor_ <= COPYSET_SIZE_MAX);
+  copyset_size_t ndest = selectImpl(replication_factor_,
                                     copyset_out,
                                     chain_out,
                                     selector_state,
@@ -68,8 +67,7 @@ LinearCopySetSelector::select(copyset_size_t extras,
       worker->resetGraylist();
     }
     if (retry) {
-      return select(extras,
-                    copyset_out,
+      return select(copyset_out,
                     copyset_size_out,
                     chain_out,
                     selector_state,
@@ -80,9 +78,7 @@ LinearCopySetSelector::select(copyset_size_t extras,
   }
 
   *copyset_size_out = ndest;
-  return ndest < replication_factor_ + extras
-      ? CopySetSelector::Result::PARTIAL
-      : CopySetSelector::Result::SUCCESS;
+  return CopySetSelector::Result::SUCCESS;
 }
 
 CopySetSelector::Result

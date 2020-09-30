@@ -114,17 +114,14 @@ GET_SEQ_STATE_Message::getCopySet(std::shared_ptr<Sequencer> seq,
   ld_spew("Calling getCopysetUsingUnderlyingSelector() for log:%lu, rqid:%lu",
           datalog_id.val_,
           request_id_.val());
-  auto result = copyset_manager_->getCopysetUsingUnderlyingSelector(datalog_id,
-                                                                    0, // extras
-                                                                    copyset,
-                                                                    &ndest);
+  auto result = copyset_manager_->getCopysetUsingUnderlyingSelector(
+      datalog_id, copyset, &ndest);
 
   ld_spew("Copyset selection result for log:%lu, rqid:%lu, result:%d",
           datalog_id.val_,
           request_id_.val(),
           (int)result);
   switch (result) {
-    case CopySetSelector::Result::PARTIAL:
     case CopySetSelector::Result::SUCCESS:
       ld_check(ndest == replication);
       break;

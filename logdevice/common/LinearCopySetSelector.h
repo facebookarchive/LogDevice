@@ -103,8 +103,7 @@ class LinearCopySetSelector : public CopySetSelector {
 
   // see docblock in CopySetSelector::select()
   CopySetSelector::Result
-  select(copyset_size_t extras,
-         StoreChainLink copyset_out[],
+  select(StoreChainLink copyset_out[],
          copyset_size_t* copyset_size_out,
          bool* chain_out = nullptr,
          CopySetSelector::State* selector_state = nullptr,
