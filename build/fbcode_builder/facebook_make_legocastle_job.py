@@ -230,7 +230,6 @@ def run_shipit(fbsource, project_name, output_dir):
         '--skip-source-pull',
         '--skip-source-clean',
         '--skip-push',
-        '--skip-project-specific',
         '--destination-use-anonymous-https',
         '--create-new-repo-output-path=' + output_dir,
     ]
