@@ -13,6 +13,7 @@
 #include <folly/Synchronized.h>
 #include <folly/portability/OpenSSL.h>
 #include <folly/ssl/OpenSSLPtrTypes.h>
+#include <folly/ssl/SSLSession.h>
 
 namespace facebook { namespace logdevice {
 
@@ -42,7 +43,7 @@ class SSLSessionCache {
    * Returns the cached SSL session, if no session is cached or we exceeded the
    * lifetime of the cached session this function will return a nullptr.
    */
-  folly::ssl::SSLSessionUniquePtr getCachedSSLSession() const;
+  std::shared_ptr<folly::ssl::SSLSession> getCachedSSLSession() const;
 
   /**
    * Caches a new session if:
@@ -50,7 +51,7 @@ class SSLSessionCache {
    *  2. The session contains a TLS ticket.
    *  3. The session is different than the already cached session.
    */
-  void setCachedSSLSession(folly::ssl::SSLSessionUniquePtr session);
+  void setCachedSSLSession(std::shared_ptr<folly::ssl::SSLSession> session);
 
   /**
    * Called when session resumption succeeds mostly for bumping stats.
@@ -59,9 +60,7 @@ class SSLSessionCache {
 
  private:
   struct CachedSession {
-    folly::ssl::SSLSessionUniquePtr session;
-    std::string session_id;
-    std::chrono::steady_clock::time_point added_at;
+    std::shared_ptr<folly::ssl::SSLSession> session;
   };
 
   StatsHolder* stats_{nullptr};

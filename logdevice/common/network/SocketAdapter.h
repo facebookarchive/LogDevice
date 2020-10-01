@@ -9,6 +9,7 @@
 #pragma once
 #include <folly/io/SocketOptionMap.h>
 #include <folly/io/async/AsyncSocket.h>
+#include <folly/ssl/SSLSession.h>
 
 namespace folly {
 class AsyncTransportCertificate;
@@ -227,12 +228,13 @@ class SocketAdapter {
   /**
    * Get a handle to the negotiated SSL session.
    */
-  virtual folly::ssl::SSLSessionUniquePtr getSSLSession() = 0;
+  virtual std::shared_ptr<folly::ssl::SSLSession> getSSLSession() = 0;
 
   /**
    * Set the SSL session to be used during sslConn.
    */
-  virtual void setSSLSession(folly::ssl::SSLSessionUniquePtr session) = 0;
+  virtual void
+  setSSLSession(std::shared_ptr<folly::ssl::SSLSession> session) = 0;
 };
 
 }} // namespace facebook::logdevice

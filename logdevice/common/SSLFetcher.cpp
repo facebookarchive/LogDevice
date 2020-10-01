@@ -70,9 +70,6 @@ void SSLFetcher::reloadSSLContext() {
     // also verifed by the server.
     SSL_CTX_set_verify(context_->getSSLCtx(), SSL_VERIFY_PEER, nullptr);
 
-    // Disabling sessions caching
-    SSL_CTX_set_session_cache_mode(context_->getSSLCtx(), SSL_SESS_CACHE_OFF);
-
     if (stats_) {
       STAT_INCR(stats_, ssl_context_created);
     }

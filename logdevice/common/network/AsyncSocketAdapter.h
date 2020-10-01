@@ -10,6 +10,7 @@
 #include <folly/io/SocketOptionMap.h>
 #include <folly/io/async/AsyncSocket.h>
 #include <folly/io/async/DelayedDestruction.h>
+#include <folly/ssl/SSLSession.h>
 
 #include "logdevice/common/checks.h"
 #include "logdevice/common/debug.h"
@@ -286,12 +287,12 @@ class AsyncSocketAdapter : public SocketAdapter {
   /**
    * Get a handle to the negotiated SSL session.
    */
-  folly::ssl::SSLSessionUniquePtr getSSLSession() override;
+  std::shared_ptr<folly::ssl::SSLSession> getSSLSession() override;
 
   /**
    * Set the SSL session to be used during sslConn.
    */
-  void setSSLSession(folly::ssl::SSLSessionUniquePtr session) override;
+  void setSSLSession(std::shared_ptr<folly::ssl::SSLSession> session) override;
 
  private:
   folly::AsyncSocket::UniquePtr transport_;
