@@ -902,13 +902,14 @@ Server::initThriftServer(std::string name,
   auto factory_plugin =
       params_->getPluginRegistry()->getSinglePlugin<ThriftServerFactory>(
           PluginType::THRIFT_SERVER_FACTORY);
-
+  ld_info("Initializing Thrift Server: %s", name.c_str());
   if (factory_plugin) {
-    return (*factory_plugin)(name, *address, std::move(handler));
+    return (*factory_plugin)(
+        name, *address, std::move(handler), processor_->getRequestExecutor());
   } else {
     // Fallback to built-in SimpleThriftApiServer
     return std::make_unique<SimpleThriftServer>(
-        name, *address, std::move(handler));
+        name, *address, std::move(handler), processor_->getRequestExecutor());
   }
 }
 
@@ -1681,11 +1682,12 @@ bool Server::initAdminServer() {
 
     auto address = admin_listen_addr.value();
     if (factory_plugin) {
-      admin_server_handle_ = (*factory_plugin)(name, address, handler);
+      admin_server_handle_ = (*factory_plugin)(
+          name, address, handler, processor_->getRequestExecutor());
     } else {
       // Fallback to built-in SimpleThriftApiServer
-      admin_server_handle_ =
-          std::make_unique<SimpleThriftServer>(name, address, handler);
+      admin_server_handle_ = std::make_unique<SimpleThriftServer>(
+          name, address, handler, processor_->getRequestExecutor());
     }
 
     if (sharded_store_) {

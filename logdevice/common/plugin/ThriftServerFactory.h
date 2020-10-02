@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "logdevice/common/RequestExecutor.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/plugin/Plugin.h"
 
@@ -36,7 +37,8 @@ class ThriftServerFactory : public Plugin {
   virtual std::unique_ptr<LogDeviceThriftServer>
   operator()(const std::string& name,
              const Sockaddr& listen_addr,
-             std::shared_ptr<fb303::FacebookBase2> handler) = 0;
+             std::shared_ptr<fb303::FacebookBase2> handler,
+             RequestExecutor request_executor) = 0;
 };
 
 }} // namespace facebook::logdevice

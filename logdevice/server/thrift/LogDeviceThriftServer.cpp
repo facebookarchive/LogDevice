@@ -11,17 +11,23 @@
 #include <thrift/lib/cpp2/server/ThriftServer.h>
 
 #include "logdevice/common/debug.h"
+#include "logdevice/server/thrift/LogDeviceThreadManager.h"
 
 namespace facebook { namespace logdevice {
 
 LogDeviceThriftServer::LogDeviceThriftServer(
     const std::string& name,
     const Sockaddr& listen_addr,
-    std::shared_ptr<apache::thrift::ServerInterface> handler)
+    std::shared_ptr<apache::thrift::ServerInterface> handler,
+    RequestExecutor request_executor)
     : name_(name), handler_(handler) {
   ld_check(listen_addr.valid());
   server_ = std::make_shared<apache::thrift::ThriftServer>();
   server_->setInterface(handler_);
+
+  auto thread_manager =
+      std::make_shared<LogDeviceThreadManager>(request_executor);
+  server_->setThreadManager(thread_manager);
 
   ld_check(listen_addr.valid());
   if (listen_addr.isUnixAddress()) {

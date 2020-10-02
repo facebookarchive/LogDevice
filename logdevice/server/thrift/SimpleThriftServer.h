@@ -23,7 +23,8 @@ class SimpleThriftServer : public LogDeviceThriftServer {
  public:
   SimpleThriftServer(const std::string& name,
                      const Sockaddr& listen_addr,
-                     std::shared_ptr<apache::thrift::ServerInterface> handler);
+                     std::shared_ptr<apache::thrift::ServerInterface> handler,
+                     RequestExecutor request_executor);
 
   bool start() override;
 

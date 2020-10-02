@@ -7,6 +7,7 @@
  */
 #pragma once
 
+#include "logdevice/common/RequestExecutor.h"
 #include "logdevice/common/Sockaddr.h"
 
 namespace apache { namespace thrift {
@@ -26,16 +27,18 @@ class LogDeviceThriftServer {
    * Creates a new Thrift server but returned instances will not accept
    * connections until start() is called.
    *
-   * @param name        Used mostly for logging purposes to distinguish multple
-   *                    servers running in the same process.
-   * @param listen_addr Address on which this server will listen for incoming
-   *                    request.
-   * @param handler     Service-specific Thrift handler.
+   * @param name             Used mostly for logging purposes to distinguish
+   *                         multiple servers running in the same process.
+   * @param listen_addr      Address on which this server will listen for
+   *                         incoming request.
+   * @param handler          Service-specific Thrift handler.
+   * @param request_executor API to post requests to workers.
    */
   LogDeviceThriftServer(
       const std::string& name,
       const Sockaddr& listen_addr,
-      std::shared_ptr<apache::thrift::ServerInterface> handler);
+      std::shared_ptr<apache::thrift::ServerInterface> handler,
+      RequestExecutor request_executor);
   /**
    * Starts listen and accept incoming requests.
    *

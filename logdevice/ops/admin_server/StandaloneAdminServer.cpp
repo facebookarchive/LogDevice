@@ -271,13 +271,13 @@ void StandaloneAdminServer::initAdminServer() {
 
   auto factory_plugin = plugin_registry_->getSinglePlugin<ThriftServerFactory>(
       PluginType::THRIFT_SERVER_FACTORY);
-
   if (factory_plugin) {
-    admin_server_ = (*factory_plugin)(name, listen_addr, api_handler_);
+    admin_server_ = (*factory_plugin)(
+        name, listen_addr, api_handler_, processor_->getRequestExecutor());
   } else {
     // Fallback to built-in SimpleThriftApiServer
-    admin_server_ =
-        std::make_unique<SimpleThriftServer>(name, listen_addr, api_handler_);
+    admin_server_ = std::make_unique<SimpleThriftServer>(
+        name, listen_addr, api_handler_, processor_->getRequestExecutor());
   }
 
   ld_check(admin_server_);

@@ -16,8 +16,12 @@ namespace facebook { namespace logdevice {
 SimpleThriftServer::SimpleThriftServer(
     const std::string& name,
     const Sockaddr& listen_addr,
-    std::shared_ptr<apache::thrift::ServerInterface> handler)
-    : LogDeviceThriftServer(name, listen_addr, std::move(handler)) {}
+    std::shared_ptr<apache::thrift::ServerInterface> handler,
+    RequestExecutor request_executor)
+    : LogDeviceThriftServer(name,
+                            listen_addr,
+                            std::move(handler),
+                            request_executor) {}
 
 bool SimpleThriftServer::start() {
   ld_check(!started_);
