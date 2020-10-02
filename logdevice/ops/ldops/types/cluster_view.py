@@ -262,6 +262,7 @@ class ClusterView:
         self,
         shards: Optional[Collection[ShardID]] = None,
         node_ids: Optional[Collection[NodeID]] = None,
+        include_sequencers: bool = False,
     ) -> Tuple[ShardID, ...]:
         shards = list(shards or [])
         node_ids = list(node_ids or [])
@@ -274,12 +275,15 @@ class ClusterView:
                 node_index=shard.node.node_index, node_name=shard.node.name
             )
             if not node_view.is_storage:
-                continue
-
-            if shard.shard_index == ALL_SHARDS:
-                r = range(0, node_view.num_shards)
+                if include_sequencers:
+                    r = [ALL_SHARDS]
+                else:
+                    continue  # pragma: nocover; coverage incorrectly doesn't count this line
             else:
-                r = range(shard.shard_index, shard.shard_index + 1)
+                if shard.shard_index == ALL_SHARDS:
+                    r = range(0, node_view.num_shards)
+                else:
+                    r = range(shard.shard_index, shard.shard_index + 1)
 
             for shard_index in r:
                 ret.add(ShardID(node=node_view.node_id, shard_index=shard_index))

@@ -310,6 +310,29 @@ class TestClusterView(TestCase):
             getattr(ni_to_nc[nis[0]], "storage", StorageConfig()).num_shards + 1,
         )
 
+        node50_storage = ni_to_nc[nis[50]].storage
+        self.assertEqual(
+            len(
+                cv.expand_shards(
+                    shards=[
+                        ShardID(node=NodeID(node_index=nis[50]), shard_index=ALL_SHARDS)
+                    ]
+                )
+            ),
+            0 if node50_storage is None else node50_storage.num_shards,
+        )
+        self.assertEqual(
+            len(
+                cv.expand_shards(
+                    shards=[
+                        ShardID(node=NodeID(node_index=nis[50]), shard_index=ALL_SHARDS)
+                    ],
+                    include_sequencers=True,
+                )
+            ),
+            1 if node50_storage is None else node50_storage.num_shards,
+        )
+
         # normalize_node_id
         self.assertEqual(
             cv.normalize_node_id(NodeID(node_index=nis[0])),

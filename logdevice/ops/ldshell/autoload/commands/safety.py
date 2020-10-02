@@ -148,7 +148,7 @@ async def check_impact(
             shard_ids.add(ShardID(node=cv.get_node_id(node_name=nn), shard_index=-1))
         for ni in node_indexes:
             shard_ids.add(ShardID(node=NodeID(node_index=ni), shard_index=-1))
-        shard_ids_expanded = cv.expand_shards(shard_ids)
+        shard_ids_expanded = cv.expand_shards(shard_ids, include_sequencers=True)
 
         return shard_ids_expanded
 
