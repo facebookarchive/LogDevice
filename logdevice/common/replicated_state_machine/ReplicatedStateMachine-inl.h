@@ -1554,13 +1554,14 @@ Status ReplicatedStateMachine<T, D>::getSnapshotFromMemory(
 template <typename T, typename D>
 std::string ReplicatedStateMachine<T, D>::createSnapshotPayload(const T& data,
                                                                 lsn_t version) {
-  RSMSnapshotHeader header{/*format_version=*/RSMSnapshotHeader::
-                               CONTAINS_DELTA_LOG_READ_PTR_AND_LENGTH,
-                           /*flags=*/0,
-                           /*byte_offset=*/delta_log_byte_offset_,
-                           /*offset=*/delta_log_offset_,
-                           /*base_version=*/version,
-                           /*delta_log_read_ptr=*/delta_read_ptr_};
+  RSMSnapshotHeader header{
+      /*format_version=*/RSMSnapshotHeader::CONTAINS_NODE_METADATA,
+      /*flags=*/0,
+      /*byte_offset=*/delta_log_byte_offset_,
+      /*offset=*/delta_log_offset_,
+      /*base_version=*/version,
+      /*delta_log_read_ptr=*/delta_read_ptr_,
+      /*node_info=*/node_info.value_or("")};
 
   // Determine the size of the header.
   const size_t header_sz = RSMSnapshotHeader::computeLengthInBytes(header);

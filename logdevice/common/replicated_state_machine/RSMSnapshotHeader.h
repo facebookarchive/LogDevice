@@ -17,7 +17,11 @@ namespace facebook { namespace logdevice {
 
 // Header of a snapshot record.
 struct RSMSnapshotHeader : public SerializableData {
-  enum Version { BASE_VERSION = 0, CONTAINS_DELTA_LOG_READ_PTR_AND_LENGTH = 1 };
+  enum Version {
+    BASE_VERSION = 0,
+    CONTAINS_DELTA_LOG_READ_PTR_AND_LENGTH = 1,
+    CONTAINS_NODE_METADATA = 2
+  };
 
   uint32_t format_version; // current snapshot header version
   uint32_t flags;          // unused, might be handy in the future.
@@ -27,6 +31,7 @@ struct RSMSnapshotHeader : public SerializableData {
   size_t length;           // length of this header in bytes (for future use).
   lsn_t delta_log_read_ptr{LSN_INVALID}; // reader pointer of the delta log
                                          // reader at the time of this snapshot.
+  std::string node_info;                 // metadata of the node running the RSM
 
   RSMSnapshotHeader() = default;
 
@@ -35,14 +40,17 @@ struct RSMSnapshotHeader : public SerializableData {
                     uint64_t byte_offset,
                     uint64_t offset,
                     lsn_t base_version,
-                    lsn_t delta_log_read_ptr = 0)
+                    lsn_t delta_log_read_ptr = 0,
+                    std::string node_info = "")
       : format_version(format_version),
         flags(flags),
         byte_offset(byte_offset),
         offset(offset),
         base_version(base_version),
-        length(computeLengthInBytes(*this)),
-        delta_log_read_ptr(delta_log_read_ptr) {}
+        delta_log_read_ptr(delta_log_read_ptr),
+        node_info(std::move(node_info)) {
+    length = computeLengthInBytes(*this);
+  }
 
   // If this flag is set, use ZSTD to compress / decompress the snapshot
   // payload.

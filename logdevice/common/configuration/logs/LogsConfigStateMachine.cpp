@@ -311,8 +311,38 @@ StatsHolder* FOLLY_NULLABLE LogsConfigStateMachine::getStats() {
   }
 }
 
+NodeID getNodeID() {
+  auto w = Worker::onThisThread();
+  return w->processor_->getMyNodeID();
+}
+
+std::string getHostName() {
+  std::array<char, 256 + 1> hostname{};
+  folly::checkUnixError(gethostname(hostname.data(), hostname.size()),
+                        "gethostname() failed, errno: ",
+                        errno);
+  hostname.at(256) = 0;
+
+  std::string ret(std::begin(hostname), std::end(hostname));
+  return ret;
+}
+
+void LogsConfigStateMachine::storeSerializedNodeInfo() {
+  if (Parent::node_info.has_value()) {
+    return;
+  }
+
+  node_id_ = getNodeID();
+  hostname_ = getHostName();
+
+  std::string serialized_info =
+      "Node ID = " + node_id_.toString() + " ; " + "Hostname = " + hostname_;
+  Parent::node_info = serialized_info;
+}
+
 void LogsConfigStateMachine::snapshot(std::function<void(Status st)> cb) {
   STAT_INCR(getStats(), logsconfig_manager_snapshot_requested);
+  storeSerializedNodeInfo();
   Parent::snapshot(cb);
 }
 

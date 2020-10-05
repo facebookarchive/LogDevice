@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include <string>
+
 #include <folly/Synchronized.h>
 
 #include "logdevice/common/configuration/logs/FBuffersLogsConfigCodec.h"
@@ -55,6 +57,10 @@ class LogsConfigStateMachine
   static std::string serializeLogGroup(const logsconfig::LogGroupNode& lg);
 
   static std::string serializeDirectory(const logsconfig::DirectoryNode& dir);
+
+  // Serailizes metadata information of the node running the RSM
+  // To be added to the snapshot header for future investigations
+  void storeSerializedNodeInfo();
 
   static std::unique_ptr<logsconfig::LogGroupNode>
   deserializeLogGroup(const std::string& payload, const std::string& delimiter);
@@ -148,5 +154,7 @@ class LogsConfigStateMachine
   bool is_writable_; // this is for delta log
   bool allow_snapshotting_;
   size_t deduplication_scheduled_{0};
+  NodeID node_id_;
+  std::string hostname_;
 };
 }} // namespace facebook::logdevice

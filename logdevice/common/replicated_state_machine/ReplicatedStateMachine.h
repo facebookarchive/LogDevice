@@ -655,6 +655,8 @@ class ReplicatedStateMachine {
   const logid_t snapshot_log_id_;
   lsn_t last_written_version_{LSN_INVALID};
 
+  folly::Optional<std::string> node_info;
+
   // Used by tests.
   boost::uuids::uuid last_uuid_;
 
