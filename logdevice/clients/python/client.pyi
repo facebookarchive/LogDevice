@@ -31,6 +31,13 @@ class Directory:
     attrs: Attrs
     # TODO flesh out
 
+class DataRecord:
+    logid: int
+    lsn: lsn_t
+    timestamp: float
+    payload: Any
+    payloads: Dict
+
 class Reader:
     def __iter__(self) -> Iterator: ...
     def __next__(self) -> Tuple[Any, Any]: ...
