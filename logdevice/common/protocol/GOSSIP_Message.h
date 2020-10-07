@@ -103,6 +103,8 @@ class GOSSIP_Message : public Message {
   Disposition onReceived(const Address& from) override;
   void onSent(Status st, const Address& to) const override;
 
+  PermissionParams getPermissionParams() const override;
+
   node_list_t node_list_;
   NodeID gossip_node_;
   GOSSIP_flags_t flags_;

@@ -16,6 +16,7 @@ enum class ACTION {
   READ = 1,
   TRIM = 2,
   LOG_MANAGEMENT = 3,
-  MAX // should always be last
+  SERVER_INTERNAL = 4, // Message types allowed only between servers
+  MAX                  // should always be last
 };
 }} // namespace facebook::logdevice

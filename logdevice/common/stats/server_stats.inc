@@ -1142,6 +1142,8 @@ STAT_DEFINE(server_message_dispatch_skip_permission, SUM)
 STAT_DEFINE(server_message_dispatch_check_permission, SUM)
 // bypass permission
 STAT_DEFINE(server_message_dispatch_bypass_permission, SUM)
+// check server messages sent by client
+STAT_DEFINE(unauthorized_server_message_by_client, SUM)
 
 // ACL Cache
 // cache misses

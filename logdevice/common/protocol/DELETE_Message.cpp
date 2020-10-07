@@ -35,4 +35,11 @@ Message::Disposition DELETE_Message::onReceived(const Address&) {
   std::abort();
 }
 
+PermissionParams DELETE_Message::getPermissionParams() const {
+  PermissionParams params;
+  params.requiresPermission = true;
+  params.action = ACTION::SERVER_INTERNAL;
+  return params;
+}
+
 }} // namespace facebook::logdevice

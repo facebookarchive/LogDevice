@@ -18,6 +18,7 @@
 #include "logdevice/common/protocol/STORE_Message.h"
 #include "logdevice/common/protocol/WINDOW_Message.h"
 #include "logdevice/common/util.h"
+#include "logdevice/include/PermissionActions.h"
 #include "logdevice/server/GAP_onSent.h"
 #include "logdevice/server/GOSSIP_onSent.h"
 #include "logdevice/server/RECORD_onSent.h"
@@ -76,6 +77,20 @@ ServerMessageDispatch::onReceivedImpl(Message* msg,
                    Sender::describeConnection(from).c_str());
     params.requiresPermission = false;
     STAT_INCR(processor_->stats_, server_message_dispatch_bypass_permission);
+  }
+
+  if (isInternalServerMessageFromNonServerNode(params, principal) &&
+      processor_->settings()->require_permission_message_types.count(
+          msg->type_) > 0) {
+    STAT_INCR(processor_->stats_, unauthorized_server_message_by_client);
+    RATELIMIT_WARNING(std::chrono::seconds(10),
+                      1,
+                      "Server only message type %s "
+                      "received from %s source address",
+                      messageTypeNames()[msg->type_].c_str(),
+                      from.toString().c_str());
+
+    return Message::Disposition::ERROR;
   }
 
   if (permission_checker && params.requiresPermission) {
@@ -280,5 +295,13 @@ void ServerMessageDispatch::onSentImpl(const Message& msg,
       // whose handler lives in common/ with the Message subclass)
       return msg.onSent(st, to);
   }
+}
+
+bool ServerMessageDispatch::isInternalServerMessageFromNonServerNode(
+    const PermissionParams& params,
+    const PrincipalIdentity& principal) const {
+  return params.requiresPermission &&
+      params.action == ACTION::SERVER_INTERNAL &&
+      principal.type != Principal::CLUSTER_NODE;
 }
 }} // namespace facebook::logdevice

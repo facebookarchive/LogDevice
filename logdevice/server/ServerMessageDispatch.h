@@ -39,6 +39,14 @@ class ServerMessageDispatch : public MessageDispatch {
                     const Address& from,
                     PermissionCheckStatus permission_status) const;
 
+  /**
+   * Method to check if the message type is only authorised to be sent between
+   * servers only but is being sent by a non-server (client) entity.
+   */
+  bool isInternalServerMessageFromNonServerNode(
+      const PermissionParams& params,
+      const PrincipalIdentity& principal) const;
+
  private:
   Processor* processor_;
 };

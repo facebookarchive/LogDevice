@@ -47,6 +47,8 @@ class DELETE_Message : public Message {
   Disposition onReceived(const Address&) override;
   static Message::deserializer_t deserialize;
 
+  PermissionParams getPermissionParams() const override;
+
   const DELETE_Header& getHeader() const {
     return header_;
   }

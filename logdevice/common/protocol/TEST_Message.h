@@ -8,6 +8,7 @@
 #pragma once
 
 #include "logdevice/common/protocol/FixedSizeMessage.h"
+#include "logdevice/common/protocol/Message.h"
 
 namespace facebook { namespace logdevice {
 
@@ -18,6 +19,11 @@ class TEST_Message : public Message {
   void serialize(ProtocolWriter&) const override;
   static Message::deserializer_t deserialize;
   Disposition onReceived(const Address& from) override;
+  PermissionParams getPermissionParams() const override;
+  void setPermissionParams(PermissionParams& param);
+
+ private:
+  PermissionParams param_;
 };
 
 }} // namespace facebook::logdevice

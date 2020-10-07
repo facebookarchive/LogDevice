@@ -29,4 +29,12 @@ Message::Disposition TEST_Message::onReceived(const Address&) {
   return Message::Disposition::NORMAL;
 }
 
+void TEST_Message::setPermissionParams(PermissionParams& param) {
+  param_ = param;
+}
+
+PermissionParams TEST_Message::getPermissionParams() const {
+  return param_;
+}
+
 }} // namespace facebook::logdevice

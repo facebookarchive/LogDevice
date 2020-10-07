@@ -123,6 +123,13 @@ void GOSSIP_Message::onSent(Status /*st*/, const Address& /*to*/) const {
   std::abort();
 }
 
+PermissionParams GOSSIP_Message::getPermissionParams() const {
+  PermissionParams params;
+  params.requiresPermission = true;
+  params.action = ACTION::SERVER_INTERNAL;
+  return params;
+}
+
 void GOSSIP_Message::writeBoycottList(ProtocolWriter& writer) const {
   ld_check(boycott_list_.size() == num_boycotts_);
   writer.write(num_boycotts_);
