@@ -305,6 +305,7 @@ class STORE_Message : public Message {
     // never get called.
     std::abort();
   }
+  PermissionParams getPermissionParams() const override;
   static Message::deserializer_t deserialize;
 
   /**

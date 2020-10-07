@@ -45,4 +45,11 @@ void SEAL_Message::onSent(Status status, const Address& to) const {
       ShardID(to.id_.node_.index(), header_.shard), header_.seal_epoch, status);
 }
 
+PermissionParams SEAL_Message::getPermissionParams() const {
+  PermissionParams params;
+  params.requiresPermission = true;
+  params.action = ACTION::SERVER_INTERNAL;
+  return params;
+}
+
 }} // namespace facebook::logdevice

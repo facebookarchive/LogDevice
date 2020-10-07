@@ -45,4 +45,11 @@ Message::Disposition CHECK_SEAL_Message::onReceived(const Address& /*from*/) {
   std::abort();
 }
 
+PermissionParams CHECK_SEAL_Message::getPermissionParams() const {
+  PermissionParams params;
+  params.requiresPermission = true;
+  params.action = ACTION::SERVER_INTERNAL;
+  return params;
+}
+
 }} // namespace facebook::logdevice

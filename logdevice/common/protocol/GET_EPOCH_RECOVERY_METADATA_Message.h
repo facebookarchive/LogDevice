@@ -65,6 +65,8 @@ class GET_EPOCH_RECOVERY_METADATA_Message : public Message {
     std::abort();
   }
 
+  PermissionParams getPermissionParams() const override;
+
   const GET_EPOCH_RECOVERY_METADATA_Header& getHeader() const {
     return header_;
   }

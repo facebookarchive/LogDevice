@@ -122,4 +122,11 @@ void CLEAN_Message::onSent(Status st, const Address& to) const {
       ShardID(to.id_.node_.index(), header_.shard), type_, st);
 }
 
+PermissionParams CLEAN_Message::getPermissionParams() const {
+  PermissionParams params;
+  params.requiresPermission = true;
+  params.action = ACTION::SERVER_INTERNAL;
+  return params;
+}
+
 }} // namespace facebook::logdevice

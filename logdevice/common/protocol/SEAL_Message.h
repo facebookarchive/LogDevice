@@ -55,6 +55,7 @@ class SEAL_Message : public Message {
   void serialize(ProtocolWriter&) const override;
   void onSent(Status st, const Address& to) const override;
   Disposition onReceived(const Address&) override;
+  PermissionParams getPermissionParams() const override;
   static Message::deserializer_t deserialize;
 
   SEAL_Header header_;

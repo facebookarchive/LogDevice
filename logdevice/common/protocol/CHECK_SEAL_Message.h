@@ -65,6 +65,7 @@ class CHECK_SEAL_Message : public Message {
   void serialize(ProtocolWriter&) const override;
   Disposition onReceived(const Address&) override;
   void onSent(Status st, const Address& to) const override;
+  PermissionParams getPermissionParams() const override;
   static Message::deserializer_t deserialize;
 
   const CHECK_SEAL_Header& getHeader() const {

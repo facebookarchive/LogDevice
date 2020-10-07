@@ -258,6 +258,13 @@ MessageReadResult STORE_Message::deserialize(ProtocolReader& reader) {
   });
 }
 
+PermissionParams STORE_Message::getPermissionParams() const {
+  PermissionParams params;
+  params.requiresPermission = true;
+  params.action = ACTION::SERVER_INTERNAL;
+  return params;
+}
+
 void STORE_Message::onSentCommon(Status st, const Address& to) const {
   ld_check(!to.isClientAddress());
 

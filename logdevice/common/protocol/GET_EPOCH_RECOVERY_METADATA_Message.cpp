@@ -27,4 +27,12 @@ GET_EPOCH_RECOVERY_METADATA_Message::deserialize(ProtocolReader& reader) {
       [&] { return new GET_EPOCH_RECOVERY_METADATA_Message(hdr); });
 }
 
+PermissionParams
+GET_EPOCH_RECOVERY_METADATA_Message::getPermissionParams() const {
+  PermissionParams params;
+  params.requiresPermission = true;
+  params.action = ACTION::SERVER_INTERNAL;
+  return params;
+}
+
 }} // namespace facebook::logdevice

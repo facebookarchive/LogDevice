@@ -111,6 +111,7 @@ class CLEAN_Message : public Message {
     std::abort();
   }
   void onSent(Status st, const Address& to) const override;
+  PermissionParams getPermissionParams() const override;
   static Message::deserializer_t deserialize;
 
   // Helper for deserializing `absent_nodes_`.
