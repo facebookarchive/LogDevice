@@ -968,8 +968,6 @@ TEST_P(ReadingIntegrationTest, PayloadHashOnly) {
 }
 
 TEST_P(ReadingIntegrationTest, LogTailAttributes) {
-  using namespace std::chrono;
-
   const int NRECORDS_PER_EPOCH = 20;
   const int RECORD_SIZE = 10;
   const logid_t LOG_ID(1);

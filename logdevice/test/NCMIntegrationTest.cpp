@@ -10,7 +10,6 @@
 #include <thread>
 
 #include <folly/Random.h>
-#include <folly/hash/Checksum.h>
 #include <folly/synchronization/Baton.h>
 #include <gtest/gtest.h>
 
@@ -28,7 +27,6 @@
 using namespace facebook::logdevice;
 using namespace facebook::logdevice::configuration::nodes;
 using namespace facebook::logdevice::membership;
-using namespace facebook::logdevice::NodesConfigurationTestUtil;
 using NCAPI = facebook::logdevice::configuration::NodesConfigurationAPI;
 
 namespace {

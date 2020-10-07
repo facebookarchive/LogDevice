@@ -14,8 +14,6 @@
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
-using namespace facebook::logdevice;
-
 namespace facebook { namespace logdevice {
 
 class RebuildingSupervisorIntegrationTest : public IntegrationTestBase {};

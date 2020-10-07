@@ -25,7 +25,6 @@
 
 using namespace facebook::logdevice;
 using namespace IntegrationTestUtils;
-using namespace testing;
 
 static std::string typeToString(SnapshotStoreType t) {
   std::string cluster_store_type;

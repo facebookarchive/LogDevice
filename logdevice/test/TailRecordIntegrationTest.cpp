@@ -10,7 +10,6 @@
 #include <thread>
 
 #include <folly/Random.h>
-#include <folly/hash/Checksum.h>
 #include <gtest/gtest.h>
 
 #include "logdevice/common/Checksum.h"

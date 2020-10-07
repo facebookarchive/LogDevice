@@ -15,8 +15,6 @@
 #include "logdevice/common/ThriftCodec.h"
 #include "logdevice/lib/ClientImpl.h"
 
-using namespace apache::thrift::util;
-
 namespace facebook { namespace logdevice {
 
 void retry_until_ready(int32_t attempts,

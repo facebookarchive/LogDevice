@@ -21,7 +21,6 @@
 #include <utility>
 #include <vector>
 
-#include <folly/Function.h>
 #include <folly/TokenBucket.h>
 
 #include "logdevice/common/debug.h"

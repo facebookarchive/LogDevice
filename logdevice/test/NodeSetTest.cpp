@@ -43,7 +43,6 @@
 #define N5 ShardID(5, 0)
 
 using namespace facebook::logdevice;
-using IntegrationTestUtils::markShardUnrecoverable;
 using IntegrationTestUtils::requestShardRebuilding;
 
 /*

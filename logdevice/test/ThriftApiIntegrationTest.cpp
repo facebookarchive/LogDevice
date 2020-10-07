@@ -10,8 +10,6 @@
 
 #include "logdevice/test/ThriftApiIntegrationTestBase.h"
 
-using namespace ::testing;
-
 namespace facebook { namespace logdevice { namespace test { namespace {
 
 class ThriftApiIntegrationTest : public ThriftApiIntegrationTestBase {};

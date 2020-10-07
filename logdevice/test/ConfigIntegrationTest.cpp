@@ -17,7 +17,6 @@
 #include "logdevice/common/configuration/InternalLogs.h"
 #include "logdevice/common/configuration/LocalLogsConfig.h"
 #include "logdevice/common/configuration/UpdateableConfig.h"
-#include "logdevice/common/hash.h"
 #include "logdevice/common/nodeset_selection/NodeSetSelectorFactory.h"
 #include "logdevice/common/plugin/PluginRegistry.h"
 #include "logdevice/common/stats/Stats.h"
