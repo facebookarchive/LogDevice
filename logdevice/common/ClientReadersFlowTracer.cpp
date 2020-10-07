@@ -111,6 +111,11 @@ void updateExponentialMovingAverage(double& current_value,
   const std::chrono::duration<double> kWindowSize = std::chrono::minutes{1};
   double alpha = 1.0 - std::exp(-time_diff / kWindowSize);
   current_value = (1 - alpha) * current_value + alpha * new_sample;
+
+  constexpr auto max_value = std::numeric_limits<int64_t>::max();
+  if (current_value > max_value) {
+    current_value = max_value;
+  }
 }
 
 } // namespace
@@ -159,10 +164,10 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
                                  num_bytes_read - last_num_bytes_read_,
                                  time_diff);
 
-  int reading_speed_records =
-      static_cast<int>(std::round(speed_records_moving_avg_));
-  int reading_speed_bytes =
-      static_cast<int>(std::round(speed_bytes_moving_avg_));
+  int64_t reading_speed_records =
+      static_cast<int64_t>(std::round(speed_records_moving_avg_));
+  int64_t reading_speed_bytes =
+      static_cast<int64_t>(std::round(speed_bytes_moving_avg_));
 
   auto sample_builder = [&, this]() -> std::unique_ptr<TraceSample> {
     auto time_stuck = std::max(msec_since(last_time_stuck_), 0l);
