@@ -7,6 +7,8 @@
  */
 #pragma once
 
+#include <string>
+
 #include "logdevice/common/SerializableData.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/include/Err.h"
@@ -31,7 +33,6 @@ struct RSMSnapshotHeader : public SerializableData {
   size_t length;           // length of this header in bytes (for future use).
   lsn_t delta_log_read_ptr{LSN_INVALID}; // reader pointer of the delta log
                                          // reader at the time of this snapshot.
-  std::string node_info;                 // metadata of the node running the RSM
 
   RSMSnapshotHeader() = default;
 
@@ -48,7 +49,7 @@ struct RSMSnapshotHeader : public SerializableData {
         offset(offset),
         base_version(base_version),
         delta_log_read_ptr(delta_log_read_ptr),
-        node_info(std::move(node_info)) {
+        node_info_(std::move(node_info)) {
     length = computeLengthInBytes(*this);
   }
 
@@ -99,6 +100,14 @@ struct RSMSnapshotHeader : public SerializableData {
   bool operator==(const RSMSnapshotHeader&) const;
 
   std::string describe() const;
+
+  void setNodeInfo(std::string node_info);
+  const std::string& getNodeInfo() const;
+
+ private:
+  std::string node_info_; // metadata of the node running the RSM
+                          // made private to control its updation as it affects
+                          // the length of the header field
 };
 
 }} // namespace facebook::logdevice
