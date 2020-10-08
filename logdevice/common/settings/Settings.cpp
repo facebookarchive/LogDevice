@@ -321,6 +321,30 @@ parse_optional_chrono_option(const std::string& value) {
   return result;
 };
 
+decltype(auto)
+parse_time_threshold_per_monitoring_tag(const std::string& value) {
+  folly::F14FastMap<std::string, std::chrono::milliseconds> res;
+
+  std::vector<std::string> tokens;
+  folly::split(',', value, tokens, true);
+  for (const auto& token : tokens) {
+    std::string monitoring_tag;
+    std::string time_threshold_str;
+    if (!folly::split(':', token, monitoring_tag, time_threshold_str)) {
+      throw boost::program_options::error(
+          "Invalid monitoring tag / time threshold pair: " + token);
+    }
+    std::chrono::milliseconds time_threshold;
+    if (parse_chrono_string(time_threshold_str, &time_threshold) != 0) {
+      throw boost::program_options::error("Invalid time threhold: " +
+                                          time_threshold_str);
+    }
+    res[monitoring_tag] = time_threshold;
+  }
+
+  return res;
+}
+
 Compression parse_compression(const std::string& value) {
   Compression compression;
   auto rv = parseCompression(value.c_str(), &compression);
@@ -1448,6 +1472,19 @@ void Settings::defineSettings(SettingEasyInit& init) {
        "(for improved debuggability).",
        CLIENT,
        SettingsCategory::Monitoring);
+
+  init("client-readers-flow-max-acceptable-time-lag-per-tag",
+       &client_readers_flow_max_acceptable_time_lag_per_tag,
+       "",
+       parse_time_threshold_per_monitoring_tag,
+       "Map that establishes the maximum acceptable time lag for each "
+       "monitoring tag. A reader that passes the maximum acceptable time lag "
+       "will be considered unhealthy for the purpose of increasing weight when "
+       "pushing samples. See "
+       "'client-readers-flow-tracer-unhealthy-publish-weight'.",
+       CLIENT,
+       SettingsCategory::Monitoring);
+
   init("client-readers-flow-tracer-GSS-skip-remote-preemption-checks",
        &client_readers_flow_tracer_GSS_skip_remote_preemption_checks,
        "true",

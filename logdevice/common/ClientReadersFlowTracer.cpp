@@ -251,7 +251,25 @@ bool ClientReadersFlowTracer::readerIsStuck() const {
 }
 
 bool ClientReadersFlowTracer::readerIsUnhealthy() const {
-  return last_reported_state_ != State::HEALTHY;
+  bool time_lag_above_threshold = false;
+
+  auto time_lag = estimateTimeLag();
+
+  // Check if time_lag is above threshold for each of the readers monitoring
+  // tags.
+  if (time_lag.hasValue()) {
+    auto& threshold_map =
+        Worker::settings().client_readers_flow_max_acceptable_time_lag_per_tag;
+    for (const auto& tag : owner_->monitoring_tags_) {
+      if (threshold_map.contains(tag) &&
+          threshold_map.at(tag) < time_lag.value()) {
+        time_lag_above_threshold = true;
+        break;
+      }
+    }
+  }
+
+  return last_reported_state_ != State::HEALTHY || time_lag_above_threshold;
 }
 
 void ClientReadersFlowTracer::onSettingsUpdated() {

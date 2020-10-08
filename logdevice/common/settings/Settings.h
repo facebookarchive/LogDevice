@@ -11,6 +11,7 @@
 #include <string>
 
 #include <folly/Optional.h>
+#include <folly/container/F14Map.h>
 
 #include "logdevice/common/AuthoritativeStatus.h"
 #include "logdevice/common/SCDCopysetReordering.h"
@@ -679,6 +680,13 @@ struct Settings : public SettingsBundle {
   // (client-only setting) Weight given to traces of unhealthy readers when
   // publishing samples (for improved debuggability).
   double client_readers_flow_tracer_unhealthy_publish_weight;
+
+  // (client-only settting) Map that establishes the maximum acceptable time lag
+  // for each monitoring tag. A reader that passes the maximum acceptable time
+  // lag will be considered unhealthy for the purpose of increasing weight when
+  // pushing samples.
+  folly::F14FastMap<std::string, std::chrono::milliseconds>
+      client_readers_flow_max_acceptable_time_lag_per_tag;
 
   // (client-only setting) If set, skips remote preemption checks (aka CHECK
   // SEALs) on GSSs issued by ClientReadersFlowTracer.

@@ -194,6 +194,7 @@ sidebar_label: Settings
 ## Monitoring
 |   Name    |   Description   |  Default  |   Notes   |
 |-----------|-----------------|:---------:|-----------|
+| client-readers-flow-max-acceptable-time-lag-per-tag | Map that establishes the maximum acceptable time lag for each monitoring tag. A reader that passes the maximum acceptable time lag will be considered unhealthy for the purpose of increasing weight when pushing samples. See 'client-readers-flow-tracer-unhealthy-publish-weight'. |  | client&nbsp;only |
 | client-readers-flow-tracer-GSS-skip-remote-preemption-checks | If set, skips remote preemption checks (aka CHECK SEALs) on GSSs issued by ClientReadersFlowTracer. | true | client&nbsp;only |
 | client-readers-flow-tracer-high-pri-max-lag | Max allowed amount of lag for high priority readers. | max | client&nbsp;only |
 | client-readers-flow-tracer-lagging-metric-num-sample-groups | Maximum number of samples that are kept by ClientReadersFlowTracer for computing relative reading speed in relation to writing speed. See client\_readers\_flow\_tracer\_lagging\_slope\_threshold. | 3 | client&nbsp;only |
