@@ -13,6 +13,7 @@
 #include <folly/Executor.h>
 
 #include "logdevice/common/NodeID.h"
+#include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/settings/UpdateableSettings.h"
@@ -37,12 +38,16 @@ class ThriftRouter {
   /**
    * Creates a new client for Thrift API on the node with given ID.
    *
-   * @param nid               ID of the node which will be used as a destination
-   *                          for all Thrift requests on the client
+   * @param nid           ID of the node which will be used as a destination for
+   *                      all Thrift requests on the client
+   * @param out_address   If not nullptr and node id successfully resolved the
+   *                      socket address used for the client connection will be
+   *                      written to this memory location.
+   *
    * @return New Thrift client or nullptr if unable to router.
    */
   virtual std::unique_ptr<thrift::LogDeviceAPIAsyncClient>
-  getApiClient(node_index_t nid) = 0;
+  getApiClient(node_index_t nid, Sockaddr* out_address = nullptr) = 0;
 
   virtual ~ThriftRouter() = default;
 };
@@ -64,13 +69,15 @@ class NcmThriftRouter : public ThriftRouter {
                   std::shared_ptr<UpdateableNodesConfiguration> nodes);
 
   std::unique_ptr<thrift::LogDeviceAPIAsyncClient>
-      getApiClient(node_index_t) override;
+  getApiClient(node_index_t, Sockaddr*) override;
 
  private:
   ThriftClientFactory* client_factory_;
   UpdateableSettings<Settings> settings_;
   // TODO(T70882102): Close connectons whose peer addrees has changed
   std::shared_ptr<UpdateableNodesConfiguration> nodes_;
+
+  folly::Optional<Sockaddr> getApiAddress(node_index_t) const;
 };
 
 }} // namespace facebook::logdevice

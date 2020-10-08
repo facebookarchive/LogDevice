@@ -30,13 +30,18 @@ NcmThriftRouter::NcmThriftRouter(
   ld_check(nodes_);
 }
 
-std::unique_ptr<LogDeviceAPIAsyncClient>
-NcmThriftRouter::getApiClient(node_index_t nid) {
+folly::Optional<Sockaddr>
+NcmThriftRouter::getApiAddress(node_index_t nid) const {
   configuration::nodes::ServerAddressRouter router;
   const auto* node_svc = nodes_->get()->getNodeServiceDiscovery(nid);
-  auto maybe_address = node_svc != nullptr
+  return node_svc != nullptr
       ? router.getThriftAddress(nid, *node_svc, *settings_.get())
       : folly::none;
+}
+
+std::unique_ptr<LogDeviceAPIAsyncClient>
+NcmThriftRouter::getApiClient(node_index_t nid, Sockaddr* out_address) {
+  auto maybe_address = getApiAddress(nid);
   if (!maybe_address.hasValue() || !maybe_address->valid()) {
     err = E::NOTINCONFIG;
     RATELIMIT_ERROR(std::chrono::seconds(1),
@@ -44,6 +49,9 @@ NcmThriftRouter::getApiClient(node_index_t nid) {
                     "Cannot find Thrift address to connect to node N%d",
                     nid);
     return nullptr;
+  }
+  if (out_address) {
+    *out_address = *maybe_address;
   }
   auto callback_executor = Worker::onThisThread(/*enforce_worker*/ false);
   return client_factory_->createClient<LogDeviceAPIAsyncClient>(
