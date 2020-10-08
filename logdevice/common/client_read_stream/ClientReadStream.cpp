@@ -274,7 +274,8 @@ std::string ClientReadStream::getDebugInfoStr() const {
     shards_slow = toString(scd_->getShardsSlow());
   }
   std::string res;
-  res += "next_lsn_to_deliver_=" + lsn_to_string(next_lsn_to_deliver_);
+  res += "reader_name_=" + getReaderName();
+  res += ", next_lsn_to_deliver_=" + lsn_to_string(next_lsn_to_deliver_);
   res += ", window_high_=" + lsn_to_string(window_high_);
   res += ", gap_end_outside_window_=" + lsn_to_string(gap_end_outside_window_);
   res += ", until_lsn_=" + lsn_to_string(until_lsn_);
