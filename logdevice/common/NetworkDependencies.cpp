@@ -1,6 +1,6 @@
 // Copyright 2004-present Facebook. All Rights Reserved.
 
-#include "logdevice/common/SocketDependencies.h"
+#include "logdevice/common/NetworkDependencies.h"
 
 #include <folly/io/async/SSLContext.h>
 
@@ -8,8 +8,8 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/SSLFetcher.h"
 #include "logdevice/common/SSLPrincipalParser.h"
+#include "logdevice/common/Sender.h"
 #include "logdevice/common/Sockaddr.h"
-#include "logdevice/common/SocketSender.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/Worker.h"
@@ -24,85 +24,60 @@
 #include "logdevice/common/protocol/SHUTDOWN_Message.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/Stats.h"
+#include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
 using folly::SSLContext;
 using namespace std::placeholders;
-// SocketDependencies is created during socket creation from worker context.
+// NetworkDependencies is created during socket creation from worker context.
 // Save off all the fields that need explicit worker access.
-SocketDependencies::SocketDependencies(Processor* processor,
-                                       SocketSender* sender)
+NetworkDependencies::NetworkDependencies(Processor* processor)
     : processor_(processor),
-      sender_(sender),
       worker_(Worker::onThisThread(false /*enforce_worker*/)) {}
 
-const Settings& SocketDependencies::getSettings() const {
+const Settings& NetworkDependencies::getSettings() const {
   return *processor_->settings();
 }
 
-StatsHolder* SocketDependencies::getStats() const {
+StatsHolder* NetworkDependencies::getStats() const {
   return processor_->stats_;
 }
 
-std::shared_ptr<Configuration> SocketDependencies::getConfig() const {
+std::shared_ptr<Configuration> NetworkDependencies::getConfig() const {
   return processor_->getConfig();
 }
 
-std::shared_ptr<ServerConfig> SocketDependencies::getServerConfig() const {
+std::shared_ptr<ServerConfig> NetworkDependencies::getServerConfig() const {
   return getConfig()->serverConfig();
 }
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
-SocketDependencies::getNodesConfiguration() const {
+NetworkDependencies::getNodesConfiguration() const {
   return processor_->getNodesConfiguration();
 }
 
-void SocketDependencies::noteBytesQueued(
-    size_t nbytes,
-    PeerType peer_type,
-    folly::Optional<MessageType> message_type) {
-  sender_->noteBytesQueued(nbytes, peer_type, message_type);
-}
-
-void SocketDependencies::noteBytesDrained(
-    size_t nbytes,
-    PeerType peer_type,
-    folly::Optional<MessageType> message_type) {
-  sender_->noteBytesDrained(nbytes, peer_type, message_type);
-}
-
-size_t SocketDependencies::getBytesPending() const {
-  return sender_->getBytesPending();
-}
-
-std::shared_ptr<SSLContext> SocketDependencies::getSSLContext() const {
+std::shared_ptr<SSLContext> NetworkDependencies::getSSLContext() const {
   return Worker::onThisThread()->sslFetcher().getSSLContext();
 }
 
-SSLSessionCache& SocketDependencies::getSSLSessionCache() const {
-  return Worker::onThisThread()->processor_->sslSessionCache();
+SSLSessionCache& NetworkDependencies::getSSLSessionCache() const {
+  return processor_->sslSessionCache();
 }
 
 std::shared_ptr<SSLPrincipalParser>
-SocketDependencies::getPrincipalParser() const {
-  return Worker::onThisThread()
-      ->processor_->security_info_->get()
-      ->principal_parser;
+NetworkDependencies::getPrincipalParser() const {
+  return processor_->security_info_->get()->principal_parser;
 }
 
-bool SocketDependencies::shuttingDown() const {
+bool NetworkDependencies::shuttingDown() const {
   return Worker::onThisThread()->shuttingDown();
 }
 
-std::string SocketDependencies::dumpQueuedMessages(Address addr) const {
-  return sender_->dumpQueuedMessages(addr);
-}
-
 const Sockaddr&
-SocketDependencies::getNodeSockaddr(NodeID node_id,
-                                    SocketType socket_type,
-                                    ConnectionType connection_type) {
+NetworkDependencies::getNodeSockaddr(NodeID node_id,
+                                     SocketType socket_type,
+                                     ConnectionType connection_type) {
   auto nodes_configuration = getNodesConfiguration();
   ld_check(nodes_configuration != nullptr);
 
@@ -123,15 +98,11 @@ SocketDependencies::getNodeSockaddr(NodeID node_id,
   return Sockaddr::INVALID;
 }
 
-EvBase* SocketDependencies::getEvBase() {
-  return &EventLoop::onThisThread()->getEvBase();
-}
-
-void SocketDependencies::onSent(std::unique_ptr<Message> msg,
-                                const Address& to,
-                                Status st,
-                                SteadyTimestamp t,
-                                Message::CompletionMethod cm) {
+void NetworkDependencies::onSent(std::unique_ptr<Message> msg,
+                                 const Address& to,
+                                 Status st,
+                                 SteadyTimestamp t,
+                                 Message::CompletionMethod cm) {
   switch (cm) {
     case Message::CompletionMethod::IMMEDIATE: {
       // Note: instead of creating a RunContext with message type, we could
@@ -146,11 +117,9 @@ void SocketDependencies::onSent(std::unique_ptr<Message> msg,
       Worker::unpackRunContext(prev_context);
       break;
     }
-    default:
-      ld_check(false);
-      FOLLY_FALLTHROUGH;
     case Message::CompletionMethod::DEFERRED:
-      sender_->queueMessageCompletion(std::move(msg), to, st, t);
+      ld_check(false);
+      ld_error("Deferred messages not supported on generic NetworkDependcies");
       break;
   }
 }
@@ -195,10 +164,10 @@ void executeOnWorker(Worker* worker,
 } // namespace
 
 Message::Disposition
-SocketDependencies::onReceived(Message* msg,
-                               const Address& from,
-                               std::shared_ptr<PrincipalIdentity> principal,
-                               ResourceBudget::Token resource_token) {
+NetworkDependencies::onReceived(Message* msg,
+                                const Address& from,
+                                std::shared_ptr<PrincipalIdentity> principal,
+                                ResourceBudget::Token resource_token) {
   ld_assert(principal);
   auto worker = Worker::onThisThread();
   if (getSettings().inline_message_execution || shouldBeInlined(msg->type_)) {
@@ -221,88 +190,58 @@ SocketDependencies::onReceived(Message* msg,
   return Message::Disposition::KEEP;
 }
 
-void SocketDependencies::processDeferredMessageCompletions() {
-  sender_->deliverCompletedMessages();
-}
-
-NodeID SocketDependencies::getMyNodeID() {
+NodeID NetworkDependencies::getMyNodeID() {
   return processor_->getMyNodeID();
 }
 
-int SocketDependencies::setDSCP(int fd,
-                                sa_family_t sa_family,
-                                const uint8_t default_dscp) {
-  int rv = 0;
-  switch (sa_family) {
-    case AF_INET: {
-      int ip_tos = default_dscp << 2;
-      rv = setsockopt(fd, IPPROTO_IP, IP_TOS, &ip_tos, sizeof(ip_tos));
-      break;
-    }
-    case AF_INET6: {
-      int tclass = default_dscp << 2;
-      rv = setsockopt(fd, IPPROTO_IPV6, IPV6_TCLASS, &tclass, sizeof(tclass));
-      break;
-    }
-    default:
-      rv = 0;
-      break;
-  }
-  return rv;
-}
-
-int SocketDependencies::setSoMark(int fd, uint32_t so_mark) {
-  return setsockopt(fd, SOL_SOCKET, SO_MARK, &so_mark, sizeof(so_mark));
-}
-
-ResourceBudget& SocketDependencies::getConnBudgetExternal() {
+ResourceBudget& NetworkDependencies::getConnBudgetExternal() {
   return processor_->conn_budget_external_;
 }
 
-std::string SocketDependencies::getClusterName() {
+std::string NetworkDependencies::getClusterName() {
   return getServerConfig()->getClusterName();
 }
 
-ServerInstanceId SocketDependencies::getServerInstanceId() {
+ServerInstanceId NetworkDependencies::getServerInstanceId() {
   return processor_->getServerInstanceId();
 }
 
-const std::string& SocketDependencies::getHELLOCredentials() {
+const std::string& NetworkDependencies::getHELLOCredentials() {
   return processor_->HELLOCredentials_;
 }
 
-const std::string& SocketDependencies::getCSID() {
+const std::string& NetworkDependencies::getCSID() {
   return processor_->csid_;
 }
 
-std::string SocketDependencies::getClientBuildInfo() {
+std::string NetworkDependencies::getClientBuildInfo() {
   auto build_info = processor_->getPluginRegistry()->getSinglePlugin<BuildInfo>(
       PluginType::BUILD_INFO);
   ld_check(build_info);
   return build_info->getBuildInfoJson();
 }
 
-SteadyTimestamp SocketDependencies::getCurrentTimestamp() {
+SteadyTimestamp NetworkDependencies::getCurrentTimestamp() {
   return SteadyTimestamp::now();
 }
 
-bool SocketDependencies::authenticationEnabled() {
+bool NetworkDependencies::authenticationEnabled() {
   return processor_->security_info_ &&
       processor_->security_info_->get()->isAuthenticationEnabled();
 }
 
-bool SocketDependencies::allowUnauthenticated() {
+bool NetworkDependencies::allowUnauthenticated() {
   return getServerConfig()->allowUnauthenticated();
 }
 
-bool SocketDependencies::includeHELLOCredentials() {
+bool NetworkDependencies::includeHELLOCredentials() {
   // Only include HELLOCredentials in HELLO_Message when the PrincipalParser
   // will use the data.
   const auto auth_type = processor_->security_info_->get()->auth_type;
   return auth_type == AuthenticationType::SELF_IDENTIFICATION;
 }
 
-void SocketDependencies::onStartedRunning(RunContext context) {
+void NetworkDependencies::onStartedRunning(RunContext context) {
   if (worker_) {
     worker_->onStartedRunning(context);
   } else {
@@ -314,7 +253,7 @@ void SocketDependencies::onStartedRunning(RunContext context) {
   }
 }
 
-void SocketDependencies::onStoppedRunning(RunContext prev_context) {
+void NetworkDependencies::onStoppedRunning(RunContext prev_context) {
   if (worker_) {
     worker_->onStoppedRunning(prev_context);
   } else {
@@ -327,12 +266,12 @@ void SocketDependencies::onStoppedRunning(RunContext prev_context) {
 }
 
 ResourceBudget::Token
-SocketDependencies::getResourceToken(size_t payload_size) {
+NetworkDependencies::getResourceToken(size_t payload_size) {
   return processor_->getIncomingMessageToken(payload_size);
 }
 
 std::unique_ptr<Message>
-SocketDependencies::createHelloMessage(NodeID destNodeID) {
+NetworkDependencies::createHelloMessage(NodeID destNodeID) {
   uint16_t max_protocol = getSettings().max_protocol;
   ld_check(max_protocol >= Compatibility::MIN_PROTOCOL_SUPPORTED);
   ld_check(max_protocol <= Compatibility::MAX_PROTOCOL_SUPPORTED);
@@ -405,27 +344,27 @@ SocketDependencies::createHelloMessage(NodeID destNodeID) {
 }
 
 std::unique_ptr<Message>
-SocketDependencies::createShutdownMessage(uint32_t serverInstanceId) {
+NetworkDependencies::createShutdownMessage(uint32_t serverInstanceId) {
   SHUTDOWN_Header hdr{E::SHUTDOWN, serverInstanceId};
   return std::make_unique<SHUTDOWN_Message>(hdr);
 }
 
-void SocketDependencies::processHelloMessage(const Message& msg,
-                                             ConnectionInfo& info) {
+void NetworkDependencies::processHelloMessage(const Message& msg,
+                                              ConnectionInfo& info) {
   const auto& hello = dynamic_cast<const HELLO_Message&>(msg);
   info.protocol = std::min(hello.header_.proto_max, getSettings().max_protocol);
 }
 
-void SocketDependencies::processACKMessage(const Message& msg,
-                                           ConnectionInfo& info) {
+void NetworkDependencies::processACKMessage(const Message& msg,
+                                            ConnectionInfo& info) {
   const auto& ack = static_cast<const ACK_Message&>(msg);
   info.our_name_at_peer = ClientID(ack.getHeader().client_idx);
   info.protocol = ack.getHeader().proto;
 }
 
 std::unique_ptr<Message>
-SocketDependencies::deserialize(const ProtocolHeader& ph,
-                                ProtocolReader& reader) {
+NetworkDependencies::deserialize(const ProtocolHeader& ph,
+                                 ProtocolReader& reader) {
   Message::deserializer_t* deserializer = messageDeserializers[ph.type];
   if (deserializer == nullptr) {
     ld_error("PROTOCOL ERROR: got an unknown message type '%c' (%d) from "
@@ -438,11 +377,11 @@ SocketDependencies::deserialize(const ProtocolHeader& ph,
   return deserializer(reader).msg;
 }
 
-std::string SocketDependencies::describeConnection(const Address& addr) {
+std::string NetworkDependencies::describeConnection(const Address& addr) {
   return Sender::describeConnection(addr);
 }
 
-folly::Func SocketDependencies::setupContextGuard() {
+folly::Func NetworkDependencies::setupContextGuard() {
   // context can be setup multiple times in a recursive call to
   // setupContextGuard. unset_context logic makes sure that context is set just
   // once and unset in the same stack frame that it was set.
@@ -459,12 +398,8 @@ folly::Func SocketDependencies::setupContextGuard() {
   };
 }
 
-folly::Executor* SocketDependencies::getExecutor() const {
+folly::Executor* NetworkDependencies::getExecutor() const {
   return worker_->getExecutor();
 }
 
-int SocketDependencies::getTCPInfo(TCPInfo* info, int fd) {
-  LinuxNetUtils util;
-  return util.getTCPInfo(info, fd);
-}
 }} // namespace facebook::logdevice

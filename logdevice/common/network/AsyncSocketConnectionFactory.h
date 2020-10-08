@@ -23,7 +23,7 @@ namespace facebook { namespace logdevice {
 class Connection;
 class FlowGroup;
 class SockAddr;
-class SocketDependencies;
+class SocketNetworkDependencies;
 class ConnectThrottle;
 
 class AsyncSocketConnectionFactory : public IConnectionFactory {
@@ -35,7 +35,7 @@ class AsyncSocketConnectionFactory : public IConnectionFactory {
                    SocketType socket_type,
                    ConnectionType connection_type,
                    FlowGroup& flow_group,
-                   std::unique_ptr<SocketDependencies> deps) override;
+                   std::unique_ptr<SocketNetworkDependencies> deps) override;
 
   std::unique_ptr<Connection>
   createConnection(int fd,
@@ -45,7 +45,7 @@ class AsyncSocketConnectionFactory : public IConnectionFactory {
                    SocketType type,
                    ConnectionType conntype,
                    FlowGroup& flow_group,
-                   std::unique_ptr<SocketDependencies> deps,
+                   std::unique_ptr<SocketNetworkDependencies> deps,
                    ConnectionKind connection_kind) const override;
 
  private:

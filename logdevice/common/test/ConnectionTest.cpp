@@ -36,7 +36,7 @@ class ServerConnectionTest : public ConnectionTest {
     settings_.server = true;
     source_node_id_ = server_name_;
     ev_base_folly_.selectEvBase(EvBase::FOLLY_EVENTBASE);
-    deps_ = new TestSocketDependencies(this);
+    deps_ = new TestNetworkDependencies(this);
   }
 
   void SetUp() override {
@@ -52,7 +52,7 @@ class ServerConnectionTest : public ConnectionTest {
         SocketType::DATA /* socket type */,
         ConnectionType::PLAIN,
         flow_group_,
-        std::unique_ptr<SocketDependencies>(deps_),
+        std::unique_ptr<SocketNetworkDependencies>(deps_),
         std::move(sock),
         ConnectionKind::DATA);
     // A server socket is connected from the beginning.

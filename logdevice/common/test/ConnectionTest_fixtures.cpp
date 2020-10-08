@@ -19,71 +19,72 @@ using ::testing::Invoke;
 using ::testing::Return;
 using ::testing::SaveArg;
 
-TestSocketDependencies::TestSocketDependencies(ConnectionTest* owner)
-    : SocketDependencies(nullptr, nullptr), owner_(owner) {
+TestNetworkDependencies::TestNetworkDependencies(ConnectionTest* owner)
+    : SocketNetworkDependencies(nullptr, nullptr), owner_(owner) {
   ON_CALL(*this, getNodeSockaddr(owner_->server_name_, _, _))
       .WillByDefault(testing::ReturnRef(owner_->server_addr_));
 }
 
-const Settings& TestSocketDependencies::getSettings() const {
+const Settings& TestNetworkDependencies::getSettings() const {
   return owner_->settings_;
 }
 
-StatsHolder* TestSocketDependencies::getStats() const {
+StatsHolder* TestNetworkDependencies::getStats() const {
   return nullptr;
 }
 
-void TestSocketDependencies::noteBytesQueued(size_t nbytes,
-                                             PeerType /* Peer type */,
-                                             folly::Optional<MessageType>) {
+void TestNetworkDependencies::noteBytesQueued(size_t nbytes,
+                                              PeerType /* Peer type */,
+                                              folly::Optional<MessageType>) {
   owner_->bytes_pending_ += nbytes;
 }
 
-void TestSocketDependencies::noteBytesDrained(size_t nbytes,
-                                              PeerType /* Peer type */,
-                                              folly::Optional<MessageType>) {
+void TestNetworkDependencies::noteBytesDrained(size_t nbytes,
+                                               PeerType /* Peer type */,
+                                               folly::Optional<MessageType>) {
   ASSERT_GE(owner_->bytes_pending_, nbytes);
   owner_->bytes_pending_ -= nbytes;
 }
 
-size_t TestSocketDependencies::getBytesPending() const {
+size_t TestNetworkDependencies::getBytesPending() const {
   return owner_->bytes_pending_;
 }
 
 std::shared_ptr<folly::SSLContext>
-TestSocketDependencies::getSSLContext() const {
+TestNetworkDependencies::getSSLContext() const {
   return nullptr;
 }
 
-bool TestSocketDependencies::shuttingDown() const {
+bool TestNetworkDependencies::shuttingDown() const {
   return false;
 }
 
-std::string TestSocketDependencies::dumpQueuedMessages(Address /*addr*/) const {
+std::string
+TestNetworkDependencies::dumpQueuedMessages(Address /*addr*/) const {
   return "";
 }
 
-EvBase* TestSocketDependencies::getEvBase() {
+EvBase* TestNetworkDependencies::getEvBase() {
   return &owner_->ev_base_folly_;
 }
 
-SteadyTimestamp TestSocketDependencies::getCurrentTimestamp() {
+SteadyTimestamp TestNetworkDependencies::getCurrentTimestamp() {
   return owner_->cur_time_;
 }
 
-void TestSocketDependencies::onSent(std::unique_ptr<Message> msg,
-                                    const Address& /*to*/,
-                                    Status st,
-                                    const SteadyTimestamp /*enqueue_time*/,
-                                    Message::CompletionMethod) {
+void TestNetworkDependencies::onSent(std::unique_ptr<Message> msg,
+                                     const Address& /*to*/,
+                                     Status st,
+                                     const SteadyTimestamp /*enqueue_time*/,
+                                     Message::CompletionMethod) {
   owner_->sent_.push(ConnectionTest::SentMsg{msg->type_, st});
 }
 
 Message::Disposition
-TestSocketDependencies::onReceived(Message* msg,
-                                   const Address& from,
-                                   std::shared_ptr<PrincipalIdentity> identity,
-                                   ResourceBudget::Token token) {
+TestNetworkDependencies::onReceived(Message* msg,
+                                    const Address& from,
+                                    std::shared_ptr<PrincipalIdentity> identity,
+                                    ResourceBudget::Token token) {
   if (owner_->on_received_hook_) {
     auto retval =
         owner_->on_received_hook_(msg, from, identity, std::move(token));
@@ -95,68 +96,68 @@ TestSocketDependencies::onReceived(Message* msg,
   return msg->onReceived(from);
 }
 
-void TestSocketDependencies::processDeferredMessageCompletions() {}
+void TestNetworkDependencies::processDeferredMessageCompletions() {}
 
-NodeID TestSocketDependencies::getMyNodeID() {
+NodeID TestNetworkDependencies::getMyNodeID() {
   return owner_->source_node_id_;
 }
 
-NodeID TestSocketDependencies::getDestinationNodeID() {
+NodeID TestNetworkDependencies::getDestinationNodeID() {
   return owner_->destination_node_id_;
 }
 
-ResourceBudget& TestSocketDependencies::getConnBudgetExternal() {
+ResourceBudget& TestNetworkDependencies::getConnBudgetExternal() {
   return owner_->conn_budget_external_;
 }
 
-std::string TestSocketDependencies::getClusterName() {
+std::string TestNetworkDependencies::getClusterName() {
   return owner_->cluster_name_;
 }
 
-const std::string& TestSocketDependencies::getHELLOCredentials() {
+const std::string& TestNetworkDependencies::getHELLOCredentials() {
   return owner_->credentials_;
 }
 
-const std::string& TestSocketDependencies::getCSID() {
+const std::string& TestNetworkDependencies::getCSID() {
   return owner_->csid_;
 }
 
-std::string TestSocketDependencies::getClientBuildInfo() {
+std::string TestNetworkDependencies::getClientBuildInfo() {
   return owner_->client_build_info_;
 }
 
-bool TestSocketDependencies::includeHELLOCredentials() {
+bool TestNetworkDependencies::includeHELLOCredentials() {
   return false;
 }
 
-bool TestSocketDependencies::authenticationEnabled() {
+bool TestNetworkDependencies::authenticationEnabled() {
   return false;
 }
 
-void TestSocketDependencies::onStartedRunning(RunContext /*context*/) {}
+void TestNetworkDependencies::onStartedRunning(RunContext /*context*/) {}
 
-void TestSocketDependencies::onStoppedRunning(RunContext /*prev_context*/) {}
+void TestNetworkDependencies::onStoppedRunning(RunContext /*prev_context*/) {}
 
 ResourceBudget::Token
-TestSocketDependencies::getResourceToken(size_t payload_size) {
+TestNetworkDependencies::getResourceToken(size_t payload_size) {
   return owner_->incoming_message_bytes_limit_.acquireToken(payload_size);
 }
 
-int TestSocketDependencies::setSoMark(int /*fd*/, uint32_t /*so_mark*/) {
+int TestNetworkDependencies::setSoMark(int /*fd*/, uint32_t /*so_mark*/) {
   return 0;
 }
 
-folly::Executor* TestSocketDependencies::getExecutor() const {
+folly::Executor* TestNetworkDependencies::getExecutor() const {
   return &folly::InlineExecutor::instance();
 }
 
-int TestSocketDependencies::getTCPInfo(TCPInfo* info, int /*fd*/) {
+int TestNetworkDependencies::getTCPInfo(TCPInfo* info, int /*fd*/) {
   *info = owner_->socket_flow_stats_;
   return 0;
 }
 
 std::shared_ptr<const configuration::nodes::NodesConfiguration>
-TestSocketDependencies::getNodesConfiguration() const {
+TestNetworkDependencies::getNodesConfiguration() const {
   return owner_->nodes_configuration_;
 }
 

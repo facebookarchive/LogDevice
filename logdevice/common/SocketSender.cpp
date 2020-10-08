@@ -26,7 +26,7 @@
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/ShapingContainer.h"
 #include "logdevice/common/SocketCallback.h"
-#include "logdevice/common/SocketDependencies.h"
+#include "logdevice/common/SocketNetworkDependencies.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/nodes/ServerAddressRouter.h"
@@ -177,7 +177,7 @@ int SocketSender::addClient(int fd,
         type,
         conntype,
         flow_group,
-        std::make_unique<SocketDependencies>(processor_, this),
+        std::make_unique<SocketNetworkDependencies>(processor_, this),
         connection_kind);
 
     auto res = impl_->client_conns_.emplace(client_name, std::move(conn));
@@ -895,7 +895,7 @@ Connection* SocketSender::initServerConnection(NodeID nid,
           sock_type,
           use_ssl ? ConnectionType::SSL : ConnectionType::PLAIN,
           flow_group,
-          std::make_unique<SocketDependencies>(processor_, this));
+          std::make_unique<SocketNetworkDependencies>(processor_, this));
 
       auto res = impl_->server_conns_.emplace(nid.index(), std::move(conn));
       it = res.first;

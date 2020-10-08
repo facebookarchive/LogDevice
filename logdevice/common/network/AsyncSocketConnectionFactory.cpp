@@ -12,7 +12,7 @@
 #include "logdevice/common/Connection.h"
 #include "logdevice/common/FlowGroup.h"
 #include "logdevice/common/Sockaddr.h"
-#include "logdevice/common/SocketDependencies.h"
+#include "logdevice/common/SocketNetworkDependencies.h"
 #include "logdevice/common/network/AsyncSocketAdapter.h"
 #include "logdevice/common/settings/Settings.h"
 
@@ -42,7 +42,7 @@ std::unique_ptr<Connection> AsyncSocketConnectionFactory::createConnection(
     SocketType socket_type,
     ConnectionType connection_type,
     FlowGroup& flow_group,
-    std::unique_ptr<SocketDependencies> deps) {
+    std::unique_ptr<SocketNetworkDependencies> deps) {
   std::unique_ptr<AsyncSocketAdapter> sock_adapter;
   if (connection_type != ConnectionType::SSL &&
       (forceSSLSockets() && socket_type != SocketType::GOSSIP)) {
@@ -82,7 +82,7 @@ std::unique_ptr<Connection> AsyncSocketConnectionFactory::createConnection(
     SocketType type,
     ConnectionType connection_type,
     FlowGroup& flow_group,
-    std::unique_ptr<SocketDependencies> deps,
+    std::unique_ptr<SocketNetworkDependencies> deps,
     ConnectionKind connection_kind) const {
   if (connection_type != ConnectionType::SSL &&
       (forceSSLSockets() && type != SocketType::GOSSIP)) {

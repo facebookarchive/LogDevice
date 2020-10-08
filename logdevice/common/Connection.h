@@ -73,7 +73,7 @@ struct Settings;
 // that is currently not needed.
 
 // Defined later in this file.
-class SocketDependencies;
+class SocketNetworkDependencies;
 /**
  * adding multiple classes here which will get renamed/refactored throguh a
  * a stack of diffs to separate different logical component which are now alloc
@@ -110,10 +110,9 @@ class Connection : public TrafficShappingSocket {
    * @param connection_type type of connection
    * @param flow_group      traffic shaping state shared between sockets
    *                        with the same bandwidth constraints.
-   * @params deps           SocketDependencies provides a way to callback into
-   *                        higher layers and provides notification mechanism.
-   *                        It depends on dependencies for stuff like Stats and
-   *                        config and other data.
+   * @params deps           SocketNetworkDependencies provides a way to callback
+   * into higher layers and provides notification mechanism. It depends on
+   * dependencies for stuff like Stats and config and other data.
    *
    * @return  on success, a new fully constructed Connection is returned. It is
    *          expected that the Connection will be registered with the Worker's
@@ -129,7 +128,7 @@ class Connection : public TrafficShappingSocket {
              SocketType socket_type,
              ConnectionType connection_type,
              FlowGroup& flow_group,
-             std::unique_ptr<SocketDependencies> deps);
+             std::unique_ptr<SocketNetworkDependencies> deps);
 
   /**
    * Constructs a new Socket, to be connected to a LogDevice
@@ -156,7 +155,7 @@ class Connection : public TrafficShappingSocket {
              SocketType socket_type,
              ConnectionType connection_type,
              FlowGroup& flow_group,
-             std::unique_ptr<SocketDependencies> deps,
+             std::unique_ptr<SocketNetworkDependencies> deps,
              std::unique_ptr<SocketAdapter> sock_adapter);
 
   /**
@@ -173,10 +172,9 @@ class Connection : public TrafficShappingSocket {
    * @param type        type of socket
    * @param flow_group  traffic shaping state shared between sockets
    *                    with the same bandwidth constraints.
-   * @params deps       SocketDependencies provides a way to callback into
-   *                    higher layers and provides notification mechanism.
-   *                    It depends on dependencies for stuff like Stats and
-   *                    config and other data.
+   * @params deps       SocketNetworkDependencies provides a way to callback
+   * into higher layers and provides notification mechanism. It depends on
+   * dependencies for stuff like Stats and config and other data.
    *
    * @return  on success, a new fully constructed Connection is returned. On
    *          failure throws ConstructorFailed and sets err to:
@@ -194,7 +192,7 @@ class Connection : public TrafficShappingSocket {
              SocketType type,
              ConnectionType conntype,
              FlowGroup& flow_group,
-             std::unique_ptr<SocketDependencies> deps,
+             std::unique_ptr<SocketNetworkDependencies> deps,
              ConnectionKind connection_kind);
 
   /**
@@ -230,7 +228,7 @@ class Connection : public TrafficShappingSocket {
              SocketType type,
              ConnectionType conntype,
              FlowGroup& flow_group,
-             std::unique_ptr<SocketDependencies> deps,
+             std::unique_ptr<SocketNetworkDependencies> deps,
              std::unique_ptr<SocketAdapter> sock_adapter,
              ConnectionKind connection_kind);
 
@@ -632,12 +630,12 @@ class Connection : public TrafficShappingSocket {
    * other than info_.peer_name, info_.peer_address and info_.connection_type to
    * defaults.
    *
-   * @param deps          @see SocketDependencies.
+   * @param deps          @see SocketNetworkDependencies.
    * @param peer_name     LD-level 4-byte id of the other endpoint
    * @param peer_sockaddr sockaddr of the other endpoint
    * @param type          type of socket
    */
-  explicit Connection(std::unique_ptr<SocketDependencies>& deps,
+  explicit Connection(std::unique_ptr<SocketNetworkDependencies>& deps,
                       Address peer_name,
                       const Sockaddr& peer_sockaddr,
                       SocketType type,
@@ -777,7 +775,7 @@ class Connection : public TrafficShappingSocket {
   friend class SocketImpl;
   std::unique_ptr<SocketImpl> impl_;
 
-  std::unique_ptr<SocketDependencies> deps_;
+  std::unique_ptr<SocketNetworkDependencies> deps_;
 
   // Envelopes that have been created via registerMessage, but have yet
   // to be released on this Socket.

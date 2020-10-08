@@ -32,7 +32,7 @@
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/SSLPrincipalParser.h"
 #include "logdevice/common/SocketCallback.h"
-#include "logdevice/common/SocketDependencies.h"
+#include "logdevice/common/SocketNetworkDependencies.h"
 #include "logdevice/common/configuration/ServerConfig.h"
 #include "logdevice/common/configuration/nodes/NodesConfiguration.h"
 #include "logdevice/common/debug.h"
@@ -91,7 +91,7 @@ class Connection::HandshakeTimeout : public folly::HHWheelTimer::Callback {
   Connection& connection_;
 };
 
-Connection::Connection(std::unique_ptr<SocketDependencies>& deps,
+Connection::Connection(std::unique_ptr<SocketNetworkDependencies>& deps,
                        Address peer_name,
                        const Sockaddr& peer_sockaddr,
                        SocketType type,
@@ -144,7 +144,7 @@ Connection::Connection(NodeID server_name,
                        SocketType socket_type,
                        ConnectionType connection_type,
                        FlowGroup& flow_group,
-                       std::unique_ptr<SocketDependencies> deps)
+                       std::unique_ptr<SocketNetworkDependencies> deps)
     : Connection(
           deps,
           Address(server_name),
@@ -157,7 +157,7 @@ Connection::Connection(NodeID server_name,
                        SocketType socket_type,
                        ConnectionType connection_type,
                        FlowGroup& flow_group,
-                       std::unique_ptr<SocketDependencies> deps,
+                       std::unique_ptr<SocketNetworkDependencies> deps,
                        std::unique_ptr<SocketAdapter> sock_adapter)
     : Connection(server_name,
                  socket_type,
@@ -177,7 +177,7 @@ Connection::Connection(int fd,
                        SocketType type,
                        ConnectionType conntype,
                        FlowGroup& flow_group,
-                       std::unique_ptr<SocketDependencies> deps,
+                       std::unique_ptr<SocketNetworkDependencies> deps,
                        ConnectionKind connection_kind)
     : Connection(deps,
                  Address(client_name),
@@ -211,7 +211,7 @@ Connection::Connection(int fd,
                        SocketType type,
                        ConnectionType conntype,
                        FlowGroup& flow_group,
-                       std::unique_ptr<SocketDependencies> deps,
+                       std::unique_ptr<SocketNetworkDependencies> deps,
                        std::unique_ptr<SocketAdapter> sock_adapter,
                        ConnectionKind connection_kind)
     : Connection(fd,

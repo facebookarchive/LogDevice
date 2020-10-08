@@ -18,7 +18,8 @@ struct Settings;
 class Connection;
 class FlowGroup;
 class Sockaddr;
-class SocketDependencies;
+class SocketNetworkDependencies;
+
 class IConnectionFactory {
  public:
   virtual ~IConnectionFactory() {}
@@ -27,7 +28,7 @@ class IConnectionFactory {
                    SocketType socket_type,
                    ConnectionType connection_type,
                    FlowGroup& flow_group,
-                   std::unique_ptr<SocketDependencies> deps) = 0;
+                   std::unique_ptr<SocketNetworkDependencies> deps) = 0;
 
   virtual std::unique_ptr<Connection>
   createConnection(int fd,
@@ -37,7 +38,7 @@ class IConnectionFactory {
                    SocketType socket_type,
                    ConnectionType connection_type,
                    FlowGroup& flow_group,
-                   std::unique_ptr<SocketDependencies> deps,
+                   std::unique_ptr<SocketNetworkDependencies> deps,
                    ConnectionKind connection_kind) const = 0;
 };
 

@@ -9,8 +9,6 @@
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/RunContext.h"
 #include "logdevice/common/SocketTypes.h"
-#include "logdevice/common/libevent/LibEventCompatibility.h"
-#include "logdevice/common/network/LinuxNetUtils.h"
 #include "logdevice/common/protocol/Message.h"
 
 namespace facebook { namespace logdevice {
@@ -20,63 +18,50 @@ class NodesConfiguration;
 
 class Processor;
 class Configuration;
+class ThriftRouter;
 class SSLPrincipalParser;
 class ServerConfig;
 class StatsHolder;
 struct Settings;
 class Sockaddr;
-class SocketSender;
 class SSLSessionCache;
 class Worker;
 
 /**
  * Unit tests implement a derived class, @see common/test/SocketTest.cpp.
  */
-class SocketDependencies {
+class NetworkDependencies {
  public:
   using SSLCtxPtr = std::shared_ptr<folly::SSLContext>;
 
-  SocketDependencies(Processor* processor, SocketSender* sender);
+  explicit NetworkDependencies(Processor* processor);
+
   virtual const Settings& getSettings() const;
   virtual StatsHolder* getStats() const;
   virtual std::shared_ptr<Configuration> getConfig() const;
   virtual std::shared_ptr<ServerConfig> getServerConfig() const;
   virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const;
-  virtual void noteBytesQueued(size_t nbytes,
-                               PeerType peer_type,
-                               folly::Optional<MessageType>);
-  virtual void noteBytesDrained(size_t nbytes,
-                                PeerType peer_type,
-                                folly::Optional<MessageType>);
-  virtual size_t getBytesPending() const;
 
   virtual SSLCtxPtr getSSLContext() const;
   virtual SSLSessionCache& getSSLSessionCache() const;
   virtual std::shared_ptr<SSLPrincipalParser> getPrincipalParser() const;
   virtual bool shuttingDown() const;
-  virtual std::string dumpQueuedMessages(Address addr) const;
   virtual const Sockaddr& getNodeSockaddr(NodeID node_id,
                                           SocketType socket_type,
                                           ConnectionType connection_type);
-  virtual EvBase* getEvBase();
 
   virtual void onSent(std::unique_ptr<Message> msg,
                       const Address& to,
                       Status st,
-                      const SteadyTimestamp enqueue_time,
+                      SteadyTimestamp enqueue_time,
                       Message::CompletionMethod);
   virtual Message::Disposition
   onReceived(Message* msg,
              const Address& from,
              std::shared_ptr<PrincipalIdentity> principal,
              ResourceBudget::Token resource_token);
-  virtual void processDeferredMessageCompletions();
   virtual NodeID getMyNodeID();
-  virtual int setDSCP(int fd,
-                      sa_family_t sa_family,
-                      const uint8_t default_dscp);
-  virtual int setSoMark(int fd, uint32_t so_mark);
   virtual ResourceBudget& getConnBudgetExternal();
   virtual std::string getClusterName();
   virtual ServerInstanceId getServerInstanceId();
@@ -108,12 +93,11 @@ class SocketDependencies {
    */
   virtual folly::Func setupContextGuard();
   virtual folly::Executor* getExecutor() const;
-  virtual int getTCPInfo(TCPInfo* info, int fd);
-  virtual ~SocketDependencies() {}
 
- private:
+  virtual ~NetworkDependencies() = default;
+
+ protected:
   Processor* const processor_;
-  SocketSender* sender_;
   Worker* const worker_;
 };
 }} // namespace facebook::logdevice

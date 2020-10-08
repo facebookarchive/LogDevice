@@ -17,7 +17,7 @@
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/SSLFetcher.h"
 #include "logdevice/common/SocketCallback.h"
-#include "logdevice/common/SocketDependencies.h"
+#include "logdevice/common/SocketNetworkDependencies.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/libevent/test/EvBaseMock.h"
@@ -34,62 +34,60 @@ namespace facebook { namespace logdevice {
 class ConnectionTest;
 
 ////////////////////////////////////////////////////////////////////////////////
-// TestSocketDependencies
+// TestNetworkDependencies
 
-class TestSocketDependencies : public SocketDependencies {
+class TestNetworkDependencies : public SocketNetworkDependencies {
  public:
-  explicit TestSocketDependencies(ConnectionTest* owner);
+  explicit TestNetworkDependencies(ConnectionTest* owner);
 
-  virtual const Settings& getSettings() const override;
-  virtual StatsHolder* getStats() const override;
-  virtual void noteBytesQueued(size_t nbytes,
-                               PeerType peer_type,
-                               folly::Optional<MessageType>) override;
-  virtual void noteBytesDrained(size_t nbytes,
-                                PeerType peer_type,
-                                folly::Optional<MessageType>) override;
-  virtual size_t getBytesPending() const override;
-  virtual std::shared_ptr<folly::SSLContext> getSSLContext() const override;
-  virtual bool shuttingDown() const override;
-  virtual std::string dumpQueuedMessages(Address addr) const override;
+  const Settings& getSettings() const override;
+  StatsHolder* getStats() const override;
+  void noteBytesQueued(size_t nbytes,
+                       PeerType peer_type,
+                       folly::Optional<MessageType>) override;
+  void noteBytesDrained(size_t nbytes,
+                        PeerType peer_type,
+                        folly::Optional<MessageType>) override;
+  size_t getBytesPending() const override;
+  std::shared_ptr<folly::SSLContext> getSSLContext() const override;
+  bool shuttingDown() const override;
+  std::string dumpQueuedMessages(Address addr) const override;
 
   MOCK_METHOD3(getNodeSockaddr,
                const Sockaddr&(NodeID, SocketType, ConnectionType));
 
   EvBase* getEvBase() override;
-  virtual SteadyTimestamp getCurrentTimestamp() override;
-  virtual void onSent(std::unique_ptr<Message> msg,
-                      const Address& to,
-                      Status st,
-                      const SteadyTimestamp enqueue_time,
-                      Message::CompletionMethod cm) override;
+  SteadyTimestamp getCurrentTimestamp() override;
+  void onSent(std::unique_ptr<Message> msg,
+              const Address& to,
+              Status st,
+              SteadyTimestamp enqueue_time,
+              Message::CompletionMethod cm) override;
   Message::Disposition
   onReceived(Message* msg,
              const Address& from,
              std::shared_ptr<PrincipalIdentity> principal,
              ResourceBudget::Token resource_token) override;
-  virtual void processDeferredMessageCompletions() override;
-  virtual NodeID getMyNodeID() override;
-  virtual ResourceBudget& getConnBudgetExternal() override;
-  virtual std::string getClusterName() override;
-  virtual const std::string& getHELLOCredentials() override;
-  virtual const std::string& getCSID() override;
-  virtual bool includeHELLOCredentials() override;
-  virtual std::string getClientBuildInfo() override;
-  virtual bool authenticationEnabled() override;
-  virtual void onStartedRunning(RunContext context) override;
-  virtual void onStoppedRunning(RunContext prev_context) override;
+  void processDeferredMessageCompletions() override;
+  NodeID getMyNodeID() override;
+  ResourceBudget& getConnBudgetExternal() override;
+  std::string getClusterName() override;
+  const std::string& getHELLOCredentials() override;
+  const std::string& getCSID() override;
+  bool includeHELLOCredentials() override;
+  std::string getClientBuildInfo() override;
+  bool authenticationEnabled() override;
+  void onStartedRunning(RunContext context) override;
+  void onStoppedRunning(RunContext prev_context) override;
   ResourceBudget::Token getResourceToken(size_t payload_size) override;
-  virtual int setSoMark(int fd, uint32_t so_mark) override;
-  virtual int getTCPInfo(TCPInfo*, int fd) override;
-  virtual std::shared_ptr<const configuration::nodes::NodesConfiguration>
+  int setSoMark(int fd, uint32_t so_mark) override;
+  int getTCPInfo(TCPInfo*, int fd) override;
+  std::shared_ptr<const configuration::nodes::NodesConfiguration>
   getNodesConfiguration() const override;
 
   NodeID getDestinationNodeID();
 
-  virtual folly::Executor* getExecutor() const override;
-
-  virtual ~TestSocketDependencies() {}
+  folly::Executor* getExecutor() const override;
 
   ConnectionTest* owner_;
 };
@@ -175,7 +173,7 @@ class ConnectionTest : public ::testing::Test {
       on_received_hook_;
 
   std::unique_ptr<Connection> conn_;
-  TestSocketDependencies* deps_;
+  TestNetworkDependencies* deps_;
 
   testing::NiceMock<MockSocketAdapter>* sock_;
   folly::AsyncSocket::WriteCallback* wr_callback_;
@@ -190,17 +188,17 @@ class ConnectionTest : public ::testing::Test {
 class ClientConnectionTest : public ConnectionTest {
  public:
   ClientConnectionTest() : connect_throttle_({1, 1000}) {
-    deps_ = new TestSocketDependencies(this);
+    deps_ = new TestNetworkDependencies(this);
     auto sock = std::make_unique<testing::NiceMock<MockSocketAdapter>>();
     sock_ = sock.get();
     ev_base_folly_.selectEvBase(EvBase::FOLLY_EVENTBASE);
-    conn_ =
-        std::make_unique<Connection>(server_name_,
-                                     SocketType::DATA,
-                                     ConnectionType::PLAIN,
-                                     flow_group_,
-                                     std::unique_ptr<SocketDependencies>(deps_),
-                                     std::move(sock));
+    conn_ = std::make_unique<Connection>(
+        server_name_,
+        SocketType::DATA,
+        ConnectionType::PLAIN,
+        flow_group_,
+        std::unique_ptr<SocketNetworkDependencies>(deps_),
+        std::move(sock));
     csid_ = "client_uuid";
     EXPECT_FALSE(connected());
     EXPECT_FALSE(handshaken());

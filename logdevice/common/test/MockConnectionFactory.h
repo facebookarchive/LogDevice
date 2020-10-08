@@ -13,10 +13,10 @@
 #include "logdevice/common/Connection.h"
 #include "logdevice/common/ConnectionKind.h"
 #include "logdevice/common/FlowGroup.h"
+#include "logdevice/common/NetworkDependencies.h"
 #include "logdevice/common/NodeID.h"
 #include "logdevice/common/ResourceBudget.h"
 #include "logdevice/common/Sockaddr.h"
-#include "logdevice/common/SocketDependencies.h"
 #include "logdevice/common/SocketTypes.h"
 #include "logdevice/common/network/IConnectionFactory.h"
 
@@ -29,7 +29,7 @@ struct MockConnectionFactory : public IConnectionFactory {
                                   SocketType socket_type,
                                   ConnectionType connection_type,
                                   FlowGroup& flow_group,
-                                  std::unique_ptr<SocketDependencies> deps));
+                                  std::unique_ptr<NetworkDependencies> deps));
 
   MOCK_CONST_METHOD9(
       createConnection,
@@ -40,7 +40,7 @@ struct MockConnectionFactory : public IConnectionFactory {
                                   SocketType socket_type,
                                   ConnectionType connection_type,
                                   FlowGroup& flow_group,
-                                  std::unique_ptr<SocketDependencies> deps,
+                                  std::unique_ptr<NetworkDependencies> deps,
                                   ConnectionKind connection_kind));
 };
 }} // namespace facebook::logdevice

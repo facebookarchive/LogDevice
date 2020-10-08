@@ -22,7 +22,7 @@
 #include "logdevice/common/Processor.h"
 #include "logdevice/common/Semaphore.h"
 #include "logdevice/common/SocketCallback.h"
-#include "logdevice/common/SocketDependencies.h"
+#include "logdevice/common/SocketNetworkDependencies.h"
 #include "logdevice/common/SocketSender.h"
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/debug.h"
@@ -103,7 +103,7 @@ struct SocketConnectRequest : public Request {
                    SocketType::DATA,
                    ConnectionType::PLAIN,
                    flow_group,
-                   std::make_unique<SocketDependencies>(
+                   std::make_unique<SocketNetworkDependencies>(
                        Worker::onThisThread()->processor_,
                        Worker::onThisThread()->socketSender()),
                    std::make_unique<AsyncSocketAdapter>(base.getEventBase()));
@@ -116,7 +116,7 @@ struct SocketConnectRequest : public Request {
 
     constructor_failed = false;
     try {
-      auto deps = std::make_unique<SocketDependencies>(
+      auto deps = std::make_unique<SocketNetworkDependencies>(
           Worker::onThisThread()->processor_,
           Worker::onThisThread()->socketSender());
       const auto throttle_settings = deps->getSettings().connect_throttle;
