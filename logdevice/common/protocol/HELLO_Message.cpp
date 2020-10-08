@@ -516,7 +516,7 @@ Message::Disposition HELLO_Message::onReceived(const Address& from) {
     }
   }
 
-  Worker::onThisThread()->sender().setConnectionInfo(from, new_info);
+  Worker::onThisThread()->sender().setConnectionInfo(from, std::move(new_info));
   return sendReply(ackhdr,
                    from,
                    !(header_.flags & HELLO_Header::SOURCE_NODE),

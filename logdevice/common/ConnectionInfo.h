@@ -51,6 +51,10 @@ struct ConnectionInfo {
    */
   ConnectionType connection_type;
 
+  bool isSSL() const {
+    return connection_type == ConnectionType::SSL;
+  }
+
   /**
    * Protocol version negotiated following handshake, before handshake must be
    * folly::none.

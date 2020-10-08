@@ -999,15 +999,15 @@ SocketSender::getConnectionInfo(const Address& address) const {
 }
 
 bool SocketSender::setConnectionInfo(const Address& address,
-                                     const ConnectionInfo& info) {
+                                     ConnectionInfo&& info) {
   auto* connection = findConnection(address);
   if (connection == nullptr) {
     return false;
   }
-  connection->setInfo(info);
   if (address.isClientAddress() && info.peer_node_idx) {
     connection->setDSCP(settings_->server_dscp_default);
   }
+  connection->setInfo(std::move(info));
   return true;
 }
 

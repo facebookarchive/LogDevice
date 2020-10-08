@@ -437,7 +437,7 @@ class Sender : public SenderBase {
    * @return whether connection info was successfully updated. This operation
    *         may fail only if connection with given address is not found.
    */
-  virtual bool setConnectionInfo(const Address&, const ConnectionInfo&) = 0;
+  virtual bool setConnectionInfo(const Address&, ConnectionInfo&&) = 0;
 
   /**
    * @return a peer Sockaddr for the connection, or an invalid Sockaddr if

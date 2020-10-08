@@ -114,7 +114,7 @@ class SocketSender : public Sender {
   const ConnectionInfo* FOLLY_NULLABLE
   getConnectionInfo(const Address&) const override;
 
-  bool setConnectionInfo(const Address&, const ConnectionInfo&) override;
+  bool setConnectionInfo(const Address&, ConnectionInfo&&) override;
 
   std::pair<ExtractPeerIdentityResult, PrincipalIdentity>
   extractPeerIdentity(const Address& addr) override;

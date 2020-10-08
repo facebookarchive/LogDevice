@@ -260,7 +260,7 @@ class Connection : public TrafficShappingSocket {
   /**
    * Replaces existing info for this connection.
    */
-  void setInfo(const ConnectionInfo& new_info);
+  void setInfo(ConnectionInfo&& new_info);
 
   // A numan-readable string like
   // "C22566784 ([abcd:1234:5678:90ef:1111:2222:3333:4444]:41406)"
@@ -494,7 +494,7 @@ class Connection : public TrafficShappingSocket {
    * @return whether the socket is an SSL socket.
    */
   bool isSSL() const {
-    return info_.connection_type == ConnectionType::SSL;
+    return info_.isSSL();
   }
 
   bool isHandshaken() const {

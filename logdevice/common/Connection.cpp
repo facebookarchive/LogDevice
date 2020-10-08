@@ -639,7 +639,7 @@ void Connection::onHandshakeTimeout() {
   STAT_INCR(deps_->getStats(), handshake_timeouts);
 }
 
-void Connection::setInfo(const ConnectionInfo& new_info) {
+void Connection::setInfo(ConnectionInfo&& new_info) {
   checkNewInfo(new_info);
   info_ = new_info;
 }
