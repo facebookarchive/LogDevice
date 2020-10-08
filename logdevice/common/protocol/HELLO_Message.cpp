@@ -28,6 +28,7 @@
 #include "logdevice/common/protocol/Compatibility.h"
 #include "logdevice/common/protocol/ProtocolReader.h"
 #include "logdevice/common/protocol/ProtocolWriter.h"
+#include "logdevice/common/stats/Stats.h"
 #include "logdevice/include/Err.h"
 
 namespace facebook { namespace logdevice {
@@ -295,6 +296,7 @@ static PrincipalIdentity checkAuthenticationData(const HelloHeader& hellohdr,
     // we will reject when we require a credential, and one is not supplied
     if (!Worker::getConfig()->serverConfig()->allowUnauthenticated() &&
         principal.type == Principal::UNAUTHENTICATED) {
+      STAT_INCR(w->stats(), unauthenticated_connection_denied);
       RATELIMIT_ERROR(std::chrono::seconds(5),
                       1,
                       "ACCESS ERROR: Got a HELLO message from %s without "

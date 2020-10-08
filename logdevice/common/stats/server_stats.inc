@@ -1151,6 +1151,9 @@ STAT_DEFINE(acl_cache_misses, SUM)
 // cache hits
 STAT_DEFINE(acl_cache_hits, SUM)
 
+// Number of denied unauthenticated connections
+STAT_DEFINE(unauthenticated_connection_denied, SUM)
+
 // how many times metadata log has been trimmed
 STAT_DEFINE(metadata_log_trims, SUM)
 
