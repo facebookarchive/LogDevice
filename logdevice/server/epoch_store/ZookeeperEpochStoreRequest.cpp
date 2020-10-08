@@ -12,8 +12,30 @@
 #include "logdevice/common/Worker.h"
 #include "logdevice/common/types_internal.h"
 #include "logdevice/include/Err.h"
+#include "logdevice/server/epoch_store/LogMetaDataCodec.h"
 
 namespace facebook { namespace logdevice {
+
+Status ZookeeperEpochStoreRequest::deserializeLogMetaData(
+    std::string value,
+    LogMetaData& log_metadata) const {
+  std::shared_ptr<const LogMetaData> deserialized_log_metadata =
+      LogMetaDataCodec::deserialize(value);
+
+  if (!deserialized_log_metadata) {
+    return E::BADMSG;
+  }
+
+  // This is a copy unfortunatly because the deserialization returns a
+  // const object.
+  log_metadata = *deserialized_log_metadata;
+  return E::OK;
+}
+
+std::string ZookeeperEpochStoreRequest::serializeLogMetaData(
+    const LogMetaData& log_metadata) const {
+  return LogMetaDataCodec::serialize(log_metadata);
+}
 
 ZookeeperEpochStoreRequest::ZookeeperEpochStoreRequest(logid_t logid)
     : logid_(logid),

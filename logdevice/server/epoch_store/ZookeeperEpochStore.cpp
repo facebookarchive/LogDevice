@@ -25,7 +25,6 @@
 #include "logdevice/server/epoch_store/EpochMetaDataZRQ.h"
 #include "logdevice/server/epoch_store/GetLastCleanEpochZRQ.h"
 #include "logdevice/server/epoch_store/LogMetaData.h"
-#include "logdevice/server/epoch_store/LogMetaDataCodec.h"
 #include "logdevice/server/epoch_store/SetLastCleanEpochZRQ.h"
 #include "logdevice/server/epoch_store/ZookeeperEpochStoreRequest.h"
 
@@ -144,7 +143,7 @@ void ZookeeperEpochStore::provisionLogZnodes(RequestContext&& context,
   ops.emplace_back(ZookeeperClientBase::makeCreateOp(
       logroot,
       context.settings.double_write
-          ? LogMetaDataCodec::serialize(context.log_metadata)
+          ? context.zrq->serializeLogMetaData(context.log_metadata)
           : ""));
   // Creating the epoch metadata znode with the supplied znode_value
   ops.emplace_back(ZookeeperClientBase::makeCreateOp(
@@ -272,7 +271,7 @@ void ZookeeperEpochStore::doubleWriteZnode(
 
   auto migration_znode_path = znodePathForLog(context.zrq->logid_);
   auto serialized_log_metadata =
-      LogMetaDataCodec::serialize(context.log_metadata);
+      context.zrq->serializeLogMetaData(context.log_metadata);
 
   auto legacy_znode_path = context.zrq->getZnodePath(rootPath());
 
@@ -340,21 +339,16 @@ void ZookeeperEpochStore::onGetZnodeComplete(
       // trigger a migration as we can't serialize a LogMetaData with an
       // invalid current_epoch_metadata.
       if (!migration_znode->value.empty()) {
-        std::shared_ptr<const LogMetaData> deserialized_log_metadata =
-            LogMetaDataCodec::deserialize(migration_znode->value);
-
-        if (!deserialized_log_metadata) {
+        auto migration_deserialization_st =
+            zrq->deserializeLogMetaData(migration_znode->value, log_metadata);
+        if (migration_deserialization_st != E::OK) {
           RATELIMIT_ERROR(std::chrono::seconds(1),
                           1,
                           "Failed to deserialize log metadata for log %lu",
                           zrq->logid_.val_);
-          st = E::BADMSG;
+          st = migration_deserialization_st;
           goto err;
         }
-
-        // This is a copy unfortunatly because the deserialization returns a
-        // const object.
-        log_metadata = *deserialized_log_metadata;
       } else if (!zrq->allowedToTriggerNewFormatMigration()) {
         // We're not allowed to trigger a migration as part of this request.
         // Let's disable double writing and act as if we didn't read this znode.

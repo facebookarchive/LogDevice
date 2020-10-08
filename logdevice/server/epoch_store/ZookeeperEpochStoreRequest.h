@@ -60,6 +60,19 @@ class ZookeeperEpochStoreRequest {
   enum class NextStep : uint8_t { MODIFY = 0, PROVISION, STOP, FAILED };
 
   /**
+   * Deserializes the passed znode value into a LogMetaData.
+   *
+   * @return The Status of the deserialization.
+   */
+  Status deserializeLogMetaData(std::string value,
+                                LogMetaData& log_metadata) const;
+
+  /**
+   * Serializes the passed LogMetaData using the LogMetaDataCodec.
+   */
+  std::string serializeLogMetaData(const LogMetaData& log_metadata) const;
+
+  /**
    * Given the legacy znode value, deserialize it into the provided LogMetaData
    * structure. Returns`Status::OK` on success or the corresponding error on
    * failure.

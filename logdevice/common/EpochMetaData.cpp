@@ -91,6 +91,7 @@ bool EpochMetaData::identicalInMetaDataLog(const EpochMetaData& rhs) const {
   // - only used to indicate written status: WRITTEN_IN_METADATALOG
   const epoch_metadata_flags_t flags_mask =
       MetaDataLogRecordHeader::ALL_KNOWN_FLAGS &
+      ~MetaDataLogRecordHeader::HAS_STORAGE_SET &
       ~MetaDataLogRecordHeader::HAS_REPLICATION_PROPERTY &
       ~MetaDataLogRecordHeader::HAS_WEIGHTS &
       ~MetaDataLogRecordHeader::WRITTEN_IN_METADATALOG &

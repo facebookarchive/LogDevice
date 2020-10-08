@@ -157,18 +157,9 @@ int FileEpochStore::updateEpochStore(
     LogMetaData& log_metadata) {
   logid_t logid = zrq->logid_;
 
-  boost::filesystem::path store_path = zrq->getZnodePath(path_);
-  boost::filesystem::path lock_path = store_path.string() + ".lock";
-
-  // Create the log root dir if it doesn't exist
-  boost::filesystem::path log_dir = store_path.parent_path();
-  if (!boost::filesystem::exists(log_dir)) {
-    auto dir_success = boost::filesystem::create_directories(log_dir);
-    if (!dir_success) {
-      err = E::FAILED;
-      return -1;
-    }
-  }
+  boost::filesystem::path log_path =
+      folly::sformat("{}/{}", path_, MetaDataLog::dataLogID(logid).val());
+  boost::filesystem::path lock_path = log_path.string() + ".lock";
 
   int lock_fd = open(lock_path.c_str(),
                      O_RDWR | O_CREAT,
@@ -208,12 +199,16 @@ int FileEpochStore::updateEpochStore(
   };
 
   std::string data;
-  auto read_success = folly::readFile(store_path.c_str(), data);
+  auto read_success = folly::readFile(log_path.c_str(), data);
 
   if (read_success) {
-    Status deserialization_st =
-        zrq->legacyDeserializeIntoLogMetaData(data, log_metadata);
-    if (deserialization_st != Status::OK) {
+    auto deserialization_st = zrq->deserializeLogMetaData(data, log_metadata);
+
+    if (deserialization_st != E::OK) {
+      RATELIMIT_ERROR(std::chrono::seconds(1),
+                      1,
+                      "Failed to deserialize log metadata for log %lu",
+                      zrq->logid_.val_);
       err = deserialization_st;
       return -1;
     }
@@ -224,33 +219,6 @@ int FileEpochStore::updateEpochStore(
   switch (next_step) {
     case ZookeeperEpochStoreRequest::NextStep::PROVISION:
     case ZookeeperEpochStoreRequest::NextStep::MODIFY:
-      // Make sure that the LCE files exist
-      {
-        bool data_lce = true;
-        std::string data_lce_path =
-            folly::sformat("{}/{}/{}",
-                           path_,
-                           MetaDataLog::dataLogID(logid).val(),
-                           LastCleanEpochZRQ::znodeNameDataLog);
-
-        if (!boost::filesystem::exists(data_lce_path)) {
-          data_lce = folly::writeFile(std::string(""), data_lce_path.c_str());
-        }
-        bool metadata_lce = true;
-        std::string metadata_lce_path =
-            folly::sformat("{}/{}/{}",
-                           path_,
-                           MetaDataLog::dataLogID(logid).val(),
-                           LastCleanEpochZRQ::znodeNameMetaDataLog);
-        if (!boost::filesystem::exists(metadata_lce_path)) {
-          metadata_lce =
-              folly::writeFile(std::string(""), metadata_lce_path.c_str());
-        }
-        if (!data_lce || !metadata_lce) {
-          err = E::FAILED;
-          return -1;
-        }
-      }
       break;
     case ZookeeperEpochStoreRequest::NextStep::STOP:
       ld_check(
@@ -272,15 +240,23 @@ int FileEpochStore::updateEpochStore(
   // Increment version and timestamp of log metadata.
   log_metadata.touch();
 
-  char znode_value[FILE_LEN_MAX];
-  int znode_value_size =
-      zrq->composeZnodeValue(log_metadata, znode_value, sizeof(znode_value));
+  {
+    // This is still needed as it can modify the LogMetaData. Can be removed
+    // when ZookeeperEpochStore is fully migrated. We no longer care about its
+    // return value though.
+    char znode_value[FILE_LEN_MAX];
+    zrq->composeZnodeValue(log_metadata, znode_value, sizeof(znode_value));
+  }
+
+  auto serialized_log_metadata = zrq->serializeLogMetaData(log_metadata);
 
   using folly::test::TemporaryFile;
-  TemporaryFile tmp("epoch_store_new_contents",
-                    boost::filesystem::path(store_path).parent_path(),
-                    TemporaryFile::Scope::PERMANENT);
-  int rv = folly::writeFull(tmp.fd(), znode_value, znode_value_size);
+  TemporaryFile tmp(
+      folly::sformat("{}.tmp", MetaDataLog::dataLogID(logid).val()),
+      path_,
+      TemporaryFile::Scope::PERMANENT);
+  int rv = folly::writeFull(
+      tmp.fd(), serialized_log_metadata.data(), serialized_log_metadata.size());
   if (rv < 0) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     10,
@@ -291,14 +267,14 @@ int FileEpochStore::updateEpochStore(
     err = E::FAILED;
     return -1;
   }
-  rv = rename(tmp.path().c_str(), store_path.c_str());
+  rv = rename(tmp.path().c_str(), log_path.c_str());
 
   if (rv < 0) {
     RATELIMIT_ERROR(std::chrono::seconds(1),
                     10,
                     "Error renaming `%s' to '%s': %d (%s)",
                     tmp.path().c_str(),
-                    store_path.c_str(),
+                    log_path.c_str(),
                     errno,
                     strerror(errno));
     err = E::FAILED;
