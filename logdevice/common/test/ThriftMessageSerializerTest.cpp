@@ -12,6 +12,7 @@
 #include <thrift/lib/cpp2/protocol/Serializer.h>
 
 #include "logdevice/common/ThriftCodec.h"
+#include "logdevice/common/protocol/ACK_Message.h"
 #include "logdevice/common/protocol/APPEND_Message.h"
 
 using namespace ::testing;
@@ -63,6 +64,23 @@ TEST_F(ThriftMessageSerializerTest, Basic) {
   ASSERT_NE(message, nullptr);
   const auto* after = dynamic_cast<APPEND_Message*>(message.get());
   checkAppendMessage(*before, *after);
+}
+
+// Checks serialized message can be deserialized w/o loss
+TEST_F(ThriftMessageSerializerTest, Ack) {
+  auto proto = Compatibility::MIN_PROTOCOL_SUPPORTED;
+  ACK_Header ackhdr{0, request_id_t(1), 1, proto, E::OK};
+  ACK_Message before{ackhdr};
+  auto converted = serializer.toThrift(before, proto);
+  thrift::Message deserialized = serder(*converted);
+  auto message = serializer.fromThrift(std::move(deserialized), proto);
+  ASSERT_NE(message, nullptr);
+  const auto* after = dynamic_cast<ACK_Message*>(message.get());
+  ASSERT_NE(after, nullptr);
+  EXPECT_EQ(after->getHeader().options, before.getHeader().options);
+  EXPECT_EQ(after->getHeader().rqid, before.getHeader().rqid);
+  EXPECT_EQ(after->getHeader().client_idx, before.getHeader().client_idx);
+  EXPECT_EQ(after->getHeader().proto, before.getHeader().proto);
 }
 
 // Create well-formed Thrift message with some garbage in wrapper

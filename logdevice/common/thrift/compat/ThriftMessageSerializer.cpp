@@ -23,6 +23,7 @@ namespace facebook { namespace logdevice {
 
 namespace {
 constexpr size_t kHeaderSize = sizeof(ProtocolHeader);
+constexpr size_t kChecksumSize = sizeof(ProtocolHeader::cksum);
 } // namespace
 
 std::unique_ptr<thrift::Message>
@@ -35,6 +36,8 @@ ThriftMessageSerializer::toThrift(const Message& message,
     // err is set during serialization
     return nullptr;
   }
+  auto total = serialized->computeChainDataLength();
+  ld_info("Total size %lu, header size: %lu", total, kHeaderSize);
   auto result = std::make_unique<thrift::Message>();
   thrift::LegacyMessageWrapper wrapper;
   wrapper.set_payload(std::move(serialized));
@@ -49,7 +52,7 @@ ThriftMessageSerializer::fromThrift(thrift::Message&& source,
   thrift::LegacyMessageWrapper wrapper = source.move_legacyMessage();
   std::unique_ptr<folly::IOBuf> payload = std::move(wrapper).get_payload();
   // Read and validate header
-  folly::Optional<ProtocolHeader> header = readHeader(payload.get());
+  folly::Optional<ProtocolHeader> header = readHeader(payload.get(), protocol);
   if (!header) {
     err = E::BADMSG;
     return nullptr;
@@ -69,7 +72,7 @@ ThriftMessageSerializer::fromThrift(thrift::Message&& source,
 }
 
 folly::Optional<ProtocolHeader>
-ThriftMessageSerializer::readHeader(folly::IOBuf* source) {
+ThriftMessageSerializer::readHeader(folly::IOBuf* source, uint16_t protocol) {
   ld_check(source);
   folly::io::Cursor cursor(source);
   if (!cursor.canAdvance(kHeaderSize)) {
@@ -83,7 +86,14 @@ ThriftMessageSerializer::readHeader(folly::IOBuf* source) {
   }
   ProtocolHeader header;
   cursor.pull(&header, kHeaderSize);
-  source->trimStart(kHeaderSize);
+  size_t bytes_read = kHeaderSize;
+  // If messages should not include checksum then it was not serialized at all.
+  // It means last kChecksumSize we read actually part of the message so we need
+  // to keep them in IOBuf to let them be read later
+  if (!ProtocolHeader::needChecksumInHeader(header.type, protocol)) {
+    bytes_read -= kChecksumSize;
+  }
+  source->trimStart(bytes_read);
   return header;
 }
 

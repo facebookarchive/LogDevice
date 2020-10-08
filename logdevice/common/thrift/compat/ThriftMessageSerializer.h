@@ -56,7 +56,7 @@ class ThriftMessageSerializer {
 
  private:
   // Reads header from given IOBuf, returns folly::none iff reading fails
-  folly::Optional<ProtocolHeader> readHeader(folly::IOBuf*);
+  folly::Optional<ProtocolHeader> readHeader(folly::IOBuf*, uint16_t protocol);
   // Validates received protocol header and returns false iff the header is
   // malformed
   bool validateHeader(const ProtocolHeader&);
