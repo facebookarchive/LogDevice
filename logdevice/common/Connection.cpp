@@ -641,7 +641,7 @@ void Connection::onHandshakeTimeout() {
 
 void Connection::setInfo(ConnectionInfo&& new_info) {
   checkNewInfo(new_info);
-  info_ = new_info;
+  info_ = std::move(new_info);
 }
 
 void Connection::checkNewInfo(const ConnectionInfo& new_info) const {
