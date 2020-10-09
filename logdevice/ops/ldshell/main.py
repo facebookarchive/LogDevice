@@ -8,6 +8,9 @@
 
 import sys
 
+from ldshell.autoload import commands
+from ldshell.logdevice_plugin import LogDevicePlugin
+
 # This is the mother of all hacks!
 # There is possibly:
 #   a) Compiler bug that makes sending exceptions across the boundary of the
@@ -21,9 +24,6 @@ import sys
 # dynamic/automatic loading later.
 # TODO: Consider removing when updating Python/Boost/GCC=>Clang.
 from logdevice.client import Client
-
-from ldshell.autoload import commands
-from ldshell.logdevice_plugin import LogDevicePlugin
 from nubia import Nubia
 
 
