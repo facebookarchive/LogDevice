@@ -317,6 +317,10 @@ STAT_DEFINE(num_read_streams, SUM)
 STAT_DEFINE(read_streams_healthy, SUM)
 STAT_DEFINE(read_streams_non_authoritative, SUM)
 STAT_DEFINE(read_streams_stalled, SUM)
+// ByteOffset requested but not present in records
+STAT_DEFINE(records_missing_byteoffset, SUM)
+// ByteOffset requested but not able to provide
+STAT_DEFINE(records_delivered_without_byteoffset, SUM)
 
 // Separate new metrics for read streams that are considered stuck/lagging. Not
 // related to read_streams_stalled, read_streams_healthy and
