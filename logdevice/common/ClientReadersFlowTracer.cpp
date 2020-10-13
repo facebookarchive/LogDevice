@@ -179,6 +179,7 @@ void ClientReadersFlowTracer::traceReaderFlow(size_t num_bytes_read,
 
     auto sample = std::make_unique<TraceSample>();
     sample->addNormalValue("log_id", std::to_string(owner_->log_id_.val()));
+    sample->addNormalValue("reader_name", owner_->getReaderName());
     sample->addNormalValue("log_group_name", owner_->log_group_name_);
     sample->addNormalValue(
         "read_stream_id",
