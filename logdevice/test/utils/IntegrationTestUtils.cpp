@@ -1744,6 +1744,7 @@ std::string Cluster::applyMaintenance(thrift::AdminAPIAsyncClient& admin_client,
   req.set_priority(thrift::MaintenancePriority::IMMINENT);
   req.set_force_restore_rebuilding(force_restore);
   req.set_shards({mkShardID(node_id, shard_idx)});
+  req.set_force_restore_rebuilding(force_restore);
   admin_client.sync_applyMaintenance(resp, req);
   if (resp.get_maintenances().empty()) {
     throw std::runtime_error("Could not create requested maintenances on N" +
@@ -1751,7 +1752,7 @@ std::string Cluster::applyMaintenance(thrift::AdminAPIAsyncClient& admin_client,
                              std::to_string(shard_idx));
   }
   return *resp.get_maintenances()[0].get_group_id();
-}
+} // namespace IntegrationTestUtils
 
 std::unique_ptr<Cluster>
 ClusterFactory::create(const Configuration& source_config) {

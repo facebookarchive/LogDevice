@@ -22,13 +22,17 @@
 #include "logdevice/include/ClientSettings.h"
 #include "logdevice/lib/ops/EventLogUtils.h"
 #include "logdevice/server/locallogstore/test/StoreUtil.h"
+#include "logdevice/test/utils/AdminAPITestUtils.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
+
 using namespace facebook::logdevice;
-using IntegrationTestUtils::markShardUndrained;
-using IntegrationTestUtils::markShardUnrecoverable;
 using IntegrationTestUtils::waitUntilShardHasEventLogState;
 using IntegrationTestUtils::waitUntilShardsHaveEventLogState;
+
+// Kill test process after this many seconds. These tests are complex and take
+// around 25s to execute so giving them a longer timeout.
+const std::chrono::seconds TEST_TIMEOUT(DEFAULT_TEST_TIMEOUT * 2);
 
 namespace fs = boost::filesystem;
 
@@ -251,6 +255,10 @@ void dirtyNodes(IntegrationTestUtils::Cluster& cluster,
 
 class RebuildingTest : public IntegrationTestBase,
                        public ::testing::WithParamInterface<TestMode> {
+ public:
+  RebuildingTest() : IntegrationTestBase(TEST_TIMEOUT) {}
+  ~RebuildingTest() override {}
+
  protected:
   enum class NodeFailureMode { REPLACE, KILL };
 
@@ -272,6 +280,7 @@ class RebuildingTest : public IntegrationTestBase,
           // before trying to store to that node again, otherwise the test would
           // timeout.
           .setParam("--disabled-retry-interval", "0s")
+          .setParam("--gossip-enabled", "true")
           .setParam("--seq-state-backoff-time", "10ms..1s")
           .setParam("--rocksdb-partition-data-age-flush-trigger", "1s")
           .setParam("--rocksdb-partition-idle-flush-trigger", "100ms")
@@ -287,37 +296,23 @@ class RebuildingTest : public IntegrationTestBase,
           .setParam("--rocksdb-partitioned", "true")
           // Make newly created partitions receive new records immediately.
           .setParam("--rocksdb-new-partition-timestamp-margin", "0")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--min-gossips-for-stable-state", "1")
+          .setParam("--disable-event-log-trimming", "true")
+          .setParam(
+              "--maintenance-manager-metadata-nodeset-update-period", "10800s")
+          .setParam("--event-log-grace-period", "1ms")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
           .setNumDBShards(NUM_DB_SHARDS)
           .setNumLogs(3)
+          .useStandaloneAdminServer(true)
           .useDefaultTrafficShapingConfig(false)
-          .setParam("--event-log-grace-period", "10ms")
           // Reduce the copyset block size so we get a copyset shuffle every ~6
           // records.
           .setParam("--sticky-copysets-block-size", "128");
     };
-  }
-
-  /**
-   * Write to the event log to trigger rebuilding of a shard.
-   * This is a wrapper around IntegrationTestUtils::requestShardRebuilding()
-   *
-   * @param client Client to use to write to event log.
-   * @param node   Node for which to rebuild a shard.
-   * @param shard  Shard to rebuild.
-   * @param flags  Flags to use.
-   * @param rrm    Time ranges for requesting time-ranged rebuilding (aka
-   *                    mini rebuilding)
-   * @return LSN of the event log record or LSN_INVALID on failure.
-   */
-  lsn_t requestShardRebuilding(Client& client,
-                               node_index_t node,
-                               uint32_t shard,
-                               SHARD_NEEDS_REBUILD_flags_t flags = 0,
-                               RebuildingRangesMetadata* rrm = nullptr) {
-    auto effective_flags =
-        flags | SHARD_NEEDS_REBUILD_Header::FILTER_RELOCATE_SHARDS;
-    return IntegrationTestUtils::requestShardRebuilding(
-        client, node, shard, effective_flags, rrm);
   }
 
   /**
@@ -344,7 +339,9 @@ class RebuildingTest : public IntegrationTestBase,
         .apply(commonSetup())
         .setLogGroupName("mylog-2")
         .setLogAttributes(log_attrs)
+        .setMaintenanceLogAttributes(log_attrs)
         .setEventLogAttributes(log_attrs)
+        .enableSelfInitiatedRebuilding()
         .setParam("--disable-event-log-trimming", trim ? "false" : "true")
         .setParam("--byte-offsets")
         .setParam("--event-log-max-delta-records", "5")
@@ -419,6 +416,8 @@ class RebuildingTest : public IntegrationTestBase,
           return true;
         });
 
+    cluster.getAdminServer()->waitUntilFullyLoaded();
+    auto admin_client = cluster.getAdminServer()->createAdminClient();
     for (node_index_t node = begin; node <= end; ++node) {
       ld_info("%s N%u...",
               fmode == NodeFailureMode::REPLACE ? "Replacing" : "Killing",
@@ -426,13 +425,9 @@ class RebuildingTest : public IntegrationTestBase,
       // Kill/Restart or Replace the node
       switch (fmode) {
         case NodeFailureMode::REPLACE:
-          ASSERT_EQ(0, cluster.replace(node));
-
-          // Trigger rebuilding of all of its shards.
-          ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node, 0));
-          ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node, 1));
-
-          // Wait until all shards finish rebuilding.
+          ASSERT_EQ(0, cluster.replaceViaAdminServer(*admin_client, node));
+          ASSERT_TRUE(
+              wait_until_shards_enabled_and_healthy(cluster, node, {0, 1}));
           cluster.getNode(node).waitUntilAllShardsFullyAuthoritative(client);
           break;
         case NodeFailureMode::KILL:
@@ -636,6 +631,7 @@ TEST_P(RebuildingTest, OnlineDiskRepair) {
                      .setLogGroupName("my-test-log")
                      .setLogAttributes(log_attrs)
                      .setEventLogAttributes(log_attrs)
+                     .setMaintenanceLogAttributes(log_attrs)
                      .setNumDBShards(3)
                      .setNumLogs(1)
                      .create(5);
@@ -643,6 +639,8 @@ TEST_P(RebuildingTest, OnlineDiskRepair) {
   cluster->waitUntilAllSequencersQuiescent();
 
   auto client = cluster->createClient();
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
 
   // Write some records to shard 1.
   std::vector<RecordsInfo> info_per_log;
@@ -667,10 +665,12 @@ TEST_P(RebuildingTest, OnlineDiskRepair) {
   std::fclose(fp);
 
   ld_info("Bumping the generation...");
-  ASSERT_EQ(0, cluster->bumpGeneration(3));
+  ASSERT_EQ(0, cluster->bumpGenerationViaAdminServer(*admin_client, 3));
 
   // Restart N3...
   ld_info("Restarting N3...");
+  // This will NOT trigger automatic internal maintenance since rebuilding
+  // supervisor is disabled here.
   cluster->getNode(3).start();
   cluster->getNode(3).waitUntilStarted();
 
@@ -684,7 +684,8 @@ TEST_P(RebuildingTest, OnlineDiskRepair) {
 
   // Trigger rebuilding of the shard....
   ld_info("Trigger rebuilding...");
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 3, 1));
+  cluster->applyInternalMaintenance(
+      *client, 3, 1, "Requesting rebuilding from the test case");
 
   ld_info("Stopping N3...");
   EXPECT_EQ(0, cluster->getNode(3).shutdown());
@@ -694,6 +695,7 @@ TEST_P(RebuildingTest, OnlineDiskRepair) {
 
   ld_info("Starting N3 and waiting for rebuilding...");
   cluster->getNode(3).start();
+  ASSERT_TRUE(wait_until_enabled_and_healthy(*cluster, 3));
   cluster->getNode(3).waitUntilAllShardsFullyAuthoritative(client);
 
   // Read data again...
@@ -731,10 +733,14 @@ TEST_P(RebuildingTest, AllNodesRebuildingSameShard) {
                      .setLogGroupName("my-test-log")
                      .setLogAttributes(log_attrs)
                      .setEventLogAttributes(log_attrs)
+                     .setMaintenanceLogAttributes(log_attrs)
                      .setNumLogs(42)
                      .setNumDBShards(2)
                      .create(5);
   cluster->waitUntilAllSequencersQuiescent();
+
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
 
   // We use 2 shards, and event has odd ID => event log and its metadata log
   // live in shard 1 => it's safe to wipe shard 0.
@@ -748,7 +754,7 @@ TEST_P(RebuildingTest, AllNodesRebuildingSameShard) {
          ++it) {
       fs::remove_all(it->path());
     }
-    ASSERT_EQ(0, cluster->bumpGeneration(node));
+    ASSERT_EQ(0, cluster->bumpGenerationViaAdminServer(*admin_client, node));
     cluster->getNode(node).start();
     cluster->getNode(node).waitUntilStarted();
   }
@@ -756,7 +762,8 @@ TEST_P(RebuildingTest, AllNodesRebuildingSameShard) {
   ld_info("Triggering rebuiling of shard 0 for all nodes in the cluster...");
   auto client = cluster->createClient(std::chrono::hours(1));
   for (node_index_t node = 1; node <= 4; ++node) {
-    ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node, SHARD));
+    cluster->applyInternalMaintenance(
+        *client, node, SHARD, "Requesting rebuilding from the test case");
   }
 
   ld_info("Waiting for all nodes to acknowledge rebuilding...");
@@ -784,6 +791,7 @@ TEST_P(RebuildingTest, RebuildingWithNoAmends) {
                      .setLogGroupName("mylog")
                      .setLogAttributes(logAttributes(3))
                      .setEventLogAttributes(logAttributes(5))
+                     .setMaintenanceLogAttributes(logAttributes(5))
                      .setMetaDataLogsConfig(meta_config)
                      // read quickly when nodes are down
                      .setParam("--gap-grace-period", "10ms")
@@ -796,6 +804,8 @@ TEST_P(RebuildingTest, RebuildingWithNoAmends) {
 
   auto client = cluster->createClient();
   client->settings().set("gap-grace-period", "10ms");
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
 
   // Write some records.
   writeRecordsToMultiplePartitions(*cluster, *client, 1000);
@@ -815,16 +825,21 @@ TEST_P(RebuildingTest, RebuildingWithNoAmends) {
 
   // Writing SHARD_NEEDS_REBUILD for the three nodes to the event log.
   ld_info("Requesting drain of N3");
-  auto flags = SHARD_NEEDS_REBUILD_Header::DRAIN;
-  ASSERT_NE(
-      LSN_INVALID, requestShardRebuilding(*client, node_index_t{3}, 0, flags));
-  ASSERT_NE(
-      LSN_INVALID, requestShardRebuilding(*client, node_index_t{3}, 1, flags));
+  ld_info(
+      "Maintenance for N3:S0 created: %s",
+      cluster->applyMaintenance(
+                 *admin_client, 3, 0, "testing", /* drain =*/true)
+          .c_str());
+  ld_info(
+      "Maintenance for N3:S1 created: %s",
+      cluster
+          ->applyMaintenance(*admin_client, 3, 1, "testing", /* drain = */ true)
+          .c_str());
 
   for (node_index_t node = 1; node <= 2; ++node) {
     for (shard_index_t shard = 0; shard < NUM_DB_SHARDS; ++shard) {
-      ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node, shard));
-      ASSERT_NE(LSN_INVALID, markShardUnrecoverable(*client, node, shard));
+      cluster->applyInternalMaintenance(
+          *client, node, shard, "Requesting rebuilding from the test case");
     }
   }
 
@@ -855,6 +870,7 @@ TEST_P(RebuildingTest, RecoveryWhenManyNodesAreRebuilding) {
                      .setLogGroupName("mylog")
                      .setLogAttributes(logAttributes(3))
                      .setEventLogAttributes(logAttributes(5))
+                     .setMaintenanceLogAttributes(logAttributes(5))
                      .setMetaDataLogsConfig(meta_config)
                      // read quickly when nodes are down
                      .setParam("--gap-grace-period", "10ms")
@@ -865,6 +881,9 @@ TEST_P(RebuildingTest, RecoveryWhenManyNodesAreRebuilding) {
 
   auto client = cluster->createClient();
   client->settings().set("gap-grace-period", "10ms");
+
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
 
   // Write some records.
   writeRecordsToMultiplePartitions(*cluster, *client, 100);
@@ -906,8 +925,8 @@ TEST_P(RebuildingTest, RecoveryWhenManyNodesAreRebuilding) {
       EXPECT_EQ(-1, rv);
     }
     for (shard_index_t shard = 0; shard < NUM_DB_SHARDS; ++shard) {
-      ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node, shard));
-      ASSERT_NE(LSN_INVALID, markShardUnrecoverable(*client, node, shard));
+      cluster->applyInternalMaintenance(
+          *client, node, shard, "Requesting rebuilding from the test case");
     }
   }
 
@@ -917,6 +936,13 @@ TEST_P(RebuildingTest, RecoveryWhenManyNodesAreRebuilding) {
 
   auto stats = cluster->getNode(0).stats();
   ASSERT_GT(stats["non_auth_recovery_epochs"], 0);
+
+  // Marking the shards unrecoverable
+  thrift::MarkAllShardsUnrecoverableRequest request;
+  request.set_user("test");
+  request.set_reason("test");
+  thrift::MarkAllShardsUnrecoverableResponse response;
+  admin_client->sync_markAllShardsUnrecoverable(response, request);
 
   // Read event log to wait for donors 4-8 to finish rebuilding,
   // with nodes 1-3 still down.
@@ -933,7 +959,7 @@ TEST_P(RebuildingTest, RecoveryWhenManyNodesAreRebuilding) {
   // Start nodes 1-3 and wait for them to ack the rebuilding.
   ld_info("Starting nodes.");
   for (node_index_t node = 1; node <= 3; ++node) {
-    ASSERT_EQ(0, cluster->bumpGeneration(node));
+    ASSERT_EQ(0, cluster->bumpGenerationViaAdminServer(*admin_client, node));
     cluster->getNode(node).start();
   }
   waitUntilShardsHaveEventLogState(
@@ -959,11 +985,15 @@ TEST_P(RebuildingTest, ClusterExpandedWhileRebuilding) {
                      .setLogGroupName("my-test-log")
                      .setLogAttributes(log_attrs)
                      .setEventLogAttributes(log_attrs)
+                     .setMaintenanceLogAttributes(log_attrs)
                      .setNumLogs(3)
                      .create(6);
 
   cluster->waitForRecovery();
   auto client = cluster->createClient();
+
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
 
   // Write some records..
   writeRecordsToMultiplePartitions(*cluster, *client, 50);
@@ -975,23 +1005,35 @@ TEST_P(RebuildingTest, ClusterExpandedWhileRebuilding) {
   EXPECT_EQ(0, cluster->getNode(1).shutdown());
 
   // Trigger rebuilding of all shards of N3...
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node_index_t{3}, 0));
-  const lsn_t sync = requestShardRebuilding(*client, node_index_t{3}, 1);
-  ASSERT_NE(LSN_INVALID, sync);
+  cluster->applyInternalMaintenance(
+      *client, 3, 0, "Requesting rebuilding from the test case");
+  cluster->applyInternalMaintenance(
+      *client, 3, 1, "Requesting rebuilding from the test case");
 
-  // Wait until N2, N4 and N5 realize that they need to rebuild N3's shard. In
-  // order to do so we just wait until they read the 3 records we just wrote to
-  // the event log.
-  EXPECT_EQ(0, cluster->waitUntilEventLogSynced(sync, {2, 4, 5}));
+  cluster->getNode(3).waitUntilInternalMaintenances(
+      *admin_client,
+      [&](const auto& maintenances) { return !maintenances.empty(); },
+      "Internal maintenances must not be empty");
+
+  // Wait until N3 is performing rebuildnig.
+  cluster->getNode(3).waitUntilShardState(
+      *admin_client,
+      0,
+      [](const thrift::ShardState& shard) {
+        return shard.get_storage_state() ==
+            membership::thrift::StorageState::DATA_MIGRATION;
+      },
+      "Shard must be in DATA_MIGRATION");
 
   // Now, add two more nodes to the cluster.
-  int rv = cluster->expand(2);
+  int rv = cluster->expandViaAdminServer(*admin_client, 2);
   ASSERT_EQ(0, rv);
   // Replace N3
-  ASSERT_EQ(0, cluster->replace(3));
+  ASSERT_EQ(0, cluster->replaceViaAdminServer(*admin_client, 3));
   // Restart N1
   cluster->getNode(1).start();
   // Wait for N3 to acknowledge rebuilding of all its shards.
+  ASSERT_TRUE(wait_until_enabled_and_healthy(*cluster, 3));
   cluster->getNode(3).waitUntilAllShardsFullyAuthoritative(client);
   cluster->waitForMetaDataLogWrites();
   // there is a known issue where purging deletes records that gets surfaced in
@@ -1024,27 +1066,39 @@ TEST_P(RebuildingTest, ClusterExpandedWhileRebuilding2) {
                      .setLogGroupName("my-test-log")
                      .setLogAttributes(log_attrs)
                      .setEventLogAttributes(log_attrs)
+                     .setMaintenanceLogAttributes(log_attrs)
                      .setNumLogs(3)
                      .create(6);
 
   cluster->waitForRecovery();
   auto client = cluster->createClient();
 
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
+
   // Write some records..
   writeRecordsToMultiplePartitions(*cluster, *client, 50);
 
   // Replace N3
-  ASSERT_EQ(0, cluster->replace(3));
+  ASSERT_EQ(0, cluster->replaceViaAdminServer(*admin_client, 3));
   // Trigger rebuilding of all shards of N3...
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node_index_t{3}, 0));
-  const lsn_t sync = requestShardRebuilding(*client, node_index_t{3}, 1);
-  ASSERT_NE(LSN_INVALID, sync);
-
-  // Wait until N2, N3, N4 and N5 realize that they need to rebuild N3's shard.
-  EXPECT_EQ(0, cluster->waitUntilEventLogSynced(sync, {2, 3, 4, 5}));
+  cluster->applyInternalMaintenance(
+      *client, 3, 0, "Requesting rebuilding from the test case");
+  cluster->applyInternalMaintenance(
+      *client, 3, 1, "Requesting rebuilding from the test case");
+  cluster->getNode(3).waitUntilShardState(
+      *admin_client,
+      0,
+      [](const thrift::ShardState& shard) {
+        return (shard.get_storage_state() ==
+                    membership::thrift::StorageState::DATA_MIGRATION ||
+                shard.get_storage_state() ==
+                    membership::thrift::StorageState::NONE);
+      },
+      "Shard must be in DATA_MIGRATION | NONE");
 
   // Now, add two more nodes to the cluster.
-  int rv = cluster->expand(2);
+  int rv = cluster->expandViaAdminServer(*admin_client, 2);
   ASSERT_EQ(0, rv);
   // Wait for N3 to acknowledge rebuilding of all its shards.
   cluster->getNode(3).waitUntilAllShardsFullyAuthoritative(client);
@@ -1059,63 +1113,6 @@ TEST_P(RebuildingTest, ClusterExpandedWhileRebuilding2) {
   };
   // Verify that everything is correctly replicated.
   ASSERT_EQ(0, cluster->checkConsistency(check_args));
-}
-
-// N3's shards are being rebuilt. All donor nodes rebuilt them except for one of
-// them (N5), which is removed from the config. Verify that adding N5 to the
-// rebuilding set unstalls rebuilding.
-TEST_P(RebuildingTest, DonorNodeRemovedFromConfigDuringRestoreRebuilding) {
-  auto log_attrs = logsconfig::LogAttributes()
-                       .with_replicationFactor(3)
-                       .with_extraCopies(0)
-                       .with_syncedCopies(0)
-                       .with_maxWritesInFlight(30);
-
-  // Ensure metadata logs are not stored on the node we are about to remove from
-  // the cluster.
-
-  Configuration::MetaDataLogsConfig meta_config =
-      createMetaDataLogsConfig({1, 2, 3, 4}, 3, NodeLocationScope::NODE);
-  meta_config.sequencers_write_metadata_logs = false;
-  meta_config.sequencers_provision_epoch_store = false;
-
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup())
-                     .setLogGroupName("my-test-log")
-                     .setLogAttributes(log_attrs)
-                     .setEventLogAttributes(log_attrs)
-                     .setNumLogs(3)
-                     .setMetaDataLogsConfig(meta_config)
-                     .create(6);
-
-  cluster->waitForRecovery();
-  auto client = cluster->createClient();
-
-  // N5 is the node that we will remove from the cluster.
-  cluster->getNode(5).kill();
-
-  // Replace N3
-  cluster->getNode(3).kill();
-  ASSERT_EQ(0, cluster->replace(3));
-  // Trigger rebuilding of all shards of N3...
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node_index_t{3}, 0));
-  const lsn_t sync = requestShardRebuilding(*client, node_index_t{3}, 1);
-  ASSERT_NE(LSN_INVALID, sync);
-
-  // Before shrinking, wait until N3 is made aware that its shards are
-  // rebuilding and builds its donor sets that include N5.
-  EXPECT_EQ(0, cluster->waitUntilEventLogSynced(sync, {3}));
-
-  // Now remove N5 from the cluster.
-  const int rv = cluster->shrink(1);
-  ASSERT_EQ(0, rv);
-
-  // At this point, rebuilding should stall. Add N5 to the rebuilding set.
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 0));
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 1));
-
-  // Wait for N3 to acknowledge rebuilding of all its shards.
-  cluster->getNode(3).waitUntilAllShardsFullyAuthoritative(client);
 }
 
 TEST_P(RebuildingTest, NodeComesBackAfterRebuildingIsComplete) {
@@ -1138,7 +1135,7 @@ TEST_P(RebuildingTest, NodeComesBackAfterRebuildingIsComplete) {
                      .setLogGroupName("my-test-log")
                      .setLogAttributes(log_attrs)
                      .setEventLogAttributes(event_log_attrs)
-                     .setParam("--disable-event-log-trimming", "true")
+                     .setMaintenanceLogAttributes(event_log_attrs)
                      .setNumLogs(3)
                      .setMetaDataLogsConfig(meta_config)
                      .create(7);
@@ -1146,11 +1143,16 @@ TEST_P(RebuildingTest, NodeComesBackAfterRebuildingIsComplete) {
   cluster->waitForRecovery();
   auto client = cluster->createClient();
 
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
+
   // Kill N3
   cluster->getNode(3).kill();
   // Trigger rebuilding of all shards of N3...
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node_index_t{3}, 0));
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node_index_t{3}, 1));
+  cluster->applyInternalMaintenance(
+      *client, 3, 0, "Requesting rebuilding from the test case");
+  cluster->applyInternalMaintenance(
+      *client, 3, 1, "Requesting rebuilding from the test case");
 
   // Wait until others finish rebuilding the node
   cluster->getNode(3).waitUntilAllShardsAuthoritativeEmpty(client);
@@ -1179,6 +1181,7 @@ TEST_P(RebuildingTest, ShardAckFromNodeAlreadyRebuilt) {
                      .setLogGroupName("alog")
                      .setLogAttributes(log_attrs)
                      .setEventLogAttributes(log_attrs)
+                     .setMaintenanceLogAttributes(log_attrs)
                      .setNumLogs(3)
                      .setMetaDataLogsConfig(meta_config)
                      .create(6);
@@ -1186,13 +1189,18 @@ TEST_P(RebuildingTest, ShardAckFromNodeAlreadyRebuilt) {
   cluster->waitUntilAllSequencersQuiescent();
   auto client = cluster->createClient();
 
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
+
   writeRecordsToMultiplePartitions(*cluster, *client, 100);
 
   // Kill N3
   cluster->getNode(3).kill();
   // Trigger rebuilding of all shards of N3...
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node_index_t{3}, 0));
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node_index_t{3}, 1));
+  cluster->applyInternalMaintenance(
+      *client, 3, 0, "Requesting rebuilding from the test case");
+  cluster->applyInternalMaintenance(
+      *client, 3, 1, "Requesting rebuilding from the test case");
 
   // Wait until others finish rebuilding the node
   cluster->getNode(3).waitUntilAllShardsAuthoritativeEmpty(client);
@@ -1200,12 +1208,16 @@ TEST_P(RebuildingTest, ShardAckFromNodeAlreadyRebuilt) {
   writeRecordsToMultiplePartitions(*cluster, *client, 1000);
 
   // Start draining N5
-  auto flags =
-      SHARD_NEEDS_REBUILD_Header::RELOCATE | SHARD_NEEDS_REBUILD_Header::DRAIN;
-  ASSERT_NE(
-      LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 0, flags));
-  ASSERT_NE(
-      LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 1, flags));
+  ld_info(
+      "Maintenance for N5:S0 created: %s",
+      cluster->applyMaintenance(
+                 *admin_client, 5, 0, "testing", /* drain =*/true)
+          .c_str());
+  ld_info(
+      "Maintenance for N5:S1 created: %s",
+      cluster
+          ->applyMaintenance(*admin_client, 5, 1, "testing", /* drain = */ true)
+          .c_str());
 
   // Now start N3
   ld_info("Starting N3");
@@ -1246,17 +1258,17 @@ TEST_P(RebuildingTest, NodeDrain) {
   cluster->waitForRecovery();
   auto client = cluster->createClient();
 
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
+
   // Start draining N5
-  auto flags =
-      SHARD_NEEDS_REBUILD_Header::RELOCATE | SHARD_NEEDS_REBUILD_Header::DRAIN;
-  ASSERT_NE(
-      LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 0, flags));
-  ASSERT_NE(
-      LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 1, flags));
+  ld_info("Maintenance for N5:S0 created: %s",
+          cluster->applyMaintenance(*admin_client, 5, 0, "testing").c_str());
+  ld_info("Maintenance for N5:S1 created: %s",
+          cluster->applyMaintenance(*admin_client, 5, 1, "testing").c_str());
 
   // Once the drain completes, the node's authoritative status is changed to
   // AUTHORITATIVE_EMPTY.
-
   waitUntilShardsHaveEventLogState(client,
                                    {ShardID(5, 0), ShardID(5, 1)},
                                    AuthoritativeStatus::AUTHORITATIVE_EMPTY,
@@ -1283,35 +1295,62 @@ TEST_P(RebuildingTest, NodeDrainCanceled) {
                      .setLogGroupName("alog")
                      .setLogAttributes(log_attrs)
                      .setEventLogAttributes(log_attrs)
+                     .setMaintenanceLogAttributes(log_attrs)
                      .setNumLogs(3)
                      .setMetaDataLogsConfig(meta_config)
                      .create(6);
 
   cluster->waitForRecovery();
   auto client = cluster->createClient();
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
 
   // Stop N3 so that rebuilding stalls.
   cluster->getNode(3).shutdown();
 
-  // Start draining in RESTORE mode N5
-  auto flags = SHARD_NEEDS_REBUILD_Header::FORCE_RESTORE |
-      SHARD_NEEDS_REBUILD_Header::DRAIN;
-  ASSERT_NE(
-      LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 0, flags));
-  ASSERT_NE(
-      LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 1, flags));
+  // Start draining N5
+  auto maintenance1 = cluster->applyMaintenance(*admin_client, 5, 0, "testing");
+  auto maintenance2 = cluster->applyMaintenance(*admin_client, 5, 1, "testing");
 
   // N5 should remaing fully authoritative because it's a drain.
-
   bool rebuilding_complete = false; // because N3 cannot participate.
   waitUntilShardsHaveEventLogState(client,
                                    {ShardID(5, 0), ShardID(5, 1)},
                                    AuthoritativeStatus::FULLY_AUTHORITATIVE,
                                    rebuilding_complete);
 
+  // We should get stuck at DATA_MIGRATION. This maintenance will be blocked on
+  // the donor (3) not completing.
+  cluster->getNode(5).waitUntilShardState(
+      *admin_client,
+      0,
+      [](const thrift::ShardState& shard) {
+        return shard.get_storage_state() ==
+            membership::thrift::StorageState::DATA_MIGRATION;
+      },
+      "Shard must be in DATA_MIGRATION");
+
+  cluster->getNode(5).waitUntilShardState(
+      *admin_client,
+      1,
+      [](const thrift::ShardState& shard) {
+        return shard.get_storage_state() ==
+            membership::thrift::StorageState::DATA_MIGRATION;
+      },
+      "Shard must be in DATA_MIGRATION");
+
   // Request we abort draining N5
-  ASSERT_NE(LSN_INVALID, markShardUndrained(*client, node_index_t{5}, 0));
-  ASSERT_NE(LSN_INVALID, markShardUndrained(*client, node_index_t{5}, 1));
+  {
+    thrift::RemoveMaintenancesRequest req;
+    thrift::MaintenancesFilter filter;
+    filter.set_group_ids({maintenance1, maintenance2});
+    req.set_user("test");
+    req.set_filter(filter);
+    thrift::RemoveMaintenancesResponse resp;
+    admin_client->sync_removeMaintenances(resp, req);
+    ASSERT_EQ(2, resp.get_maintenances().size());
+  }
+  ASSERT_TRUE(wait_until_enabled_and_healthy(*cluster, 5));
 
   // Rebuilding should be aborted.
 
@@ -1339,9 +1378,11 @@ TEST_P(RebuildingTest, NodeDiesAfterDrain) {
 
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
+                     .setParam("--use-force-restore-rebuilding-flag", "true")
                      .setLogGroupName("alog")
                      .setLogAttributes(log_attrs)
                      .setEventLogAttributes(log_attrs)
+                     .setMaintenanceLogAttributes(log_attrs)
                      .setNumLogs(3)
                      .setMetaDataLogsConfig(meta_config)
                      .create(6);
@@ -1349,13 +1390,22 @@ TEST_P(RebuildingTest, NodeDiesAfterDrain) {
   cluster->waitForRecovery();
   auto client = cluster->createClient();
 
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
+
   // Start draining N5 in RESTORE mode.
-  auto flags = SHARD_NEEDS_REBUILD_Header::FORCE_RESTORE |
-      SHARD_NEEDS_REBUILD_Header::DRAIN;
-  ASSERT_NE(
-      LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 0, flags));
-  ASSERT_NE(
-      LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 1, flags));
+  cluster->applyMaintenance(*admin_client,
+                            5,
+                            0,
+                            "testing",
+                            /* drain = */ true,
+                            /* force_restore = */ true);
+  cluster->applyMaintenance(*admin_client,
+                            5,
+                            1,
+                            "testing",
+                            /* drain = */ true,
+                            /* force_restore = */ true);
 
   cluster->getNode(5).waitUntilAllShardsAuthoritativeEmpty(client);
 
@@ -1363,282 +1413,12 @@ TEST_P(RebuildingTest, NodeDiesAfterDrain) {
   cluster->getNode(5).kill();
   // Kill N3 and start rebuilding N3
   cluster->getNode(3).kill();
-  ASSERT_NE(
-      LSN_INVALID, requestShardRebuilding(*client, node_index_t{3}, 0, 0));
-  ASSERT_NE(
-      LSN_INVALID, requestShardRebuilding(*client, node_index_t{3}, 1, 0));
+  cluster->applyInternalMaintenance(*client, 3, 0, "testing");
+  cluster->applyInternalMaintenance(*client, 3, 1, "testing");
 
   // N5 should not be considered as donor and N3's rebuilding
   // should complete
   cluster->getNode(3).waitUntilAllShardsAuthoritativeEmpty(client);
-}
-
-// N5 is being drained, but it is removed from the config before the drain
-// completes. We then restart rebuilding of N5 in RELOCATE mode this time.
-TEST_P(RebuildingTest, NodeRebuildingInRelocateModeRemovedFromConfig) {
-  auto log_attrs = logsconfig::LogAttributes()
-                       .with_replicationFactor(3)
-                       .with_extraCopies(0)
-                       .with_syncedCopies(0)
-                       .with_maxWritesInFlight(30);
-
-  // Ensure metadata logs are not stored on the node we are about to remove from
-  // the cluster.
-  Configuration::MetaDataLogsConfig meta_config =
-      createMetaDataLogsConfig({1, 2, 3, 4}, 3, NodeLocationScope::NODE);
-  meta_config.sequencers_write_metadata_logs = false;
-  meta_config.sequencers_provision_epoch_store = false;
-
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup())
-                     .setLogGroupName("blog")
-                     .setLogAttributes(log_attrs)
-                     .setEventLogAttributes(log_attrs)
-                     .setNumLogs(3)
-                     .setMetaDataLogsConfig(meta_config)
-                     .create(6);
-
-  cluster->waitForRecovery();
-  auto client = cluster->createClient();
-
-  // Stop N3 so that rebuilding stalls.
-  cluster->getNode(3).shutdown();
-
-  // Start draining N5
-  auto flags = SHARD_NEEDS_REBUILD_Header::RELOCATE;
-  ASSERT_NE(
-      LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 0, flags));
-  const lsn_t sync = requestShardRebuilding(*client, node_index_t{5}, 1, flags);
-  ASSERT_NE(LSN_INVALID, sync);
-
-  // Before shrinking, wait until N4 is made aware that N5's shards are
-  // rebuilding in RELOCATE mode.
-  EXPECT_EQ(0, cluster->waitUntilEventLogSynced(sync, {4}));
-
-  // Now remove N5 from the cluster.
-  cluster->getNode(5).shutdown();
-  int rv = cluster->shrink(1);
-  ASSERT_EQ(0, rv);
-
-  // Start N3.
-  cluster->getNode(3).start();
-  cluster->getNode(3).waitUntilStarted();
-
-  // At this point, rebuilding should stall. Add N5 to the rebuilding set in
-  // RESTORE mode this time to unstall rebuilding.
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 0));
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 1));
-
-  // We expect the shards to become fully authoritative because
-  // EventLogStateMachine trims the event log when it sees a shard that's
-  // AUTHORITATIVE_EMPTY but is not in the config anymore. Readers don't care
-  // since the node is not in the config, they treat it as if it was
-  // AUTHORITATIVE_EMPTY.
-  //
-  // Since the transition from AUTHORITATIVE_EMPTY to FULLY_AUTHORITATIVE
-  // happens by trimming the log, event log tailer inside
-  // waitUntilShardsHaveEventLogState won't notice it, so we have to do polling
-  // instead of tailing.
-  wait_until("N5 becomes FULLY_AUTHORITATIVE", [&] {
-    ShardAuthoritativeStatusMap m;
-    int rv = cluster->getShardAuthoritativeStatusMap(m);
-    EXPECT_EQ(rv, 0) << err;
-    if (rv != 0) {
-      return false;
-    }
-    for (shard_index_t s = 0; s < NUM_DB_SHARDS; ++s) {
-      if (m.getShardStatus(ShardID(5, s)) !=
-          AuthoritativeStatus::FULLY_AUTHORITATIVE) {
-        return false;
-      }
-    }
-    return true;
-  });
-}
-
-// A node is removed from the config while it is rebuilding.
-// RebuildingCoordinator on donor nodes should abort rebuilding.
-TEST_P(RebuildingTest, RebuildingNodeRemovedFromConfig) {
-  auto log_attrs = logsconfig::LogAttributes()
-                       .with_replicationFactor(3)
-                       .with_extraCopies(0)
-                       .with_syncedCopies(0)
-                       .with_maxWritesInFlight(30);
-
-  // Ensure metadata logs are not stored on the node we are about to remove from
-  // the cluster.
-  Configuration::MetaDataLogsConfig meta_config =
-      createMetaDataLogsConfig({1, 2, 3, 4}, 3, NodeLocationScope::NODE);
-  meta_config.sequencers_write_metadata_logs = false;
-  meta_config.sequencers_provision_epoch_store = false;
-
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup())
-                     .setLogGroupName("my-test-log")
-                     .setLogAttributes(log_attrs)
-                     .setEventLogAttributes(log_attrs)
-                     .setNumLogs(3)
-                     .setMetaDataLogsConfig(meta_config)
-                     .create(6);
-
-  cluster->waitForRecovery();
-  auto client = cluster->createClient();
-
-  // Kill N1 just to prevent rebuilding to complete immediately.
-  EXPECT_EQ(0, cluster->getNode(1).shutdown());
-
-  // Replace N5
-  cluster->getNode(5).kill();
-  ASSERT_EQ(0, cluster->replace(5));
-  // Trigger rebuilding of all shards of N5...
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 0));
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 1));
-
-  // Now remove N5 from the cluster.
-  int rv = cluster->shrink(1);
-  ASSERT_EQ(0, rv);
-
-  cluster->getNode(1).start();
-}
-
-// Same as RebuildingNodeRemovedFromConfig but the rebuilding node is not the
-// only node in the rebuilding set.
-TEST_P(RebuildingTest, RebuildingNodeRemovedFromConfigButNotAlone) {
-  auto log_attrs = logsconfig::LogAttributes()
-                       .with_replicationFactor(3)
-                       .with_extraCopies(0)
-                       .with_syncedCopies(0)
-                       .with_maxWritesInFlight(30);
-
-  // Ensure metadata logs are not stored on the node we are about to remove from
-  // the cluster.
-  Configuration::MetaDataLogsConfig meta_config =
-      createMetaDataLogsConfig({1, 2, 3, 4}, 3, NodeLocationScope::NODE);
-  meta_config.sequencers_write_metadata_logs = false;
-  meta_config.sequencers_provision_epoch_store = false;
-
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup())
-                     .setLogGroupName("my-test-log")
-                     .setLogAttributes(log_attrs)
-                     .setEventLogAttributes(log_attrs)
-                     .setNumLogs(3)
-                     .setMetaDataLogsConfig(meta_config)
-                     .create(7);
-
-  cluster->waitForRecovery();
-  auto client = cluster->createClient();
-
-  // Kill N1 just to prevent rebuilding to complete immediately.
-  cluster->getNode(1).shutdown();
-
-  // Replace N6
-  cluster->getNode(6).kill();
-  ASSERT_EQ(0, cluster->replace(6));
-  // Trigger rebuilding of all shards of N6...
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node_index_t{6}, 0));
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node_index_t{6}, 1));
-
-  // Replace N5
-  cluster->getNode(5).kill();
-  ASSERT_EQ(0, cluster->replace(5));
-  // Trigger rebuilding of all shards of N5...
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 0));
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node_index_t{5}, 1));
-
-  // Now remove N6 from the cluster.
-  int rv = cluster->shrink(1);
-  ASSERT_EQ(0, rv);
-
-  cluster->getNode(1).start();
-
-  // Wait until N5 is rebuilt.
-  cluster->getNode(5).waitUntilAllShardsFullyAuthoritative(client);
-}
-
-// Test a scenario where an f-majority of nodes is in the nodeset. This makes it
-// impossible for RecordRebuilding state machines to make progress so it should
-// try to re-replicate as much as possible but records will remain
-// under-replicated. In this test we want to verify that this situation does not
-// cause rebuilding to stall.
-TEST_P(RebuildingTest, FMajorityInRebuildingSet) {
-  auto log_attrs = logsconfig::LogAttributes()
-                       .with_replicationFactor(3)
-                       .with_extraCopies(0)
-                       .with_syncedCopies(0)
-                       .with_maxWritesInFlight(30)
-                       .with_backlogDuration(std::chrono::seconds{6 * 3600});
-
-  auto event_log_attrs = logsconfig::LogAttributes()
-                             .with_replicationFactor(3)
-                             .with_extraCopies(0)
-                             .with_syncedCopies(0)
-                             .with_maxWritesInFlight(30);
-
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .apply(commonSetup())
-                     .setLogGroupName("my-test-log")
-                     .setLogAttributes(log_attrs)
-                     .setEventLogAttributes(event_log_attrs)
-                     .setNumLogs(4)
-                     .setNumDBShards(2)
-                     .create(6);
-
-  // We need to wipe/rebuild a lot of nodes, while keeping event log readable
-  // and writable. The very hacky way we do this is by making sure data log and
-  // internal logs go to different shards, and only wiping/rebuilding the shards
-  // with data logs. In particular, it relies on the following facts:
-  //  (a) we're using 2 DB shards,
-  //  (b) logs are assigned to shard log_id % num_shards,
-  //  (c) event log deltas log has ID 4611686018427387903 (odd - shard 1),
-  //  (d) event log's metadata log is 13835058055282163711 (also odd),
-  //  (e) event log snapshots log is disabled,
-  //  (f) we're writing to data log 2 (even - shard 0),
-  //  (g) the test doesn't depend on any other internal logs, and no other
-  //      internal machinery needs shard 0 to be available.
-  //
-  // TODO: This is not a very good solution. Many of these assumptions are
-  // likely to break in future. This problem comes up in integration tests
-  // a lot, and many tests use similar crappy ad-hoc workarounds. Would be nice
-  // to replace them all with some good mechanism to avoid this problem. Maybe
-  // support segregating internal logs to a separate set of nodes, similar to
-  // how IntegrationTestUtils by default places sequencers on a separate node?
-  const shard_index_t SHARD = 0;
-
-  // Write some records
-  cluster->waitUntilAllSequencersQuiescent();
-  auto client = cluster->createClient();
-  writeRecordsToMultiplePartitions(*cluster, *client, 100);
-
-  cluster->waitUntilAllSequencersQuiescent();
-
-  for (node_index_t node = 1; node <= 4; ++node) {
-    EXPECT_EQ(0, cluster->getNode(node).shutdown());
-    auto shard_path = cluster->getNode(node).getShardPath(SHARD);
-    for (fs::directory_iterator end_dir_it, it(shard_path); it != end_dir_it;
-         ++it) {
-      fs::remove_all(it->path());
-    }
-    ASSERT_EQ(0, cluster->bumpGeneration(node));
-    cluster->getNode(node).start();
-    cluster->getNode(node).waitUntilStarted();
-  }
-
-  // 4 nodes in the rebuilding set is too much, it's impossible to rebuild the
-  // records that have a replication factor of 3 since there are 6-4=2 nodes not
-  // in the set. Rebuilding should skip the epochs and not stall.
-  for (node_index_t node = 1; node <= 4; ++node) {
-    ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node, SHARD));
-  }
-
-  IntegrationTestUtils::waitUntilShardsHaveEventLogState(
-      client,
-      {ShardID(1, SHARD),
-       ShardID(2, SHARD),
-       ShardID(3, SHARD),
-       ShardID(4, SHARD)},
-      AuthoritativeStatus::FULLY_AUTHORITATIVE,
-      true);
 }
 
 // Kill/Restart each storage node one by one. No extras.
@@ -1701,6 +1481,8 @@ TEST_P(RebuildingTest, MiniRebuildingIsAuthoritative) {
           .setLogGroupName("my-test-log")
           .setLogAttributes(log_attrs)
           .setEventLogAttributes(log_attrs)
+          .enableSelfInitiatedRebuilding()
+          .setMaintenanceLogAttributes(log_attrs)
           .setParam("--append-store-durability", "memory")
           // Set min flush trigger intervals and partition duration high
           // so that only the test is creating/retiring partitions.
@@ -1769,6 +1551,7 @@ TEST_P(RebuildingTest, MiniRebuildingAlwaysNonRecoverable) {
           .setLogGroupName("mylog")
           .setLogAttributes(logAttributes(3))
           .setEventLogAttributes(logAttributes(5))
+          .setMaintenanceLogAttributes(logAttributes(5))
           .setParam("--rebuild-store-durability", "async_write")
           .setMetaDataLogsConfig(meta_config)
           // read quickly when nodes are down
@@ -1796,6 +1579,9 @@ TEST_P(RebuildingTest, MiniRebuildingAlwaysNonRecoverable) {
   cluster->waitForRecovery();
 
   auto client = cluster->createClient();
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
+
   EventLogRebuildingSet base_set;
   ASSERT_EQ(EventLogUtils::getRebuildingSet(*client, base_set), 0);
   ASSERT_TRUE(base_set.empty());
@@ -1881,9 +1667,25 @@ TEST_P(RebuildingTest, MiniRebuildingAlwaysNonRecoverable) {
                                               std::chrono::seconds(1));
       EXPECT_EQ(-1, rv);
     }
-    ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, node, /*shard*/ 0));
-    ASSERT_NE(LSN_INVALID, markShardUnrecoverable(*client, node, /*shard*/ 0));
+    cluster->applyInternalMaintenance(*client, node, 0, "testing");
   }
+  // Waiting until all nodes are in MIGRATING_DATA state
+  for (node_index_t node : unrecoverable_node_set) {
+    cluster->getNode(node).waitUntilShardState(
+        *admin_client,
+        0,
+        [](const thrift::ShardState& shard) {
+          return shard.get_storage_state() ==
+              membership::thrift::StorageState::DATA_MIGRATION;
+        },
+        "Shard must be in DATA_MIGRATION");
+  }
+  // Marking the data unrecoverable
+  thrift::MarkAllShardsUnrecoverableRequest request;
+  request.set_user("test");
+  request.set_reason("test");
+  thrift::MarkAllShardsUnrecoverableResponse response;
+  admin_client->sync_markAllShardsUnrecoverable(response, request);
 
   // Now recovery should finish.
   ld_info("Waiting for recovery.");
@@ -1905,7 +1707,7 @@ TEST_P(RebuildingTest, MiniRebuildingAlwaysNonRecoverable) {
   // Start nodes 1-3 and wait for them to ack the rebuilding.
   ld_info("Starting nodes.");
   for (node_index_t node = 1; node <= 3; ++node) {
-    ASSERT_EQ(0, cluster->bumpGeneration(node));
+    ASSERT_EQ(0, cluster->bumpGenerationViaAdminServer(*admin_client, node));
     cluster->getNode(node).start();
   }
   waitUntilShardsHaveEventLogState(
@@ -1938,15 +1740,19 @@ TEST_P(RebuildingTest, RebuildingWithDifferentDurabilities) {
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .apply(commonSetup())
                      .setParam("--rebuild-store-durability", "async_write")
+                     .setParam("--enable-self-initiated-rebuilding", "true")
                      .setLogGroupName("test-log-group")
                      .setLogAttributes(log_attrs)
                      .setEventLogAttributes(event_log_attrs)
+                     .setMaintenanceLogAttributes(event_log_attrs)
                      .setNumLogs(42)
-                     .create(5);
+                     .create(6);
 
   // Write some records
   ld_info("Creating client");
   auto client = cluster->createClient();
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
   // Write to shard 1 only.
   // Note: I'm not sure why there's a 1ms sleep between records here.
   // This may just be a bad copypasta.
@@ -1967,21 +1773,21 @@ TEST_P(RebuildingTest, RebuildingWithDifferentDurabilities) {
   ld_info("Shutting down N1");
   EXPECT_EQ(0, cluster->getNode(1).shutdown());
   ld_info("Wiping N1");
-  auto shard_path = cluster->getNode(1).getShardPath(0);
-  for (fs::directory_iterator end_dir_it, it(shard_path); it != end_dir_it;
-       ++it) {
-    fs::remove_all(it->path());
-  }
+  cluster->getNode(1).wipeShard(0);
+  cluster->getNode(1).wipeShard(1);
   ld_info("Bumping generation");
-  ASSERT_EQ(0, cluster->bumpGeneration(1));
+  ASSERT_EQ(0, cluster->bumpGenerationViaAdminServer(*admin_client, 1));
   ld_info("Starting N1");
   cluster->getNode(1).start();
   cluster->getNode(1).waitUntilStarted();
 
-  ld_info("Requesting rebuilding");
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 1, 0));
-
   ld_info("Waiting for rebuilding");
+  cluster->getNode(1).waitUntilInternalMaintenances(
+      *admin_client,
+      [&](const auto& maintenances) { return maintenances.empty(); },
+      "Internal maintenances must be removed");
+
+  ASSERT_TRUE(wait_until_enabled_and_healthy(*cluster, 1));
   cluster->getNode(1).waitUntilAllShardsFullyAuthoritative(client);
   ld_info("Waiting for metadata log writes");
   cluster->waitForMetaDataLogWrites();
@@ -2095,6 +1901,7 @@ TEST_P(RebuildingTest, UnderReplicatedRegions) {
           .setLogGroupName("my-test-log")
           .setLogAttributes(log_attrs)
           .setEventLogAttributes(log_attrs)
+          .setMaintenanceLogAttributes(log_attrs)
           .setParam("--append-store-durability", "memory")
           // Set min flush trigger intervals and partition duration high
           // so that only the test is creating/retiring partitions.
@@ -2186,6 +1993,7 @@ TEST_P(RebuildingTest, SkipEverything) {
 
   Configuration::Nodes nodes(3);
   for (int i = 0; i < 3; ++i) {
+    nodes[i].setName("Node-" + std::to_string(i));
     nodes[i].addSequencerRole();
     nodes[i].addStorageRole(/*num_shards*/ 1);
     nodes[i].generation = 1;
@@ -2193,12 +2001,14 @@ TEST_P(RebuildingTest, SkipEverything) {
 
   auto nodes_configuration =
       NodesConfigurationTestUtil::provisionNodes(std::move(nodes));
-  nodes_configuration = nodes_configuration->applyUpdate(
-      NodesConfigurationTestUtil::setStorageMembershipUpdate(
-          *nodes_configuration,
-          {ShardID(2, -1)},
-          membership::StorageState::READ_ONLY,
-          folly::none));
+  /*
+   *nodes_configuration = nodes_configuration->applyUpdate(
+   *    NodesConfigurationTestUtil::setStorageMembershipUpdate(
+   *        *nodes_configuration,
+   *        {ShardID(2, -1)},
+   *        membership::StorageState::READ_ONLY,
+   *        folly::none));
+   */
 
   ld_info("Creating cluster");
   auto cluster = IntegrationTestUtils::ClusterFactory()
@@ -2206,6 +2016,7 @@ TEST_P(RebuildingTest, SkipEverything) {
                      .setLogGroupName("a")
                      .setLogAttributes(log_attrs)
                      .setEventLogAttributes(event_log_attrs)
+                     .setMaintenanceLogAttributes(event_log_attrs)
                      .setMetaDataLogsConfig(meta_config)
                      .setNodes(std::move(nodes_configuration))
                      .setNumDBShards(1)
@@ -2216,13 +2027,31 @@ TEST_P(RebuildingTest, SkipEverything) {
 
   ld_info("Creating client");
   auto client = cluster->createClient();
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
+  // N2 needs to be READ_ONLY
+  cluster->applyMaintenance(
+      *admin_client, 2, 0, /* user = */ "testing", /* drain = */ false);
+
+  cluster->getNode(2).waitUntilShardState(
+      *admin_client,
+      0,
+      [](const thrift::ShardState& shard) {
+        return shard.get_storage_state() ==
+            membership::thrift::StorageState::READ_ONLY;
+      },
+      "Shard N2:S0 must be READ_ONLY");
+
   ld_info("Writing records");
   writeRecordsToMultiplePartitions(*cluster, *client, 400);
 
   ld_info("Requesting drain of N2");
-  ASSERT_NE(
-      LSN_INVALID,
-      requestShardRebuilding(*client, 2, 0, SHARD_NEEDS_REBUILD_Header::DRAIN));
+  ld_info(
+      "Maintenance for N2:S0 created: %s",
+      cluster
+          ->applyMaintenance(
+              *admin_client, 2, 0, /* user = */ "testing2", /* drain = */ true)
+          .c_str());
 
   ld_info("Waiting for rebuilding of N2");
   waitUntilShardHasEventLogState(
@@ -2259,6 +2088,12 @@ TEST_P(RebuildingTest, DerivedStats) {
                      .setParam("--enable-self-initiated-rebuilding", "false")
                      .create(5);
 
+  ld_info("Creating Client");
+  auto client = cluster->createClient();
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
+
   auto stats = cluster->getNode(1).stats();
   EXPECT_EQ(0, stats["shards_waiting_for_non_started_restore"]);
   EXPECT_EQ(0, stats["non_empty_shards_in_restore"]);
@@ -2268,7 +2103,7 @@ TEST_P(RebuildingTest, DerivedStats) {
   // Wipe N1 and start it.
   ld_info("Wiping N1");
   cluster->getNode(1).wipeShard(0);
-  ASSERT_EQ(0, cluster->bumpGeneration(1));
+  ASSERT_EQ(0, cluster->bumpGenerationViaAdminServer(*admin_client, 1));
   ld_info("Starting N1");
   cluster->getNode(1).start();
   cluster->getNode(1).waitUntilStarted();
@@ -2277,15 +2112,15 @@ TEST_P(RebuildingTest, DerivedStats) {
   EXPECT_EQ(1, stats["shards_waiting_for_non_started_restore"]);
   EXPECT_EQ(0, stats["non_empty_shards_in_restore"]);
 
-  ld_info("Creating Client");
-  auto client = cluster->createClient();
   ld_info("Requesting rebuilding of N1");
-  lsn_t event_lsn =
-      requestShardRebuilding(*client, /* node */ 1, /* shard */ 0);
-  ASSERT_NE(LSN_INVALID, event_lsn);
+  cluster->applyInternalMaintenance(
+      *client, 1, 0, "Requesting rebuilding from the test case");
 
-  ld_info("Waiting for event to propagate to N1");
-  EXPECT_EQ(0, cluster->waitUntilEventLogSynced(event_lsn, {1}));
+  ld_info("Waiting for maintenance to be applied");
+  cluster->getNode(1).waitUntilInternalMaintenances(
+      *admin_client,
+      [&](const auto& maintenances) { return !maintenances.empty(); },
+      "Internal maintenances must not be empty");
 
   // Rebuilding should be stuck because N2 is down.
   // The event propagation inside the server is asynchronous, even after the
@@ -2304,6 +2139,7 @@ TEST_P(RebuildingTest, DerivedStats) {
 
   // Rebuilding should be able to complete now.
   ld_info("Waiting for rebuilding of N1");
+  ASSERT_TRUE(wait_until_enabled_and_healthy(*cluster, 1));
   cluster->getNode(1).waitUntilAllShardsFullyAuthoritative(client);
 
   stats = cluster->getNode(1).stats();
@@ -2326,11 +2162,8 @@ TEST_P(RebuildingTest, DerivedStats) {
 
   // Now let's drain N3.
   ld_info("Requesting drain of N3");
-  ASSERT_NE(LSN_INVALID,
-            requestShardRebuilding(*client,
-                                   /* node */ 3,
-                                   /* shard */ 0,
-                                   SHARD_NEEDS_REBUILD_Header::DRAIN));
+  auto maintenance_id = cluster->applyMaintenance(
+      *admin_client, 3, 0, "testing", /* drain = */ true);
 
   stats = cluster->getNode(3).stats();
   EXPECT_EQ(0, stats["shards_waiting_for_non_started_restore"]);
@@ -2340,7 +2173,8 @@ TEST_P(RebuildingTest, DerivedStats) {
   cluster->getNode(2).start();
 
   ld_info("Waiting for drain of N3 to complete");
-  event_lsn = cluster->getNode(3).waitUntilAllShardsAuthoritativeEmpty(client);
+  auto event_lsn =
+      cluster->getNode(3).waitUntilAllShardsAuthoritativeEmpty(client);
 
   stats = cluster->getNode(3).stats();
   EXPECT_EQ(0, stats["shards_waiting_for_non_started_restore"]);
@@ -2351,7 +2185,7 @@ TEST_P(RebuildingTest, DerivedStats) {
   EXPECT_EQ(0, cluster->getNode(3).shutdown());
   ld_info("Wiping N3");
   cluster->getNode(3).wipeShard(0);
-  ASSERT_EQ(0, cluster->bumpGeneration(3));
+  ASSERT_EQ(0, cluster->bumpGenerationViaAdminServer(*admin_client, 3));
   ld_info("Starting N3");
   cluster->getNode(3).start();
   cluster->getNode(3).waitUntilStarted();
@@ -2371,9 +2205,19 @@ TEST_P(RebuildingTest, DerivedStats) {
 
   // Undrain N3 and wait for it to ack.
   ld_info("Marking N3 undrained");
-  event_lsn = markShardUndrained(*client, /* node */ 3, /* shard */ 0);
-  ASSERT_NE(LSN_INVALID, event_lsn);
+  // Request we abort draining N3
+  {
+    thrift::RemoveMaintenancesRequest req;
+    thrift::MaintenancesFilter filter;
+    filter.set_group_ids({maintenance_id});
+    req.set_user("test");
+    req.set_filter(filter);
+    thrift::RemoveMaintenancesResponse resp;
+    admin_client->sync_removeMaintenances(resp, req);
+    ASSERT_EQ(1, resp.get_maintenances().size());
+  }
   ld_info("Waiting for N3 to ack");
+  ASSERT_TRUE(wait_until_enabled_and_healthy(*cluster, 3));
   cluster->getNode(3).waitUntilAllShardsFullyAuthoritative(client);
 
   wait_until("non_empty_shards_in_restore", [&cluster, &stats] {
@@ -2406,6 +2250,8 @@ TEST_P(RebuildingTest, ReplicationCheckerDuringRebuilding) {
 
   ld_info("Creating Client");
   auto client = cluster->createClient();
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
   ld_info("Appending record");
   std::string data("hello");
   lsn_t lsn = client->appendSync(LOG_IDS[0], Payload(data.data(), data.size()));
@@ -2420,12 +2266,23 @@ TEST_P(RebuildingTest, ReplicationCheckerDuringRebuilding) {
   EXPECT_EQ(0, cluster->shutdownNodes({2}));
 
   ld_info("Requesting rebuilding of N2");
-  lsn_t event_lsn =
-      requestShardRebuilding(*client, /* node */ 2, /* shard */ 0);
-  ASSERT_NE(LSN_INVALID, event_lsn);
-  ld_info("Marking N2 unrecoverable");
-  event_lsn = markShardUnrecoverable(*client, /* node */ 2, /* shard */ 0);
-  ASSERT_NE(LSN_INVALID, event_lsn);
+  cluster->applyInternalMaintenance(
+      *client, 2, 0, "Requesting rebuilding from the test case");
+
+  cluster->getNode(2).waitUntilShardState(
+      *admin_client,
+      0,
+      [](const thrift::ShardState& shard) {
+        return shard.get_data_health() == thrift::ShardDataHealth::UNAVAILABLE;
+      },
+      "Shard data health must be UNAVAILABLE");
+
+  // Marking the shards unrecoverable
+  thrift::MarkAllShardsUnrecoverableRequest request;
+  request.set_user("test");
+  request.set_reason("test");
+  thrift::MarkAllShardsUnrecoverableResponse response;
+  admin_client->sync_markAllShardsUnrecoverable(response, request);
 
   // Read the record back to make sure it's released.
   ld_info("Reading");
@@ -2448,7 +2305,8 @@ TEST_P(RebuildingTest, ReplicationCheckerDuringRebuilding) {
   cluster->getNode(2).waitUntilStarted();
 
   ld_info("Waiting for N2 to abort its rebuilding");
-  event_lsn = cluster->getNode(2).waitUntilAllShardsFullyAuthoritative(client);
+  auto event_lsn =
+      cluster->getNode(2).waitUntilAllShardsFullyAuthoritative(client);
 
   ld_info("Waiting for nodes to catch up in event log");
   EXPECT_EQ(0, cluster->waitUntilEventLogSynced(event_lsn, {0, 1, 2}));
@@ -2507,11 +2365,14 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
           .setLogGroupName("test-log-group")
           .setLogAttributes(log_attrs)
           .setEventLogAttributes(event_log_attrs)
+          .setMaintenanceLogAttributes(event_log_attrs)
           .eventLogMode(
               IntegrationTestUtils::ClusterFactory::EventLogMode::SNAPSHOTTED)
           .setNumLogs(10)
           .create(7);
 
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
   // Run two iterations of each test to make sure that
   // there is no incorrectly left over state from the previous
   // iterations that impacts future rebuilds.
@@ -2541,15 +2402,17 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
     EXPECT_EQ(0, cluster->getNode(nodeToFail).shutdown());
     cluster->getNode(nodeToFail).wipeShard(0);
     cluster->getNode(nodeToFail).wipeShard(1);
-    ASSERT_EQ(0, cluster->bumpGeneration(nodeToFail));
+    ASSERT_EQ(
+        0, cluster->bumpGenerationViaAdminServer(*admin_client, nodeToFail));
     cluster->getNode(nodeToFail).start();
     cluster->getNode(nodeToFail).waitUntilStarted();
 
     // Ask to rebuild the shards.
     ld_info("Requesting rebuilding");
-    ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, nodeToFail, 0));
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-    ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, nodeToFail, 1));
+    cluster->applyInternalMaintenance(
+        *client, nodeToFail, 0, "Requesting rebuilding from the test case");
+    cluster->applyInternalMaintenance(
+        *client, nodeToFail, 1, "Requesting rebuilding from the test case");
 
     // Wait a little and fail the same shard on another node
     ld_info("Waiting, wiping more shards, restarting nodes");
@@ -2558,7 +2421,8 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
     EXPECT_EQ(0, cluster->getNode(nodeToFail).shutdown());
     cluster->getNode(nodeToFail).wipeShard(0);
     cluster->getNode(nodeToFail).wipeShard(1);
-    ASSERT_EQ(0, cluster->bumpGeneration(nodeToFail));
+    ASSERT_EQ(
+        0, cluster->bumpGenerationViaAdminServer(*admin_client, nodeToFail));
     cluster->getNode(nodeToFail).start();
     cluster->getNode(nodeToFail).waitUntilStarted();
 
@@ -2568,9 +2432,10 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
 
     // Ask to rebuild the shards.
     ld_info("Requesting rebuilding");
-    ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, nodeToFail, 0));
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-    ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, nodeToFail, 1));
+    cluster->applyInternalMaintenance(
+        *client, nodeToFail, 0, "Requesting rebuilding from the test case");
+    cluster->applyInternalMaintenance(
+        *client, nodeToFail, 1, "Requesting rebuilding from the test case");
 
     // Wait a little and restart one of the other nodes. We want to
     // make sure that donor restarts don't impact the expected outcome.
@@ -2620,11 +2485,14 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsAborted) {
           .setLogGroupName("test-log-group")
           .setLogAttributes(log_attrs)
           .setEventLogAttributes(event_log_attrs)
+          .setMaintenanceLogAttributes(event_log_attrs)
           .eventLogMode(
               IntegrationTestUtils::ClusterFactory::EventLogMode::SNAPSHOTTED)
           .setNumLogs(42)
           .create(5);
 
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
   // Run two iterations of each test to make sure that
   // there is no incorrectly left over state from the previous
   // iterations that impacts future rebuilds.
@@ -2649,14 +2517,16 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsAborted) {
     int numShards = cluster->getNode(1).num_db_shards_;
     int nodeToFail = 1;
     for (shard_index_t shard = 0; shard < numShards; shard++) {
-      ASSERT_NE(
-          LSN_INVALID, requestShardRebuilding(*client, nodeToFail, shard));
-      std::this_thread::sleep_for(std::chrono::milliseconds(200));
+      cluster->applyInternalMaintenance(
+          *client,
+          nodeToFail,
+          shard,
+          "Requesting rebuilding from the test case");
     }
 
     // Sleep for a little and re-enable the node. The nodes data is available
     // again.
-    std::this_thread::sleep_for(std::chrono::seconds(2));
+    std::this_thread::sleep_for(std::chrono::seconds(4));
     cluster->getNode(nodeToFail).start();
     cluster->getNode(nodeToFail).waitUntilStarted();
 
@@ -2705,10 +2575,15 @@ TEST_P(RebuildingTest, DisableDataLogRebuildNodeFailed) {
           .setLogGroupName("test-log-group")
           .setLogAttributes(log_attrs)
           .setEventLogAttributes(event_log_attrs)
+          .setMaintenanceLogAttributes(event_log_attrs)
           .eventLogMode(
               IntegrationTestUtils::ClusterFactory::EventLogMode::SNAPSHOTTED)
           .setNumLogs(42)
           .create(5);
+
+  cluster->waitForRecovery();
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
 
   // Run two iterations of each test to make sure that
   // there is no incorrectly left over state from the previous
@@ -2735,10 +2610,12 @@ TEST_P(RebuildingTest, DisableDataLogRebuildNodeFailed) {
     int numShards = cluster->getNode(nodeToFail).num_db_shards_;
     std::vector<ShardID> rebuildingShards;
     for (shard_index_t shard = 0; shard < numShards; shard++) {
-      ASSERT_NE(
-          LSN_INVALID, requestShardRebuilding(*client, nodeToFail, shard));
+      cluster->applyInternalMaintenance(
+          *client,
+          nodeToFail,
+          shard,
+          "Requesting rebuilding from the test case");
       rebuildingShards.push_back(ShardID(nodeToFail, shard));
-      std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
     waitUntilShardsHaveEventLogState(client,
@@ -2753,8 +2630,7 @@ TEST_P(RebuildingTest, DisableDataLogRebuildNodeFailed) {
     // Restart the node. It should become FA.
     cluster->getNode(nodeToFail).start();
     cluster->getNode(nodeToFail).waitUntilStarted();
-
-    cluster->getNode(nodeToFail).waitUntilAllShardsFullyAuthoritative(client);
+    ASSERT_TRUE(wait_until_enabled_and_healthy(*cluster, nodeToFail));
   }
 }
 
@@ -3090,26 +2966,9 @@ TEST_P(RebuildingTest, UndrainDeadNode) {
           .create(6);
 
   auto client = cluster->createClient();
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
 
-  // Drain N1:S0.
-  ASSERT_NE(LSN_INVALID,
-            requestShardRebuilding(*client,
-                                   /* node */ 1,
-                                   /* shard */ 0,
-                                   SHARD_NEEDS_REBUILD_Header::DRAIN));
-  // Wait for rebuilding.
-  waitUntilShardsHaveEventLogState(
-      client, {ShardID(1, 0)}, AuthoritativeStatus::AUTHORITATIVE_EMPTY, true);
-
-  // Stop N1.
-  cluster->getNode(1).shutdown();
-
-  // Undrain N1:S0.
-  ASSERT_NE(
-      LSN_INVALID, markShardUndrained(*client, /* node */ 1, /* shard */ 0));
-
-  // Check that N1:S0 is AUTHORITATIVE_EMPTY and has drain flag equal to
-  // `drain`.
   auto check_still_auth_empty = [&](bool drain) {
     EventLogRebuildingSet set;
     ASSERT_EQ(0, EventLogUtils::getRebuildingSet(*client, set));
@@ -3119,49 +2978,99 @@ TEST_P(RebuildingTest, UndrainDeadNode) {
     EXPECT_EQ(drain, node->drain);
   };
 
-  {
-    SCOPED_TRACE("");
-    check_still_auth_empty(false);
-  }
+  // Drain N1:S0.
+  auto maintenance_id = cluster->applyMaintenance(
+      *admin_client, 1, 0, "testing", /* drain = */ true);
 
-  // Drain N1:S0 and N2:S0.
-
-  ASSERT_NE(LSN_INVALID,
-            requestShardRebuilding(*client,
-                                   /* node */ 1,
-                                   /* shard */ 0,
-                                   SHARD_NEEDS_REBUILD_Header::DRAIN));
-
+  // Wait for rebuilding.
+  waitUntilShardsHaveEventLogState(
+      client, {ShardID(1, 0)}, AuthoritativeStatus::AUTHORITATIVE_EMPTY, true);
+  cluster->getNode(1).waitUntilShardState(
+      *admin_client,
+      0,
+      [](const thrift::ShardState& shard) {
+        return shard.get_storage_state() ==
+            membership::thrift::StorageState::NONE;
+      },
+      "Shard must be in NONE");
   {
     SCOPED_TRACE("");
     check_still_auth_empty(true);
   }
 
-  ASSERT_NE(LSN_INVALID,
-            requestShardRebuilding(*client,
-                                   /* node */ 2,
-                                   /* shard */ 0,
-                                   SHARD_NEEDS_REBUILD_Header::DRAIN));
+  // Stop N1.
+  cluster->getNode(1).shutdown();
 
+  // Undrain N1:S0.
+  {
+    thrift::RemoveMaintenancesRequest req;
+    thrift::MaintenancesFilter filter;
+    filter.set_group_ids({maintenance_id});
+    req.set_user("test");
+    req.set_filter(filter);
+    thrift::RemoveMaintenancesResponse resp;
+    admin_client->sync_removeMaintenances(resp, req);
+    ASSERT_EQ(1, resp.get_maintenances().size());
+  }
+
+  {
+    SCOPED_TRACE("");
+    // The node will remain drained because it's DEAD.
+    check_still_auth_empty(true);
+  }
+
+  // Drain N1:S0 and N2:S0.
+  auto maintenance_id1 = cluster->applyMaintenance(
+      *admin_client, 1, 0, "testing", /* drain = */ true);
+  {
+    SCOPED_TRACE("");
+    check_still_auth_empty(true);
+  }
+
+  auto maintenance_id2 = cluster->applyMaintenance(
+      *admin_client, 2, 0, "testing", /* drain = */ true);
   {
     SCOPED_TRACE("");
     check_still_auth_empty(true);
   }
 
   // Wait for rebuilding.
-  waitUntilShardsHaveEventLogState(
-      client, {ShardID(2, 0)}, AuthoritativeStatus::AUTHORITATIVE_EMPTY, true);
+  cluster->getNode(2).waitUntilShardState(
+      *admin_client,
+      0,
+      [](const thrift::ShardState& shard) {
+        return shard.get_storage_state() ==
+            membership::thrift::StorageState::NONE;
+      },
+      "Shard must be in NONE");
 
   // Undrain N2:S0.
-  ASSERT_NE(
-      LSN_INVALID, markShardUndrained(*client, /* node */ 2, /* shard */ 0));
+  {
+    thrift::RemoveMaintenancesRequest req;
+    thrift::MaintenancesFilter filter;
+    filter.set_group_ids({maintenance_id2});
+    req.set_user("test");
+    req.set_filter(filter);
+    thrift::RemoveMaintenancesResponse resp;
+    admin_client->sync_removeMaintenances(resp, req);
+    ASSERT_EQ(1, resp.get_maintenances().size());
+  }
 
   // Wait for ack.
+  cluster->getNode(2).waitUntilShardState(
+      *admin_client,
+      0,
+      [](const thrift::ShardState& shard) {
+        return shard.get_storage_state() ==
+            membership::thrift::StorageState::READ_WRITE;
+      },
+      "Shard must be in READ_WRITE");
   waitUntilShardsHaveEventLogState(
       client, {ShardID(2, 0)}, AuthoritativeStatus::FULLY_AUTHORITATIVE, true);
 
   {
     SCOPED_TRACE("");
+    // N1:S0 should remain drained
     check_still_auth_empty(true);
   }
 }
