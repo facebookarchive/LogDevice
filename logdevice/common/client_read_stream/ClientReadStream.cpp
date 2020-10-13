@@ -576,8 +576,12 @@ void ClientReadStream::ensureSkipEpoch0(
    * the latest epoch.
    */
   if (!done()) {
-    requestEpochMetaData(
-        currentEpoch(), /*require_consistent_from_cache=*/false);
+    if (requestEpochMetaData(
+            currentEpoch(), /*require_consistent_from_cache=*/false)) {
+      // onEpochMetaData() was called synchronously.
+      // *this may be destroyed here.
+      return;
+    }
   }
   disposeIfDone();
 }
@@ -2310,7 +2314,7 @@ void ClientReadStream::applyShardStatus(const char* context,
   }
 }
 
-void ClientReadStream::requestEpochMetaData(
+bool ClientReadStream::requestEpochMetaData(
     epoch_t epoch,
     bool require_consistent_from_cache) {
   // read stream should not request epoch metadata for an epoch whose
@@ -2326,7 +2330,7 @@ void ClientReadStream::requestEpochMetaData(
     ld_check(epoch == epoch_metadata_requested_.value());
     // the read stream is already requesting this epoch, return and wait
     // for the result
-    return;
+    return false;
   }
 
   epoch_metadata_requested_.assign(epoch);
@@ -2354,9 +2358,11 @@ void ClientReadStream::requestEpochMetaData(
     // Metadata will be fetched asynchronously. Until then, let's update
     // connection health.
     connection_health_tracker_->recalculate();
+    return false;
   } else {
     // onEpochMetaData() was called synchronously.
     // *this may be destroyed here.
+    return true;
   }
 }
 

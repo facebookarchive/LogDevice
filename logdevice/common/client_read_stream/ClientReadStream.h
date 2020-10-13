@@ -1257,7 +1257,9 @@ class ClientReadStream : boost::noncopyable {
   // @param require_consistent_from_cache   if true, only allows consistent
   //                                        metadata records delivered from
   //                                        the metadata cache
-  void requestEpochMetaData(epoch_t epoch,
+  // @returns true if onEpochMetaData was called synchronously in the stack
+  // below
+  bool requestEpochMetaData(epoch_t epoch,
                             bool require_consistent_from_cache = true);
 
   // updated last_released_ based on what we got from storage shards.
