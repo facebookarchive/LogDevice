@@ -28,8 +28,10 @@
 #include <thrift/lib/cpp2/async/HeaderClientChannel.h>
 
 #include "common/fb303/if/gen-cpp2/FacebookServiceAsyncClient.h"
+#include "logdevice/admin/AdminAPIUtils.h"
 #include "logdevice/admin/if/gen-cpp2/AdminAPI.h"
 #include "logdevice/admin/maintenance/MaintenanceLogWriter.h"
+#include "logdevice/admin/toString.h"
 #include "logdevice/common/CheckSealRequest.h"
 #include "logdevice/common/EpochMetaDataUpdater.h"
 #include "logdevice/common/FileConfigSource.h"
@@ -101,6 +103,8 @@ std::string defaultMarkdownLDQueryPath() {
 }
 static const char* CHECKER_PATH = "bin/ld-replication-checker";
 #endif
+
+static std::string_view LOC_PREFIX = "rg1.dc1.cl1.rw1.rk";
 
 namespace fs = boost::filesystem;
 
@@ -479,8 +483,6 @@ ClusterFactory::provisionNodesConfiguration(int nnodes) const {
 
   configuration::Nodes nodes;
 
-  std::string loc_prefix = "rg1.dc1.cl1.rw1.rk";
-
   int num_storage_nodes = 0;
   if (hash_based_sequencer_assignment_) {
     // Hash based sequencer assignment is used, all nodes are both sequencers
@@ -490,7 +492,7 @@ ClusterFactory::provisionNodesConfiguration(int nnodes) const {
       node.name = folly::sformat("server-{}", i);
       node.generation = 1;
       NodeLocation location;
-      location.fromDomainString(loc_prefix +
+      location.fromDomainString(std::string(LOC_PREFIX) +
                                 std::to_string(i % num_racks_ + 1));
       node.location = location;
 
@@ -507,7 +509,7 @@ ClusterFactory::provisionNodesConfiguration(int nnodes) const {
       Configuration::Node node;
       node.name = folly::sformat("server-{}", i);
       NodeLocation location;
-      location.fromDomainString(loc_prefix +
+      location.fromDomainString(std::string(LOC_PREFIX) +
                                 std::to_string(i % num_racks_ + 1));
       node.location = location;
       node.generation = 1;
@@ -1078,6 +1080,135 @@ int Cluster::pickAddressesForServers(
   return 0;
 }
 
+int Cluster::expandViaAdminServer(thrift::AdminAPIAsyncClient& admin_client,
+                                  int nnodes,
+                                  bool start_nodes,
+                                  int num_racks) {
+  std::vector<node_index_t> new_indices;
+  node_index_t first = config_->getNodesConfiguration()->getMaxNodeIndex() + 1;
+  for (int i = 0; i < nnodes; ++i) {
+    new_indices.push_back(first + i);
+  }
+  return expandViaAdminServer(
+      admin_client, std::move(new_indices), start_nodes, num_racks);
+}
+
+int Cluster::expandViaAdminServer(thrift::AdminAPIAsyncClient& admin_client,
+                                  std::vector<node_index_t> new_indices,
+                                  bool start_nodes,
+                                  int num_racks) {
+  std::sort(new_indices.begin(), new_indices.end());
+  if (std::unique(new_indices.begin(), new_indices.end()) !=
+      new_indices.end()) {
+    ld_error("expandViaAdminServer() called with duplicate indices");
+    return -1;
+  }
+
+  auto nodes_config = getConfig()->getNodesConfiguration();
+  for (node_index_t i : new_indices) {
+    if (nodes_config->isNodeInServiceDiscoveryConfig(i) || nodes_.count(i)) {
+      ld_error("expandViaAdminServer() called with node index %d that already "
+               "exists",
+               (int)i);
+      return -1;
+    }
+  }
+  ld_info("Expanding with nodes %s", toString(new_indices).c_str());
+
+  configuration::Nodes nodes;
+  for (node_index_t idx : new_indices) {
+    Configuration::Node node;
+    node.name = folly::sformat("server-{}", idx);
+    node.generation = 1;
+    NodeLocation location;
+    location.fromDomainString(std::string(LOC_PREFIX) +
+                              std::to_string(idx % num_racks + 1));
+    node.location = location;
+    setNodeReplacementCounter(idx, 1);
+
+    // Storage only node.
+    node.addStorageRole(num_db_shards_);
+    nodes[idx] = std::move(node);
+  }
+
+  nodes_config = nodes_config->applyUpdate(
+      NodesConfigurationTestUtil::addNewNodesUpdate(*nodes_config, nodes));
+  ld_check(nodes_config);
+
+  std::vector<ServerAddresses> addrs;
+  if (pickAddressesForServers(new_indices,
+                              use_tcp_,
+                              root_path_,
+                              node_replacement_counters_,
+                              addrs) != 0) {
+    return -1;
+  }
+
+  // Set the addresses
+  NodesConfiguration::Update update{};
+  update.service_discovery_update =
+      std::make_unique<configuration::nodes::ServiceDiscoveryConfig::Update>();
+
+  for (size_t i = 0; i < new_indices.size(); ++i) {
+    auto idx = new_indices[i];
+    auto sd = nodes_config->getNodeServiceDiscovery(idx);
+    ld_check(sd);
+    auto new_sd = *sd;
+    addrs[i].toNodeConfig(new_sd, !no_ssl_address_);
+
+    update.service_discovery_update->addNode(
+        idx,
+        {configuration::nodes::ServiceDiscoveryConfig::UpdateType::RESET,
+         std::make_unique<configuration::nodes::NodeServiceDiscovery>(new_sd)});
+  }
+  nodes_config = nodes_config->applyUpdate(std::move(update));
+  ld_check(nodes_config);
+
+  // Tests expect the nodes to be enabled. Let's force enable the new nodes.
+  std::vector<ShardID> shards;
+  for (node_index_t idx : new_indices) {
+    shards.emplace_back(idx, -1);
+  }
+
+  // Submit the request to Admin Server
+  thrift::AddNodesRequest req;
+  thrift::AddNodesResponse resp;
+  for (node_index_t i : new_indices) {
+    thrift::NodeConfig node_cfg;
+    fillNodeConfig(node_cfg, i, *nodes_config);
+    thrift::AddSingleNodeRequest single;
+
+    ld_info("Adding Node: %s", thriftToJson(node_cfg).c_str());
+    single.set_new_config(std::move(node_cfg));
+    req.new_node_requests_ref()->push_back(std::move(single));
+  }
+  try {
+    admin_client.sync_addNodes(resp, req);
+  } catch (const thrift::ClusterMembershipOperationFailed& exception) {
+    ld_error("Failed to expand the cluster with nodes %s: %s",
+             toString(new_indices).c_str(),
+             exception.what());
+    return -1;
+  }
+  std::cout << "RESPONSE" << std::endl << thriftToJson(resp) << std::endl;
+  vcs_config_version_t new_config_version(
+      static_cast<uint64_t>(resp.get_new_nodes_configuration_version()));
+  ld_info("Nodes added via Admin API in new config version %lu",
+          new_config_version.val_);
+
+  waitForServersAndClientsToProcessNodesConfiguration(new_config_version);
+  if (!start_nodes) {
+    return 0;
+  }
+
+  for (size_t i = 0; i < new_indices.size(); ++i) {
+    node_index_t idx = new_indices[i];
+    nodes_[idx] = createNode(idx, std::move(addrs[i]));
+  }
+
+  return start(new_indices);
+}
+
 int Cluster::expand(std::vector<node_index_t> new_indices, bool start_nodes) {
   std::sort(new_indices.begin(), new_indices.end());
   if (std::unique(new_indices.begin(), new_indices.end()) !=
@@ -1597,6 +1728,32 @@ bool Cluster::applyInternalMaintenance(Client& client,
   return write_to_maintenance_log(client, delta) != LSN_INVALID;
 }
 
+std::string Cluster::applyMaintenance(thrift::AdminAPIAsyncClient& admin_client,
+                                      node_index_t node_id,
+                                      uint32_t shard_idx,
+                                      const std::string& user,
+                                      bool drain,
+                                      bool force_restore,
+                                      const std::string& reason) {
+  thrift::MaintenanceDefinitionResponse resp;
+  thrift::MaintenanceDefinition req;
+  req.set_user(user);
+  req.set_reason(reason);
+  req.set_shard_target_state(
+      drain ? thrift::ShardOperationalState::DRAINED
+            : thrift::ShardOperationalState::MAY_DISAPPEAR);
+  req.set_priority(thrift::MaintenancePriority::IMMINENT);
+  req.set_force_restore_rebuilding(force_restore);
+  req.set_shards({mkShardID(node_id, shard_idx)});
+  admin_client.sync_applyMaintenance(resp, req);
+  if (resp.get_maintenances().empty()) {
+    throw std::runtime_error("Could not create requested maintenances on N" +
+                             std::to_string(node_id) + ":S" +
+                             std::to_string(shard_idx));
+  }
+  return *resp.get_maintenances()[0].get_group_id();
+}
+
 std::unique_ptr<Cluster>
 ClusterFactory::create(const Configuration& source_config) {
   for (int outer_try = 0; outer_try < outerTries(); ++outer_try) {
@@ -1847,6 +2004,61 @@ int Node::waitUntilStarted(std::chrono::steady_clock::time_point deadline) {
     ld_info("Node %d started", node_index_);
   }
   return rv;
+}
+
+bool Node::waitUntilShardState(
+    thrift::AdminAPIAsyncClient& admin_client,
+    shard_index_t shard,
+    folly::Function<bool(const thrift::ShardState&)> predicate,
+    const std::string& reason,
+    std::chrono::steady_clock::time_point deadline) {
+  int rv = wait_until(
+      ("Shard N" + std::to_string(node_index_) + ":" + std::to_string(shard) +
+       " matches predicate, " + reason)
+          .c_str(),
+      [&]() {
+        return predicate(*get_shard_state(
+            get_nodes_state(admin_client), ShardID(node_index_, shard)));
+      },
+      deadline);
+  if (rv != 0) {
+    ld_info(
+        "Failed on waiting for shard state to finish for node %d", node_index_);
+    return false;
+  }
+  return true;
+}
+
+bool Node::waitUntilInternalMaintenances(
+    thrift::AdminAPIAsyncClient& admin_client,
+    folly::Function<bool(const std::vector<thrift::MaintenanceDefinition>&)>
+        predicate,
+    const std::string& reason,
+    std::chrono::steady_clock::time_point deadline) {
+  thrift::MaintenancesFilter filter;
+  thrift::MaintenanceDefinitionResponse resp;
+  std::vector<std::string> groups;
+  for (shard_index_t s = 0; s < num_db_shards_; ++s) {
+    groups.push_back("N" + std::to_string(node_index_) + ":S" +
+                     std::to_string(s));
+  }
+  filter.set_group_ids(groups);
+  int rv = wait_until(
+      ("Node " + std::to_string(node_index_) + " internal maintenances (" +
+       toString(groups) + ") matches predicate, " + reason)
+          .c_str(),
+      [&]() {
+        admin_client.sync_getMaintenances(resp, filter);
+        return predicate(resp.get_maintenances());
+      },
+      deadline);
+  if (rv != 0) {
+    ld_info(
+        "Failed on waiting for internal maintenances to finished for node %d",
+        node_index_);
+    return false;
+  }
+  return true;
 }
 
 lsn_t Node::waitUntilAllShardsFullyAuthoritative(
@@ -2517,6 +2729,21 @@ Node::partitionsInfo(shard_index_t shard, int level) const {
   return data;
 }
 
+std::map<shard_index_t, std::string> Node::rebuildingStateInfo() const {
+  auto data = sendJsonCommand("info shards --json");
+  ld_check(!data.empty());
+  std::map<shard_index_t, std::string> result;
+  for (const auto& row : data) {
+    const auto shard = row.find("Shard");
+    const auto rebuilding_state = row.find("Rebuilding state");
+    if (shard == row.end() || rebuilding_state == row.end()) {
+      continue;
+    }
+    result.emplace(std::stoi(shard->second), rebuilding_state->second);
+  }
+  return result;
+}
+
 std::map<shard_index_t, RebuildingRangesMetadata> Node::dirtyShardInfo() const {
   auto data = sendJsonCommand("info shards --json --dirty-as-json");
   ld_check(!data.empty());
@@ -2799,6 +3026,99 @@ std::unique_ptr<MetaDataProvisioner> Cluster::createMetaDataProvisioner() {
       createEpochStore(), getConfig(), fn);
 }
 
+int Cluster::replaceViaAdminServer(thrift::AdminAPIAsyncClient& admin_client,
+                                   node_index_t index,
+                                   bool defer_start) {
+  ld_info("Replacing node %d", (int)index);
+  thrift::NodesFilter filter;
+  thrift::NodeID node;
+  node.set_node_index(index);
+  filter.set_node(node);
+  // Kill the existing node and wipe its data.
+  for (int outer_try = 0; outer_try < outer_tries_; ++outer_try) {
+    auto current_generation =
+        getConfig()->getNodesConfiguration()->getNodeGeneration(index);
+    nodes_.at(index).reset();
+    if (hasStorageRole(index)) {
+      ld_check(getNodeReplacementCounter(index) ==
+               getConfig()->getNodesConfiguration()->getNodeGeneration(index));
+    }
+    // Bump the node generation
+    {
+      thrift::BumpGenerationRequest req;
+      req.set_node_filters({filter});
+      thrift::BumpGenerationResponse resp;
+      admin_client.sync_bumpNodeGeneration(resp, req);
+      current_generation++;
+      if (resp.bumped_nodes_ref()->size() != 1) {
+        ld_error(
+            "Failed to find the node %d in the nodes configuration.", index);
+        return -1;
+      }
+      ld_info(
+          "Node %d generation is bumped at nodes config version %s",
+          index,
+          std::to_string(resp.get_new_nodes_configuration_version()).c_str());
+      waitForServersAndClientsToProcessNodesConfiguration(
+          vcs_config_version_t(resp.get_new_nodes_configuration_version()));
+      // bump the internal node replacement counter
+      setNodeReplacementCounter(index, current_generation);
+    }
+
+    // Update the addresses
+    std::vector<ServerAddresses> addrs;
+    if (pickAddressesForServers(std::vector<node_index_t>{index},
+                                use_tcp_,
+                                root_path_,
+                                node_replacement_counters_,
+                                addrs) != 0) {
+      return -1;
+    }
+
+    auto nodes_config = getConfig()->getNodesConfiguration();
+    thrift::NodeConfig new_config;
+
+    {
+      auto sd = nodes_config->getNodeServiceDiscovery(index);
+      ld_check(sd);
+      auto new_sd = *sd;
+      addrs[0].toNodeConfig(new_sd, !no_ssl_address_);
+
+      nodes_config = nodes_config->applyUpdate(
+          NodesConfigurationTestUtil::setNodeAttributesUpdate(
+              index, std::move(new_sd), folly::none, folly::none));
+      ld_check(nodes_config);
+
+      fillNodeConfig(new_config, index, *nodes_config);
+    }
+    // Sending the update request
+    thrift::UpdateSingleNodeRequest update;
+    update.set_node_to_be_updated(mkNodeID(index));
+    update.set_new_config(new_config);
+    {
+      thrift::UpdateNodesRequest req;
+      thrift::UpdateNodesResponse resp;
+      req.set_node_requests({std::move(update)});
+      admin_client.sync_updateNodes(resp, req);
+      if (resp.updated_nodes_ref()->size() != 1) {
+        ld_error("NodesConfig update failed to find the node %d", index);
+        return -1;
+      }
+      // Wait for new config
+      waitForServersAndClientsToProcessNodesConfiguration(
+          vcs_config_version_t(resp.get_new_nodes_configuration_version()));
+    }
+    nodes_[index] = createNode(index, std::move(addrs[0]));
+    if (defer_start) {
+      return 0;
+    }
+    if (start({index}) == 0) {
+      return 0;
+    }
+  }
+  return -1;
+}
+
 int Cluster::replace(node_index_t index, bool defer_start) {
   ld_debug("replacing node %d", (int)index);
 
@@ -2873,6 +3193,31 @@ int Cluster::replace(node_index_t index, bool defer_start) {
 
   ld_error("Failed to replace");
   return -1;
+}
+
+int Cluster::bumpGenerationViaAdminServer(
+    thrift::AdminAPIAsyncClient& admin_client,
+    node_index_t index) {
+  auto current_generation =
+      getConfig()->getNodesConfiguration()->getNodeGeneration(index);
+  thrift::NodesFilter filter;
+  thrift::NodeID node;
+  node.set_node_index(index);
+  filter.set_node(node);
+  thrift::BumpGenerationRequest req;
+  req.set_node_filters({filter});
+  thrift::BumpGenerationResponse resp;
+  admin_client.sync_bumpNodeGeneration(resp, req);
+  current_generation++;
+  if (resp.bumped_nodes_ref()->size() != 1) {
+    ld_error("Failed to find the node %d in the nodes configuration.", index);
+    return -1;
+  }
+  waitForServersAndClientsToProcessNodesConfiguration(
+      vcs_config_version_t(resp.get_new_nodes_configuration_version()));
+  // bump the internal node replacement counter
+  setNodeReplacementCounter(index, current_generation);
+  return 0;
 }
 
 int Cluster::bumpGeneration(node_index_t index) {
@@ -3122,7 +3467,7 @@ int Cluster::waitUntilAllStartedAndPropagatedInGossip(
             bool starting = state["detector"]["starting"].getInt() == 1;
             // This is a workaround for a quirk in FailureDetector: it may mark
             // the node as ALIVE based on GetClusterState request, then soon
-            // mark it as DEAD if we're unlicky enough to not receive enough
+            // mark it as DEAD if we're unlucky enough to not receive enough
             // gossip messages to declare it alive.
             bool gossiped_recently =
                 state["detector"]["gossip"].getInt() < 1000;

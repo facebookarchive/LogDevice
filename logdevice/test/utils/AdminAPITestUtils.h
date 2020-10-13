@@ -18,7 +18,6 @@
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
 namespace facebook { namespace logdevice {
-
 /**
  * Retry a lambda for a number of attempts with a delay as long as it's throwing
  * NodeNotReady exception.
@@ -48,6 +47,14 @@ bool wait_until_service_state(thrift::AdminAPIAsyncClient& admin_client,
 folly::Optional<thrift::ShardState>
 get_shard_state(const thrift::NodesStateResponse& response,
                 const ShardID& shard);
+
+/**
+ * Returns the ShardState objects for the requested shards. Returns an empty map
+ * if none found.
+ */
+std::unordered_map<shard_index_t, thrift::ShardState>
+get_shards_state(const thrift::NodesStateResponse& response,
+                 std::unordered_set<ShardID> shards);
 
 /**
  * A helper to query the admin server for NodesState.
@@ -85,4 +92,26 @@ get_shard_data_health(const thrift::NodesStateResponse& response,
 thrift::ShardDataHealth
 get_shard_data_health(const thrift::AdminAPIAsyncClient& admin_client,
                       const ShardID& shard);
+/**
+ * Waits until all given shards in a node are healthy. The definition of
+ * healthy here is:
+ *  - Their local state is that they are not expecting to be rebuilt.
+ *  - Admin server thinks that they are fully enabled (read-write)
+ */
+bool wait_until_shards_enabled_and_healthy(
+    IntegrationTestUtils::Cluster& cluster,
+    node_index_t node_id,
+    std::unordered_set<shard_index_t> shards,
+    std::chrono::steady_clock::time_point deadline =
+        std::chrono::steady_clock::time_point::max());
+
+/**
+ * Same as wait_until_shards_enabled_and_healthy, it checks for all shards and
+ * that the node is fully started as well.
+ */
+bool wait_until_enabled_and_healthy(
+    IntegrationTestUtils::Cluster& cluster,
+    node_index_t node_id,
+    std::chrono::steady_clock::time_point deadline =
+        std::chrono::steady_clock::time_point::max());
 }} // namespace facebook::logdevice

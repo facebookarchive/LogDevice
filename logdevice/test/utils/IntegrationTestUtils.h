@@ -854,6 +854,9 @@ class Cluster {
   void stop();
 
   /**
+   * DEPRECATED, Will be removed and replaced by the implementation of
+   * expandViaAdminServer in the future.
+   *
    * Expand the cluster by adding nodes with the given indices.
    * @return 0 on success, -1 on error.
    */
@@ -862,9 +865,31 @@ class Cluster {
   /**
    * Expand the cluster by adding `nnodes` with consecutive indices after the
    * highest existing one.
+   *
+   * The newly added nodes will be distributed among the configured number
+   * of racks in this cluster.
    * @return 0 on success, -1 on error.
    */
   int expand(int nnodes, bool start = true);
+
+  /**
+   * Expand the cluster by adding nodes with the given indices.
+   * @return 0 on success, -1 on error.
+   */
+  int expandViaAdminServer(thrift::AdminAPIAsyncClient& admin_client,
+                           std::vector<node_index_t> new_indices,
+                           bool start = true,
+                           int num_racks = 1);
+
+  /**
+   * Expand the cluster by adding `nnodes` with consecutive indices after the
+   * highest existing one.
+   * @return 0 on success, -1 on error.
+   */
+  int expandViaAdminServer(thrift::AdminAPIAsyncClient& admin_client,
+                           int nnodes,
+                           bool start_nodes = true,
+                           int num_racks = 1);
 
   /**
    * Shrink the cluster by removing the given nodes.
@@ -914,10 +939,6 @@ class Cluster {
   const Nodes& getNodes() const {
     return nodes_;
   }
-
-  // Creates a thrift client for the standalone admin server if enabled. Returns
-  // nullptr if not.
-  std::unique_ptr<thrift::AdminAPIAsyncClient> createAdminClient() const;
 
   /**
    * Returns the admin server instance if started.
@@ -1029,15 +1050,33 @@ class Cluster {
    * Replaces the node at the specified index.  Kills the current process if
    * still running, deletes the node's data, then starts up a new one and
    * updates the cluster config.
+   *
    * @return 0 on success, -1 if node fails to start or there are no free ports
    */
   int replace(node_index_t index, bool defer_start = false);
+
+  /**
+   * Replaces the node at the specified index.  Kills the current process if
+   * still running, deletes the node's data, then starts up a new one and
+   * updates the cluster config using the Admin API.
+   *
+   * @return 0 on success, -1 if node fails to start or there are no free ports
+   */
+  int replaceViaAdminServer(thrift::AdminAPIAsyncClient& admin_client,
+                            node_index_t index,
+                            bool defer_start = false);
 
   /**
    * Update the config to bump the generation of node at position `index`.
    * Also bump the node replacement counter.
    */
   int bumpGeneration(node_index_t index);
+
+  /**
+   * Bumps up the generation using the Admin API.
+   */
+  int bumpGenerationViaAdminServer(thrift::AdminAPIAsyncClient& admin_client,
+                                   node_index_t index);
 
   /**
    * Update node's attributes in config
@@ -1289,6 +1328,8 @@ class Cluster {
    * maintenance log. This might change in the future so the caller should not
    * rely on this implementation detail.
    *
+   * Internal maintenances will trigger rebuilding in RESTORE mode.
+   *
    * @return true if the operation succeeded. On
    *              `false` the value of `err` is set accordingly.
    */
@@ -1297,6 +1338,22 @@ class Cluster {
                                 node_index_t node_id,
                                 uint32_t shard_idx,
                                 const std::string& reason);
+
+  /**
+   * A quick helper that applies a maintenance (drain by default) to a given
+   * shard.
+   *
+   * Note: this skips safety checks (creates IMMINENT maintenance)
+   *
+   * @return the created maintenance ID
+   */
+  std::string applyMaintenance(thrift::AdminAPIAsyncClient& admin_client,
+                               node_index_t node_id,
+                               uint32_t shard_idx,
+                               const std::string& user = "integration_test",
+                               bool drain = true,
+                               bool force_restore = false,
+                               const std::string& reason = "testing");
   /**
    * Gracefully shut down the given nodes. Faster than calling shutdown() on
    * them one by one.
@@ -1727,6 +1784,7 @@ class Node {
    * use waitUntilEventLogSynced() for that.
    */
   lsn_t waitUntilAllShardsFullyAuthoritative(std::shared_ptr<Client> client);
+
   /**
    * Wait until all shards of this node are authoritative empty.
    * Returns the lsn of the last update.
@@ -1734,6 +1792,26 @@ class Node {
    * use waitUntilEventLogSynced() for that.
    */
   lsn_t waitUntilAllShardsAuthoritativeEmpty(std::shared_ptr<Client> client);
+
+  /**
+   * Waits until all internal maintenances are removed for this particular
+   * node.
+   */
+  bool waitUntilInternalMaintenances(
+      thrift::AdminAPIAsyncClient& admin_client,
+      folly::Function<bool(const std::vector<thrift::MaintenanceDefinition>&)>
+          predicate,
+      const std::string& reason,
+      std::chrono::steady_clock::time_point deadline =
+          std::chrono::steady_clock::time_point::max());
+
+  bool waitUntilShardState(
+      thrift::AdminAPIAsyncClient& admin_client,
+      shard_index_t shard,
+      folly::Function<bool(const thrift::ShardState&)> predicate,
+      const std::string& reason,
+      std::chrono::steady_clock::time_point deadline =
+          std::chrono::steady_clock::time_point::max());
 
   /**
    * Sends admin command `command' to command port and returns the result.
@@ -1949,6 +2027,12 @@ class Node {
    * a map of dirty shard to dirty time ranges.
    */
   std::map<shard_index_t, RebuildingRangesMetadata> dirtyShardInfo() const;
+
+  /**
+   * Issues a INFO SHARD command to the node and returns the "Rebuilding state"
+   * field per shard.
+   */
+  std::map<shard_index_t, std::string> rebuildingStateInfo() const;
 
   // Issues LOGSDB CREATE command. Returns PARTITION_INVALID if it failed.
   partition_id_t createPartition(uint32_t shard);
