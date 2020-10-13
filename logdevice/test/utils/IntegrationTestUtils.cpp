@@ -3900,6 +3900,11 @@ lsn_t waitUntilShardsHaveEventLogState(std::shared_ptr<Client> client,
           std::vector<node_index_t> donors_remaining;
           const auto status = set.getShardAuthoritativeStatus(
               shard.node(), shard.shard(), donors_remaining);
+          ld_info("Shard N%u:%u has authoritative status %s, expected %s",
+                  shard.node(),
+                  shard.shard(),
+                  toString(status).c_str(),
+                  toString(st).c_str());
           if (!st.count(status) ||
               (wait_for_rebuilding && !donors_remaining.empty())) {
             return true;
