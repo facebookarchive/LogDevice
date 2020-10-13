@@ -1074,13 +1074,15 @@ Connection::registerMessage(std::unique_ptr<Message>&& msg) {
   // establishment.
   if (!isHandshakeMessage(msg->type_) && sizeLimitsExceeded()) {
     STAT_INCR(deps_->getStats(), sock_write_event_nobufs);
-    RATELIMIT_WARNING(
-        std::chrono::seconds(1),
-        10,
-        "ENOBUFS for Socket %s. Current socket usage: %zu, max: %zu",
-        conn_description_.c_str(),
-        getBytesPending(),
-        outbuf_overflow_);
+    RATELIMIT_WARNING(std::chrono::seconds(1),
+                      10,
+                      "ENOBUFS for Socket %s. Current socket usage: %zu, max: "
+                      "%zu, SNDBUF: %zd / %zu",
+                      conn_description_.c_str(),
+                      getBytesPending(),
+                      outbuf_overflow_,
+                      getTcpSendBufOccupancy(),
+                      getTcpSendBufSize());
 
     RATELIMIT_INFO(std::chrono::seconds(60),
                    1,
