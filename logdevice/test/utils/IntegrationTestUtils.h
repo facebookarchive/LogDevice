@@ -1067,16 +1067,10 @@ class Cluster {
                             bool defer_start = false);
 
   /**
-   * Update the config to bump the generation of node at position `index`.
-   * Also bump the node replacement counter.
-   */
-  int bumpGeneration(node_index_t index);
-
-  /**
    * Bumps up the generation using the Admin API.
    */
-  int bumpGenerationViaAdminServer(thrift::AdminAPIAsyncClient& admin_client,
-                                   node_index_t index);
+  int bumpGeneration(thrift::AdminAPIAsyncClient& admin_client,
+                     node_index_t index);
 
   /**
    * Update node's attributes in config

@@ -305,9 +305,7 @@ TEST_F(NonAuthoritativeRebuildingTest,
   // Wipe the shard on node 11 and restart it.
   // The node should write SHARD_UNRECOVERABLE message.
   cluster_->getNode(another_shard.node()).wipeShard(another_shard.shard());
-  ASSERT_EQ(0,
-            cluster_->bumpGenerationViaAdminServer(
-                *admin_client, another_shard.node()));
+  ASSERT_EQ(0, cluster_->bumpGeneration(*admin_client, another_shard.node()));
   cluster_->getNode(another_shard.node()).start();
   cluster_->getNode(another_shard.node()).waitUntilStarted();
 
@@ -412,8 +410,7 @@ TEST_F(NonAuthoritativeRebuildingTest, LoseRackPlusAnotherShard) {
   // The nodes should write the SHARD_UNRECOVERABLE message.
   for (ShardID sid : two_other_shards) {
     cluster_->getNode(sid.node()).wipeShard(sid.shard());
-    ASSERT_EQ(
-        0, cluster_->bumpGenerationViaAdminServer(*admin_client, sid.node()));
+    ASSERT_EQ(0, cluster_->bumpGeneration(*admin_client, sid.node()));
     cluster_->getNode(sid.node()).start();
   }
   for (ShardID sid : two_other_shards) {
@@ -614,9 +611,7 @@ TEST_F(NonAuthoritativeRebuildingTest, LoseRackPlusAnotherShardAndReadIOError) {
   // Wipe the shard on N8 and restart it.
   // The node should write the SHARD_UNRECOVERABLE message.
   cluster_->getNode(wiped_shard.node()).wipeShard(0);
-  ASSERT_EQ(0,
-            cluster_->bumpGenerationViaAdminServer(
-                *admin_client, wiped_shard.node()));
+  ASSERT_EQ(0, cluster_->bumpGeneration(*admin_client, wiped_shard.node()));
   cluster_->getNode(wiped_shard.node()).start();
   cluster_->getNode(wiped_shard.node()).waitUntilStarted();
 
@@ -799,9 +794,7 @@ TEST_F(NonAuthoritativeRebuildingTest, RebuildRackAfterCompletedRebuildShard) {
 
   // Wipe the shard on node 11 and restart it.
   cluster_->getNode(another_shard.node()).wipeShard(another_shard.shard());
-  ASSERT_EQ(0,
-            cluster_->bumpGenerationViaAdminServer(
-                *admin_client, another_shard.node()));
+  ASSERT_EQ(0, cluster_->bumpGeneration(*admin_client, another_shard.node()));
   cluster_->getNode(another_shard.node()).start();
   cluster_->getNode(another_shard.node()).waitUntilStarted();
 

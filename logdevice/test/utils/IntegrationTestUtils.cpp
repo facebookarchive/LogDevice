@@ -3195,9 +3195,8 @@ int Cluster::replace(node_index_t index, bool defer_start) {
   return -1;
 }
 
-int Cluster::bumpGenerationViaAdminServer(
-    thrift::AdminAPIAsyncClient& admin_client,
-    node_index_t index) {
+int Cluster::bumpGeneration(thrift::AdminAPIAsyncClient& admin_client,
+                            node_index_t index) {
   auto current_generation =
       getConfig()->getNodesConfiguration()->getNodeGeneration(index);
   thrift::NodesFilter filter;
@@ -3217,39 +3216,6 @@ int Cluster::bumpGenerationViaAdminServer(
       vcs_config_version_t(resp.get_new_nodes_configuration_version()));
   // bump the internal node replacement counter
   setNodeReplacementCounter(index, current_generation);
-  return 0;
-}
-
-int Cluster::bumpGeneration(node_index_t index) {
-  auto old_replacement_counter = getNodeReplacementCounter(index);
-
-  // always bump the internal node replacement counter
-  bumpNodeReplacementCounter(index);
-
-  if (!hasStorageRole(index)) {
-    return 0;
-  }
-
-  auto node_storage_attrs =
-      getConfig()->getNodesConfiguration()->getNodeStorageAttribute(index);
-  ld_check(node_storage_attrs);
-
-  // expect internal tracked replacemnt counter is in sync with configuration
-  ld_check_eq(old_replacement_counter, node_storage_attrs->generation);
-
-  auto new_storage_attrs = *node_storage_attrs;
-
-  ++new_storage_attrs.generation;
-
-  auto nodes_config = getConfig()->getNodesConfiguration();
-  nodes_config = nodes_config->applyUpdate(
-      NodesConfigurationTestUtil::setNodeAttributesUpdate(
-          index, folly::none, folly::none, std::move(new_storage_attrs)));
-
-  int rv = updateNodesConfiguration(*nodes_config);
-  if (rv != 0) {
-    return -1;
-  }
   return 0;
 }
 

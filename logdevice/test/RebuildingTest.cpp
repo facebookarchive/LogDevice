@@ -665,7 +665,7 @@ TEST_P(RebuildingTest, OnlineDiskRepair) {
   std::fclose(fp);
 
   ld_info("Bumping the generation...");
-  ASSERT_EQ(0, cluster->bumpGenerationViaAdminServer(*admin_client, 3));
+  ASSERT_EQ(0, cluster->bumpGeneration(*admin_client, 3));
 
   // Restart N3...
   ld_info("Restarting N3...");
@@ -754,7 +754,7 @@ TEST_P(RebuildingTest, AllNodesRebuildingSameShard) {
          ++it) {
       fs::remove_all(it->path());
     }
-    ASSERT_EQ(0, cluster->bumpGenerationViaAdminServer(*admin_client, node));
+    ASSERT_EQ(0, cluster->bumpGeneration(*admin_client, node));
     cluster->getNode(node).start();
     cluster->getNode(node).waitUntilStarted();
   }
@@ -959,7 +959,7 @@ TEST_P(RebuildingTest, RecoveryWhenManyNodesAreRebuilding) {
   // Start nodes 1-3 and wait for them to ack the rebuilding.
   ld_info("Starting nodes.");
   for (node_index_t node = 1; node <= 3; ++node) {
-    ASSERT_EQ(0, cluster->bumpGenerationViaAdminServer(*admin_client, node));
+    ASSERT_EQ(0, cluster->bumpGeneration(*admin_client, node));
     cluster->getNode(node).start();
   }
   waitUntilShardsHaveEventLogState(
@@ -1707,7 +1707,7 @@ TEST_P(RebuildingTest, MiniRebuildingAlwaysNonRecoverable) {
   // Start nodes 1-3 and wait for them to ack the rebuilding.
   ld_info("Starting nodes.");
   for (node_index_t node = 1; node <= 3; ++node) {
-    ASSERT_EQ(0, cluster->bumpGenerationViaAdminServer(*admin_client, node));
+    ASSERT_EQ(0, cluster->bumpGeneration(*admin_client, node));
     cluster->getNode(node).start();
   }
   waitUntilShardsHaveEventLogState(
@@ -1776,7 +1776,7 @@ TEST_P(RebuildingTest, RebuildingWithDifferentDurabilities) {
   cluster->getNode(1).wipeShard(0);
   cluster->getNode(1).wipeShard(1);
   ld_info("Bumping generation");
-  ASSERT_EQ(0, cluster->bumpGenerationViaAdminServer(*admin_client, 1));
+  ASSERT_EQ(0, cluster->bumpGeneration(*admin_client, 1));
   ld_info("Starting N1");
   cluster->getNode(1).start();
   cluster->getNode(1).waitUntilStarted();
@@ -2103,7 +2103,7 @@ TEST_P(RebuildingTest, DerivedStats) {
   // Wipe N1 and start it.
   ld_info("Wiping N1");
   cluster->getNode(1).wipeShard(0);
-  ASSERT_EQ(0, cluster->bumpGenerationViaAdminServer(*admin_client, 1));
+  ASSERT_EQ(0, cluster->bumpGeneration(*admin_client, 1));
   ld_info("Starting N1");
   cluster->getNode(1).start();
   cluster->getNode(1).waitUntilStarted();
@@ -2185,7 +2185,7 @@ TEST_P(RebuildingTest, DerivedStats) {
   EXPECT_EQ(0, cluster->getNode(3).shutdown());
   ld_info("Wiping N3");
   cluster->getNode(3).wipeShard(0);
-  ASSERT_EQ(0, cluster->bumpGenerationViaAdminServer(*admin_client, 3));
+  ASSERT_EQ(0, cluster->bumpGeneration(*admin_client, 3));
   ld_info("Starting N3");
   cluster->getNode(3).start();
   cluster->getNode(3).waitUntilStarted();
@@ -2402,8 +2402,7 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
     EXPECT_EQ(0, cluster->getNode(nodeToFail).shutdown());
     cluster->getNode(nodeToFail).wipeShard(0);
     cluster->getNode(nodeToFail).wipeShard(1);
-    ASSERT_EQ(
-        0, cluster->bumpGenerationViaAdminServer(*admin_client, nodeToFail));
+    ASSERT_EQ(0, cluster->bumpGeneration(*admin_client, nodeToFail));
     cluster->getNode(nodeToFail).start();
     cluster->getNode(nodeToFail).waitUntilStarted();
 
@@ -2421,8 +2420,7 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
     EXPECT_EQ(0, cluster->getNode(nodeToFail).shutdown());
     cluster->getNode(nodeToFail).wipeShard(0);
     cluster->getNode(nodeToFail).wipeShard(1);
-    ASSERT_EQ(
-        0, cluster->bumpGenerationViaAdminServer(*admin_client, nodeToFail));
+    ASSERT_EQ(0, cluster->bumpGeneration(*admin_client, nodeToFail));
     cluster->getNode(nodeToFail).start();
     cluster->getNode(nodeToFail).waitUntilStarted();
 
