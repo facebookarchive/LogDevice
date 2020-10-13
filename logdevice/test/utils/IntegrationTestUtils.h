@@ -1334,7 +1334,6 @@ class Cluster {
    *              `false` the value of `err` is set accordingly.
    */
   bool applyInternalMaintenance(Client& client,
-                                node_index_t maintenance_leader,
                                 node_index_t node_id,
                                 uint32_t shard_idx,
                                 const std::string& reason);

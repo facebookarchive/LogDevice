@@ -1716,7 +1716,6 @@ void Cluster::partition(std::vector<std::set<int>> partitions) {
                                 ->withIncrementedVersionAndTimestamp());
 }
 bool Cluster::applyInternalMaintenance(Client& client,
-                                       node_index_t maintenance_leader,
                                        node_index_t node_id,
                                        uint32_t shard_idx,
                                        const std::string& reason) {

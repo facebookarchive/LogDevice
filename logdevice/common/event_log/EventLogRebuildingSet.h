@@ -141,7 +141,7 @@ class EventLogRebuildingSet {
     // `nodes_` acked.
     folly::F14FastMap<node_index_t, NodeInfo> nodes_;
     // Track the progress of the donors for this rebuilding version. Reset when
-    // the rebuliding version changes. RebuildingCoordinator uses this to slide
+    // the rebuilding version changes. RebuildingCoordinator uses this to slide
     // its local window according to global window deduced from the progress of
     // each donor. This is the union of `donors_remaining` for each node in
     // `nodes_`.

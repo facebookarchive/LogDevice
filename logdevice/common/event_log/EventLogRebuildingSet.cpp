@@ -855,9 +855,7 @@ void EventLogRebuildingSet::recomputeAuthoritativeStatus(
   const auto& storage_membership = nodes_configuration.getStorageMembership();
   std::unordered_set<node_index_t> storage_nodes;
   for (const auto& n : *storage_membership) {
-    if (storage_membership->hasShardShouldReadFrom(n)) {
-      storage_nodes.insert(n);
-    }
+    storage_nodes.insert(n);
   }
 
   auto it_shard = shards_.find(shard);

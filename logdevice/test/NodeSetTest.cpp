@@ -32,6 +32,7 @@
 #include "logdevice/lib/ClientImpl.h"
 #include "logdevice/server/epoch_store/FileEpochStore.h"
 #include "logdevice/server/locallogstore/test/StoreUtil.h"
+#include "logdevice/test/utils/AdminAPITestUtils.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
@@ -43,8 +44,6 @@
 #define N5 ShardID(5, 0)
 
 using namespace facebook::logdevice;
-using IntegrationTestUtils::requestShardRebuilding;
-
 /*
  * @file: A set of Integration tests that involves changing epoch metadata
  * (i.e., nodeset, replication factor).
@@ -117,9 +116,16 @@ void NodeSetTest::init() {
           .doNotLetSequencersProvisionEpochMetaData()
           // If some reactivations are delayed they still complete quickly
           .setParam("--sequencer-reactivation-delay-secs", "1s..2s")
+          .setParam("--disable-event-log-trimming", "true")
           .setParam("--disable-rebuilding", "false")
           .setParam("--bridge-record-in-empty-epoch",
                     bridge_empty_epoch_ ? "true" : "false")
+          .useStandaloneAdminServer(true)
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--gossip-enabled", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
           .setNumDBShards(1);
 
   cluster_ = factory.create(nodes_);
@@ -735,6 +741,8 @@ TEST_F(NodeSetTest, DeferReleasesUntilMetaDataRead) {
   START_CLUSTER();
   cluster_->waitForRecovery();
   std::shared_ptr<Client> client = cluster_->createClient();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
   std::map<lsn_t, std::string> lsn_map;
   lsn_t first_lsn = write_test_records(client, LOG_ID, 10, lsn_map);
 
@@ -751,11 +759,11 @@ TEST_F(NodeSetTest, DeferReleasesUntilMetaDataRead) {
   // write the new epoch metadata only to epochstore but not metadata log
   updateMetaDataInEpochStore();
   // restart the sequencer to pick up the new epoch metadata, write some data
-  cluster_->replace(0);
+  cluster_->replaceViaAdminServer(*admin_client, 0);
   lsn_t second_lsn = write_test_records(client, LOG_ID, 10, lsn_map);
 
   // restart the sequencer again and write some data in the third epoch
-  cluster_->replace(0);
+  cluster_->replaceViaAdminServer(*admin_client, 0);
   lsn_t third_lsn = write_test_records(client, LOG_ID, 10, lsn_map);
 
   ASSERT_GT(lsn_to_epoch(second_lsn), lsn_to_epoch(first_lsn));
@@ -804,6 +812,8 @@ TEST_F(NodeSetTest, DeferReleasesUntilMetaDataRead) {
 TEST_F(NodeSetTest, RebuildMultipleEpochs) {
   START_CLUSTER();
   std::shared_ptr<Client> client = cluster_->createClient();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
   std::map<lsn_t, std::string> lsn_map;
   const size_t records_per_epoch = 10;
 
@@ -824,9 +834,12 @@ TEST_F(NodeSetTest, RebuildMultipleEpochs) {
             ->getNodesConfiguration()
             ->getStorageMembership()
             ->hasShardShouldReadFrom(i)) {
-      ASSERT_EQ(0, cluster_->replace(i));
-      ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, i, SHARD_IDX));
-      // Wait until all shards finish rebuilding.
+      cluster_->applyInternalMaintenance(
+          *client, i, SHARD_IDX, "Requesting rebuilding from the test case");
+      ASSERT_EQ(0, cluster_->replaceViaAdminServer(*admin_client, i));
+
+      ASSERT_TRUE(
+          wait_until_shards_enabled_and_healthy(*cluster_, i, {SHARD_IDX}));
       cluster_->getNode(i).waitUntilAllShardsFullyAuthoritative(client);
     }
   }
