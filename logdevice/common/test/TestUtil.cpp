@@ -215,7 +215,7 @@ int wait_until(const char* reason,
   auto last_logged = start;
 
   if (reason != nullptr) {
-    ld_info("Waiting until: %s", reason);
+    ld_info("\033[0;34mWaiting until:\033[0m %s", reason);
   }
 
   while (1) {
@@ -224,23 +224,26 @@ int wait_until(const char* reason,
         std::chrono::duration_cast<std::chrono::duration<double>>(now - start);
 
     if (cond()) {
-      ld_info(
-          "Finished waiting until: %s (%.3fs)", reason, seconds_waited.count());
+      ld_info("\033[0;32mFinished waiting until:\033[0m %s (%.3fs)",
+              reason,
+              seconds_waited.count());
       return 0;
     }
 
     if (now > deadline) {
-      ld_info("Timed out when waiting until: %s (%.3fs)",
+      ld_info("\033[0;31mTimed out when waiting until:\033[0m %s (%.3fs)",
               reason,
               seconds_waited.count());
       return -1;
     }
     if (now - last_logged >= std::chrono::seconds(5)) {
       if (reason != nullptr) {
-        ld_info(
-            "Still waiting until: %s (%.3fs)", reason, seconds_waited.count());
+        ld_info("\033[0;33mStill waiting until:\033[0m %s (%.3fs)",
+                reason,
+                seconds_waited.count());
       } else {
-        ld_info("Still waiting (%.3fs)", seconds_waited.count());
+        ld_info(
+            "\033[0;33mStill waiting (%.3fs)\033[0m", seconds_waited.count());
       }
       last_logged = now;
     }
