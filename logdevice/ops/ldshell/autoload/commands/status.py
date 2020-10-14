@@ -98,24 +98,28 @@ def get_rpc_options() -> RpcOptions:
 
 async def get_host_info(client_factory, *args, **kwargs) -> Optional[HostInfo]:
     options = get_rpc_options()
-    async with client_factory(*args, **kwargs) as client:
-        host_tasks = {
-            "version": client.getVersion(rpc_options=options),
-            "uptime": client.aliveSince(rpc_options=options),
-        }
+    try:
+        async with client_factory(*args, **kwargs) as client:
+            host_tasks = {
+                "version": client.getVersion(rpc_options=options),
+                "uptime": client.aliveSince(rpc_options=options),
+            }
 
-        # pyre-ignore
-        await add_additional_host_tasks(
-            client=client, rpc_options=options, host_tasks=host_tasks
-        )
+            # pyre-ignore
+            await add_additional_host_tasks(
+                client=client, rpc_options=options, host_tasks=host_tasks
+            )
 
-        results = await asyncio.gather(*host_tasks.values(), return_exceptions=True)
-        # TODO: better / granular handling of exceptions
-        if any(isinstance(e, Exception) for e in results):
-            return None
-        else:
-            # This way the order of HostInfo's properties does not matter.
-            return HostInfo(**dict(zip(host_tasks.keys(), results)))
+            results = await asyncio.gather(*host_tasks.values(), return_exceptions=True)
+            # TODO: better / granular handling of exceptions
+            if any(isinstance(e, Exception) for e in results):
+                return None
+            else:
+                # This way the order of HostInfo's properties does not matter.
+                return HostInfo(**dict(zip(host_tasks.keys(), results)))
+    except Exception as ex:
+        cprint("Failed to connect to host: {}".format(str(ex)), file=sys.stderr)
+        return None
 
 
 async def print_results_tabular(results, *args, **kwargs):
