@@ -43,6 +43,11 @@
 #define N4 ShardID(4, 0)
 #define N5 ShardID(5, 0)
 
+// Kill test process after this many seconds. These tests are complex and take
+// around 25s to execute so giving them a longer timeout.
+const std::chrono::seconds
+    TEST_TIMEOUT(facebook::logdevice::DEFAULT_TEST_TIMEOUT * 2);
+
 using namespace facebook::logdevice;
 /*
  * @file: A set of Integration tests that involves changing epoch metadata
@@ -56,6 +61,8 @@ const int NLOGS{1};
 
 class NodeSetTest : public IntegrationTestBase {
  public:
+  NodeSetTest() : IntegrationTestBase(TEST_TIMEOUT) {}
+  ~NodeSetTest() override {}
   // initializes a Cluster object with the desired log config
   void init();
 
@@ -122,6 +129,8 @@ void NodeSetTest::init() {
                     bridge_empty_epoch_ ? "true" : "false")
           .useStandaloneAdminServer(true)
           .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam(
+              "--maintenance-manager-metadata-nodeset-update-period", "100min")
           .setParam("--gossip-enabled", "true")
           .setParam("--nodes-configuration-manager-intermediary-shard-state-"
                     "timeout",
