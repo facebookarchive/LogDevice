@@ -94,6 +94,9 @@ struct RocksDBLogStoreConfig {
   // Create an SstFileManager, used to ratelimit deletes. This should only be
   // called on a copy that has been created for a particular shard.
   void addSstFileManagerForShard();
+
+ protected:
+  std::shared_ptr<rocksdb::MemoryAllocator> getMemoryAllocator();
 };
 
 }} // namespace facebook::logdevice

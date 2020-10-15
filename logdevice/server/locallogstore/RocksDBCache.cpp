@@ -9,14 +9,21 @@
 
 namespace facebook { namespace logdevice {
 
-RocksDBCache::RocksDBCache(UpdateableSettings<RocksDBSettings> rocksdb_settings)
+RocksDBCache::RocksDBCache(
+    UpdateableSettings<RocksDBSettings> rocksdb_settings,
+    folly::Optional<std::shared_ptr<rocksdb::MemoryAllocator>>
+        memory_allocator = folly::none)
     : rocksdb_settings_(rocksdb_settings) {
   rocksdb::LRUCacheOptions opt;
   opt.capacity = rocksdb_settings_->cache_size_;
   opt.num_shard_bits = rocksdb_settings_->cache_numshardbits_;
   opt.high_pri_pool_ratio = rocksdb_settings_->cache_high_pri_pool_ratio_;
-
+  opt.memory_allocator = memory_allocator.value_or(nullptr);
   cache_ = rocksdb::NewLRUCache(opt);
+}
+
+RocksDBCache::RocksDBCache(rocksdb::LRUCacheOptions& options) {
+  cache_ = rocksdb::NewLRUCache(options);
 }
 
 const char* RocksDBCache::Name() const {

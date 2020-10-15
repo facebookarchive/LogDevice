@@ -76,14 +76,16 @@ RocksDBLogStoreConfig::RocksDBLogStoreConfig(
 
   if (rocksdb_settings_->cache_size_ > 0) {
     table_options_.block_cache =
-        std::make_shared<RocksDBCache>(rocksdb_settings_);
+        std::make_shared<RocksDBCache>(rocksdb_settings_, getMemoryAllocator());
   }
 
   size_t compressed_cache_size = rocksdb_settings_->compressed_cache_size_;
   if (compressed_cache_size > 0) {
-    table_options_.block_cache_compressed =
-        rocksdb::NewLRUCache(compressed_cache_size,
-                             rocksdb_settings_->compressed_cache_numshardbits_);
+    rocksdb::LRUCacheOptions opt;
+    opt.capacity = compressed_cache_size;
+    opt.num_shard_bits = rocksdb_settings_->compressed_cache_numshardbits_;
+    opt.memory_allocator = getMemoryAllocator();
+    table_options_.block_cache_compressed = std::make_shared<RocksDBCache>(opt);
   }
 
   if (rocksdb_settings_->flush_block_policy_ !=
@@ -188,8 +190,12 @@ RocksDBLogStoreConfig::RocksDBLogStoreConfig(
     size_t metadata_cache_size = rocksdb_settings_->metadata_cache_size_;
     if (metadata_cache_size > 0) {
       changed = true;
-      metadata_table_options_.block_cache = rocksdb::NewLRUCache(
-          metadata_cache_size, rocksdb_settings_->metadata_cache_numshardbits_);
+
+      rocksdb::LRUCacheOptions opt;
+      opt.capacity = metadata_cache_size;
+      opt.num_shard_bits = rocksdb_settings_->metadata_cache_numshardbits_;
+      opt.memory_allocator = getMemoryAllocator();
+      metadata_table_options_.block_cache = std::make_shared<RocksDBCache>(opt);
     }
 
     if (rocksdb_settings_->metadata_block_size_ > 0) {
@@ -258,6 +264,26 @@ void RocksDBLogStoreConfig::addSstFileManagerForShard() {
   if (!status.ok()) {
     ld_error("An error occurred when deleting existing trash: %s",
              status.ToString().c_str());
+  }
+}
+
+std::shared_ptr<rocksdb::MemoryAllocator>
+RocksDBLogStoreConfig::getMemoryAllocator() {
+  if (!rocksdb_settings_->use_nocachedump_memory_allocator) {
+    return nullptr;
+  }
+
+  std::shared_ptr<rocksdb::MemoryAllocator> memory_allocator;
+  auto allocatorOptions = rocksdb::JemallocAllocatorOptions();
+  rocksdb::Status s =
+      NewJemallocNodumpAllocator(allocatorOptions, &memory_allocator);
+  if (s.ok()) {
+    return memory_allocator;
+  } else {
+    ld_warning("Failed to create new memory allocator: %s ."
+               "Defaulting to system allocator",
+               s.ToString().c_str());
+    return nullptr;
   }
 }
 

@@ -9,6 +9,7 @@
 
 #include <rocksdb/cache.h>
 
+#include "folly/Optional.h"
 #include "logdevice/server/locallogstore/RocksDBSettings.h"
 
 namespace facebook { namespace logdevice {
@@ -19,7 +20,12 @@ namespace facebook { namespace logdevice {
 
 class RocksDBCache : public rocksdb::Cache {
  public:
-  explicit RocksDBCache(UpdateableSettings<RocksDBSettings> rocksdb_settings);
+  explicit RocksDBCache(
+      UpdateableSettings<RocksDBSettings> rocksdb_settings,
+      folly::Optional<std::shared_ptr<rocksdb::MemoryAllocator>>
+          memory_allocator);
+
+  explicit RocksDBCache(rocksdb::LRUCacheOptions& options);
 
   const char* Name() const override;
   rocksdb::Status Insert(const rocksdb::Slice& key,

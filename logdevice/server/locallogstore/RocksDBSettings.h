@@ -423,6 +423,9 @@ class RocksDBSettings : public SettingsBundle {
   int metadata_bloom_bits_per_key_;
   bool bloom_block_based_;
 
+  // Use new rocksdb option to exclude block cache in core dumps
+  bool use_nocachedump_memory_allocator;
+
   uint32_t table_format_version_;
 
   std::chrono::seconds test_clamp_backlog;

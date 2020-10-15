@@ -1046,6 +1046,15 @@ void RocksDBSettings::defineSettings(SettingEasyInit& init) {
        SERVER,
        SettingsCategory::RocksDB);
 
+  init("rocksdb-use-nocachedump-memory-allocator",
+       &use_nocachedump_memory_allocator,
+       "false",
+       nullptr,
+       "If true, rocksdb will exclude block cache in core dumps "
+       "by using the new JemallocNodumpAllocator memory allocator option",
+       SERVER,
+       SettingsCategory::RocksDB);
+
   init("rocksdb-partition-size-limit",
        &partition_size_limit_,
        "6G",
