@@ -3352,19 +3352,21 @@ int ClientReadStream::deliverRecord(
   // Try to set byte offset from accumulated clientReadStream value if
   // current record does not have byte_offset information and client
   // requested byte offset.
-  if (additional_start_flags_ & START_Header::INCLUDE_BYTE_OFFSET &&
-      !record->attrs.offsets.isValid()) {
-    WORKER_STAT_INCR(records_missing_byteoffset);
+  if (additional_start_flags_ & START_Header::INCLUDE_BYTE_OFFSET) {
+    if (!record->attrs.offsets.isValid()) {
+      WORKER_STAT_INCR(records_missing_byteoffset);
 
-    if (accumulated_offsets_.isValid()) {
-      current_offsets = OffsetMap::mergeOffsets(
-          std::move(accumulated_offsets_), payload_size_map);
+      if (accumulated_offsets_.isValid()) {
+        current_offsets = OffsetMap::mergeOffsets(
+            std::move(accumulated_offsets_), payload_size_map);
+      } else {
+        current_offsets = OffsetMap();
+        WORKER_STAT_INCR(records_delivered_without_byteoffset);
+      }
+      record->attrs.offsets = OffsetMap::toRecord(current_offsets);
     } else {
-      current_offsets = OffsetMap();
-      WORKER_STAT_INCR(records_delivered_without_byteoffset);
+      WORKER_STAT_INCR(records_delivered_with_byteoffset);
     }
-
-    record->attrs.offsets = OffsetMap::toRecord(current_offsets);
   }
 
   if ((record->flags_ & RECORD_Header::HOLE) && !ship_pseudorecords_) {
