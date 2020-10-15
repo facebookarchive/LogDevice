@@ -140,8 +140,7 @@ class LDShellContext(context.Context):
             self._cluster_name = await client.getClusterName()
 
     def _initialize_after_connected(self) -> None:
-        """
-        """
+        """"""
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self._fetch_config())
         loop.run_until_complete(self._fetch_cluster_name())

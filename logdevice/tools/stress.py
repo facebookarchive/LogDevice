@@ -74,7 +74,7 @@ class TaskQueue:
 
     def getTaskNumber(self):
         """Returns a unique task number for a worker to run, or None if the
-worker should stop.
+        worker should stop.
 
         """
         with self.mutex as mutex:
