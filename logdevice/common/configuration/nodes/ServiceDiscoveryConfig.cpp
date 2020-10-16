@@ -134,20 +134,25 @@ bool NodeServiceDiscovery::isValidForReset(
     return false;
   }
 
-  // The node can't change its location if it's a storage node AND its version
-  // remains the same.
-  // TODO(T57564225): Agree on location string update policy
-  if (current.version == version && current.location != location &&
-      hasRole(NodeRole::STORAGE)) {
-    ld_error(
-        "Storage nodes' location is assumed to be immutable to maintain the "
-        "correctness of the replication property of the historical nodesets. "
-        "Current value: '%s', requested update: '%s'",
-        current.location.has_value() ? current.location->toString().c_str()
-                                     : "",
-        location.has_value() ? location->toString().c_str() : "");
-    return false;
-  }
+  // TODO Uncomment this after the SFZ location string migration has completed
+  // fleetwide. This allows for a safe migration of the location string.
+  // The CWS migration script safely starts a maintenance, stops the nodes, and
+  // disables expands on a per scope basis. T76073606
+  // // The node can't change its location if it's a storage node AND its
+  // version
+  // // remains the same.
+  // // TODO(T57564225): Agree on location string update policy
+  // if (current.version == version && current.location != location &&
+  //     hasRole(NodeRole::STORAGE)) {
+  //   ld_error(
+  //       "Storage nodes' location is assumed to be immutable to maintain the "
+  //       "correctness of the replication property of the historical nodesets.
+  //       " "Current value: '%s', requested update: '%s'",
+  //       current.location.has_value() ? current.location->toString().c_str()
+  //                                    : "",
+  //       location.has_value() ? location->toString().c_str() : "");
+  //   return false;
+  // }
 
   // If we reached this point, all the eligible fields can be mutated freely.
   return true;
