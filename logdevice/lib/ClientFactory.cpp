@@ -136,7 +136,7 @@ std::shared_ptr<PluginRegistry> ClientFactory::loadPluginRegistry(
     std::shared_ptr<Logger> logger_plugin =
         plugin_registry->getSinglePlugin<Logger>(PluginType::LOGGER);
     if (logger_plugin) {
-      dbg::external_logger_plugin.swap(logger_plugin);
+      dbg::initializeExternalLoggerPlugin(std::move(logger_plugin));
     }
   });
 

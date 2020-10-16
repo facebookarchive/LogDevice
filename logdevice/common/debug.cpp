@@ -21,6 +21,7 @@
 #include <folly/Format.h>
 #include <folly/ScopeGuard.h>
 #include <folly/Singleton.h>
+#include <folly/concurrency/AtomicSharedPtr.h>
 #include <folly/container/Array.h>
 #include <folly/synchronization/LifoSem.h>
 #include <sys/time.h>
@@ -60,8 +61,16 @@ std::atomic<bool> abortOnFailedCheck{true};
 // If this is true, then when an ld_catch*() fails, we'll abort().
 std::atomic<bool> abortOnFailedCatch{folly::kIsDebug};
 
-// If it's available than we have linked logger plugin.
-std::shared_ptr<Logger> external_logger_plugin{nullptr};
+namespace {
+folly::atomic_shared_ptr<Logger> externalLoggerPlugin{nullptr};
+} // namespace
+
+std::shared_ptr<Logger> getExternalLoggerPlugin() {
+  return externalLoggerPlugin.load(std::memory_order_acquire);
+}
+void initializeExternalLoggerPlugin(std::shared_ptr<Logger> logger) {
+  externalLoggerPlugin.store(std::move(logger), std::memory_order_release);
+}
 
 // see common/debug.h
 bump_error_counter_fn_t bumpErrorCounterFn = nullptr;
@@ -517,9 +526,11 @@ void log(const char* cluster,
 
   va_end(ap);
 
-  if (external_logger_plugin && level <= externalLoggerLogLevel) {
-    folly::StringPiece log_line(record, reclen);
-    external_logger_plugin->log(cluster, static_cast<int>(level), log_line);
+  if (level <= externalLoggerLogLevel) {
+    if (auto external_logger_plugin = getExternalLoggerPlugin()) {
+      folly::StringPiece log_line(record, reclen);
+      external_logger_plugin->log(cluster, static_cast<int>(level), log_line);
+    }
   }
 
   // Write the message to logFD.

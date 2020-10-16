@@ -218,7 +218,11 @@ extern std::atomic<bool> abortOnFailedCheck;
 extern std::atomic<bool> abortOnFailedCatch;
 extern std::atomic<bool> assertOnData;
 extern std::atomic<Level> externalLoggerLogLevel;
-extern std::shared_ptr<facebook::logdevice::Logger> external_logger_plugin;
+
+// If it's available than we have linked logger plugin.
+std::shared_ptr<Logger> getExternalLoggerPlugin();
+// Sets the linked logger plugin.
+void initializeExternalLoggerPlugin(std::shared_ptr<Logger> logger);
 
 //////////  Catch: Conditions that abort in debug, but return true / false in
 //////////  non-debug.
