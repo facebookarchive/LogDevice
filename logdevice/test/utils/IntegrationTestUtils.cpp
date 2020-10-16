@@ -1724,6 +1724,10 @@ bool Cluster::applyInternalMaintenance(Client& client,
                                     buildMaintenanceDefinitionForRebuilding(
                                         ShardID(node_id, shard_idx), reason)});
   // write_to_maintenance_log will set err if it returns LSN_INVALID
+  ld_info("Applying INTERNAL maintenance on N%u:S%u: %s",
+          node_id,
+          shard_idx,
+          reason.c_str());
   return write_to_maintenance_log(client, delta) != LSN_INVALID;
 }
 

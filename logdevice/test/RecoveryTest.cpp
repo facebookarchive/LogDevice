@@ -36,13 +36,12 @@
 #include "logdevice/server/RecordCacheDependencies.h"
 #include "logdevice/server/epoch_store/FileEpochStore.h"
 #include "logdevice/server/locallogstore/test/StoreUtil.h"
+#include "logdevice/test/utils/AdminAPITestUtils.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
 // TODO 11866467: convert all tests to support immutable consensus
 
 using namespace facebook::logdevice;
-using IntegrationTestUtils::markShardUnrecoverable;
-using IntegrationTestUtils::requestShardRebuilding;
 
 const logid_t LOG_ID{1};
 const int SHARD_IDX{1}; // log 1 maps to shard 1
@@ -195,6 +194,7 @@ class RecoveryTest : public ::testing::TestWithParam<PopulateRecordCache> {
   size_t max_writes_in_flight_ = 256;
   bool tail_optimized_{false};
   bool bridge_empty_epoch_{false};
+  bool disable_check_seals_{false};
 
   NodeLocationScope sync_replication_scope_{NodeLocationScope::NODE};
   std::shared_ptr<const NodesConfiguration> node_configs_;
@@ -369,10 +369,21 @@ void RecoveryTest::init(bool can_tail_optimize) {
           // allow 1000 reactivations per seconds
           .setParam("--reactivation-limit", "1000/1s")
           // fall back to non-authoritative quickly
-          .setParam("--event-log-grace-period", "10ms");
+          .setParam("--event-log-grace-period", "10ms")
+          .setParam(
+              "--disable-check-seals", disable_check_seals_ ? "true" : "false");
 
   if (enable_rebuilding_) {
-    factory.setParam("--disable-rebuilding", "false");
+    factory.setParam("--disable-rebuilding", "false")
+        .setParam("--disable-event-log-trimming", "true")
+        .setParam("--gossip-enabled", "true")
+        .setParam("--ignore-isolation", "true")
+        .setParam("--min-gossips-for-stable-state", "1")
+        .setParam("--enable-cluster-maintenance-state-machine", "true")
+        .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                  "timeout",
+                  "1s")
+        .useStandaloneAdminServer(true);
   }
 
   factory.setParam(
@@ -1209,8 +1220,12 @@ TEST_P(RecoveryTest, NonAuthoritativeRecovery) {
 
   ld_info("Requesting shard rebuildings.");
   auto client = cluster_->createClient();
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 4, SHARD_IDX));
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 5, SHARD_IDX));
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
+  cluster_->applyInternalMaintenance(
+      *client, 4, SHARD_IDX, "Requesting rebuilding from the test case");
+  cluster_->applyInternalMaintenance(
+      *client, 5, SHARD_IDX, "Requesting rebuilding from the test case");
 
   ld_info("Waiting for recovery.");
   cluster_->getNode(0).waitForRecovery(LOG_ID);
@@ -1899,6 +1914,9 @@ TEST_P(RecoveryTest, NonAuthoritativePurging) {
   // two logs are used in this test
   num_logs_ = 2;
   single_empty_erm_ = true;
+  // The test will not work if check seals is enabled since the entire nodeset
+  // will not be available.
+  disable_check_seals_ = true;
   init();
 
   const copyset_t copyset = {N1, N2};
@@ -1937,8 +1955,30 @@ TEST_P(RecoveryTest, NonAuthoritativePurging) {
 
   ld_info("Requesting shard rebuildings.");
   auto client = cluster_->createClient();
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 4, SHARD_IDX));
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 5, SHARD_IDX));
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
+  ASSERT_TRUE(cluster_->applyInternalMaintenance(
+      *client, 4, SHARD_IDX, "Requesting rebuilding from the test case"));
+  ASSERT_TRUE(cluster_->applyInternalMaintenance(
+      *client, 5, SHARD_IDX, "Requesting rebuilding from the test case"));
+  cluster_->getNode(4).waitUntilShardState(
+      *admin_client,
+      SHARD_IDX,
+      [](const thrift::ShardState& shard) {
+        return shard.get_storage_state() ==
+            membership::thrift::StorageState::DATA_MIGRATION ||
+            shard.get_storage_state() == membership::thrift::StorageState::NONE;
+      },
+      "Shard must be in DATA_MIGRATION || NONE");
+  cluster_->getNode(5).waitUntilShardState(
+      *admin_client,
+      SHARD_IDX,
+      [](const thrift::ShardState& shard) {
+        return shard.get_storage_state() ==
+            membership::thrift::StorageState::DATA_MIGRATION ||
+            shard.get_storage_state() == membership::thrift::StorageState::NONE;
+      },
+      "Shard must be in DATA_MIGRATION || NONE");
 
   // after sequencer sends a RELEASE for e3n0,
   // node 1 should delete record (1, 2)
@@ -2228,10 +2268,23 @@ TEST_P(RecoveryTest, AuthoritativeRecoveryAndPurgingWithRNodesEmpty) {
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 3, 4, 5, 6, 7}));
   ld_info("Requesting shard rebuildings.");
   auto client = cluster_->createClient();
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 8, SHARD_IDX));
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 9, SHARD_IDX));
-  ASSERT_NE(LSN_INVALID, markShardUnrecoverable(*client, 8, SHARD_IDX));
-  ASSERT_NE(LSN_INVALID, markShardUnrecoverable(*client, 9, SHARD_IDX));
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
+  ASSERT_TRUE(cluster_->applyInternalMaintenance(
+      *client, 8, SHARD_IDX, "Requesting rebuilding from the test case"));
+  ASSERT_TRUE(cluster_->applyInternalMaintenance(
+      *client, 9, SHARD_IDX, "Requesting rebuilding from the test case"));
+  IntegrationTestUtils::waitUntilShardsHaveEventLogState(
+      client,
+      {ShardID(8, SHARD_IDX), ShardID(9, SHARD_IDX)},
+      AuthoritativeStatus::UNAVAILABLE,
+      true);
+
+  thrift::MarkAllShardsUnrecoverableRequest request;
+  request.set_user("test");
+  request.set_reason("test");
+  thrift::MarkAllShardsUnrecoverableResponse response;
+  admin_client->sync_markAllShardsUnrecoverable(response, request);
 
   ld_info("Waiting for rebuilding to complete");
   IntegrationTestUtils::waitUntilShardsHaveEventLogState(
@@ -2491,12 +2544,48 @@ TEST_P(RecoveryTest, RecoveryCannotFullyReplicate) {
 
   ld_info("Requesting shard rebuildings.");
   auto client = cluster_->createClient();
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 7, SHARD_IDX));
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 8, SHARD_IDX));
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 9, SHARD_IDX));
-  ASSERT_NE(LSN_INVALID, markShardUnrecoverable(*client, 7, SHARD_IDX));
-  ASSERT_NE(LSN_INVALID, markShardUnrecoverable(*client, 8, SHARD_IDX));
-  ASSERT_NE(LSN_INVALID, markShardUnrecoverable(*client, 9, SHARD_IDX));
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
+  ASSERT_TRUE(cluster_->applyInternalMaintenance(
+      *client, 7, SHARD_IDX, "Requesting rebuilding from the test case"));
+  ASSERT_TRUE(cluster_->applyInternalMaintenance(
+      *client, 8, SHARD_IDX, "Requesting rebuilding from the test case"));
+  ASSERT_TRUE(cluster_->applyInternalMaintenance(
+      *client, 9, SHARD_IDX, "Requesting rebuilding from the test case"));
+
+  cluster_->getNode(7).waitUntilShardState(
+      *admin_client,
+      SHARD_IDX,
+      [](const thrift::ShardState& shard) {
+        return shard.get_storage_state() ==
+            membership::thrift::StorageState::DATA_MIGRATION ||
+            shard.get_storage_state() == membership::thrift::StorageState::NONE;
+      },
+      "Shard must be in DATA_MIGRATION || NONE");
+  cluster_->getNode(8).waitUntilShardState(
+      *admin_client,
+      SHARD_IDX,
+      [](const thrift::ShardState& shard) {
+        return shard.get_storage_state() ==
+            membership::thrift::StorageState::DATA_MIGRATION ||
+            shard.get_storage_state() == membership::thrift::StorageState::NONE;
+      },
+      "Shard must be in DATA_MIGRATION || NONE");
+  cluster_->getNode(9).waitUntilShardState(
+      *admin_client,
+      SHARD_IDX,
+      [](const thrift::ShardState& shard) {
+        return shard.get_storage_state() ==
+            membership::thrift::StorageState::DATA_MIGRATION ||
+            shard.get_storage_state() == membership::thrift::StorageState::NONE;
+      },
+      "Shard must be in DATA_MIGRATION || NONE");
+
+  thrift::MarkAllShardsUnrecoverableRequest request;
+  request.set_user("test");
+  request.set_reason("test");
+  thrift::MarkAllShardsUnrecoverableResponse response;
+  admin_client->sync_markAllShardsUnrecoverable(response, request);
 
   ld_info("Waiting for recovery.");
   cluster_->getNode(0).waitForRecovery(LOG_ID);
@@ -3179,6 +3268,9 @@ TEST_P(RecoveryTest, PurgingAfterSkippedNonAuthoritativeRecovery) {
   num_logs_ = 1;
   pre_provision_epoch_metadata_ = false;
   single_empty_erm_ = false;
+  // The test will not work if check seals is enabled since the entire nodeset
+  // will not be available.
+  disable_check_seals_ = true;
 
   // metadata log is only stored in N6
   Configuration::MetaDataLogsConfig meta_config =
@@ -3314,11 +3406,18 @@ TEST_P(RecoveryTest, PurgingAfterSkippedNonAuthoritativeRecovery) {
   ASSERT_EQ(0, cluster_->start({0, 6}));
   ld_info("Requesting shard rebuildings.");
   auto client = cluster_->createClient();
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 1, SHARD_IDX));
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 2, SHARD_IDX));
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 3, SHARD_IDX));
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 4, SHARD_IDX));
-  ASSERT_NE(LSN_INVALID, requestShardRebuilding(*client, 5, SHARD_IDX));
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
+  ASSERT_TRUE(cluster_->applyInternalMaintenance(
+      *client, 1, SHARD_IDX, "Requesting rebuilding from the test case"));
+  ASSERT_TRUE(cluster_->applyInternalMaintenance(
+      *client, 2, SHARD_IDX, "Requesting rebuilding from the test case"));
+  ASSERT_TRUE(cluster_->applyInternalMaintenance(
+      *client, 3, SHARD_IDX, "Requesting rebuilding from the test case"));
+  ASSERT_TRUE(cluster_->applyInternalMaintenance(
+      *client, 4, SHARD_IDX, "Requesting rebuilding from the test case"));
+  ASSERT_TRUE(cluster_->applyInternalMaintenance(
+      *client, 5, SHARD_IDX, "Requesting rebuilding from the test case"));
 
   ld_info("Waiting for the first non-authoritative recovery.");
   cluster_->waitForRecovery();
@@ -3961,15 +4060,36 @@ TEST_P(RecoveryTest, AuthoritativeRecoveryWithReadOnlyNodes) {
   ASSERT_EQ(0, cluster_->start({0, 1, 2, 5}));
 
   {
+    cluster_->getAdminServer()->waitUntilFullyLoaded();
+    auto admin_client = cluster_->getAdminServer()->createAdminClient();
     // Mark N1 & N2 as READ_ONLY
     ld_info("Marking N1 and N2 as READ_ONLY");
-    auto nc = cluster_->getConfig()->getNodesConfiguration();
-    nc = nc->applyUpdate(NodesConfigurationTestUtil::setStorageMembershipUpdate(
-        *nc,
-        {ShardID(1, SHARD_IDX), ShardID(2, SHARD_IDX)},
-        membership::StorageState::READ_ONLY,
-        folly::none));
-    cluster_->updateNodesConfiguration(*nc);
+    cluster_->applyMaintenance(*admin_client,
+                               1,
+                               SHARD_IDX,
+                               /* user = */ "testing",
+                               /* drain = */ false);
+    cluster_->applyMaintenance(*admin_client,
+                               2,
+                               SHARD_IDX,
+                               /* user = */ "testing",
+                               /* drain = */ false);
+    cluster_->getNode(1).waitUntilShardState(
+        *admin_client,
+        SHARD_IDX,
+        [](const thrift::ShardState& shard) {
+          return shard.get_storage_state() ==
+              membership::thrift::StorageState::READ_ONLY;
+        },
+        "Shard must be READ_ONLY");
+    cluster_->getNode(2).waitUntilShardState(
+        *admin_client,
+        SHARD_IDX,
+        [](const thrift::ShardState& shard) {
+          return shard.get_storage_state() ==
+              membership::thrift::StorageState::READ_ONLY;
+        },
+        "Shard must be READ_ONLY");
   }
 
   // half of the time, kill sequencer so that it does not have up-to-date
