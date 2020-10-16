@@ -269,7 +269,8 @@ std::unique_ptr<DataRecord> ReadVerifyData::verifyRestoreRecordPayload(
       PayloadHolder(PayloadHolder::COPY_BUFFER, ver.user_payload),
       drop_ptr->attrs.lsn,
       drop_ptr->attrs.timestamp,
-      drop_ptr->flags_);
+      drop_ptr->flags_,
+      drop_ptr->attrs.offsets);
 }
 
 }} // namespace facebook::logdevice

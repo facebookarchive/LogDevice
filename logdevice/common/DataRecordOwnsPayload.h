@@ -21,7 +21,7 @@ struct ExtraMetadata;
 
 /**
  * Like DataRecord, but owns payload and has some additional fields not exposed
- * through public API. Payload is pwned in one of two ways: PayloadHolder
+ * through public API. Payload is owned in one of two ways: PayloadHolder
  * or shared_ptr<BufferedWriterDecoder>. The latter is used for records that are
  * part of a batch; such records share ownership of the bigger record containing
  * the whole batch.
@@ -32,9 +32,9 @@ struct DataRecordOwnsPayload : public DataRecord {
                         lsn_t lsn,
                         std::chrono::milliseconds timestamp,
                         RECORD_flags_t flags,
+                        RecordOffset offsets,
                         std::unique_ptr<ExtraMetadata> extra_metadata = nullptr,
                         int batch_offset = 0,
-                        RecordOffset offsets = RecordOffset(),
                         bool invalid_checksum = false);
 
   DataRecordOwnsPayload(logid_t log_id,
@@ -42,9 +42,9 @@ struct DataRecordOwnsPayload : public DataRecord {
                         lsn_t lsn,
                         std::chrono::milliseconds timestamp,
                         RECORD_flags_t flags,
+                        RecordOffset offsets,
                         std::unique_ptr<ExtraMetadata> extra_metadata = nullptr,
                         int batch_offset = 0,
-                        RecordOffset offsets = RecordOffset(),
                         bool invalid_checksum = false);
 
   DataRecordOwnsPayload(logid_t log_id,
@@ -53,9 +53,9 @@ struct DataRecordOwnsPayload : public DataRecord {
                         lsn_t lsn,
                         std::chrono::milliseconds timestamp,
                         RECORD_flags_t flags,
+                        RecordOffset offsets,
                         std::unique_ptr<ExtraMetadata> extra_metadata = nullptr,
                         int batch_offset = 0,
-                        RecordOffset offsets = RecordOffset(),
                         bool invalid_checksum = false);
 
   ~DataRecordOwnsPayload();

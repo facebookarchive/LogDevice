@@ -922,9 +922,9 @@ create_data_record(std::unique_ptr<RawDataRecord> record, T&& payload) {
       record->attrs.lsn,
       record->attrs.timestamp,
       record->flags,
+      std::move(record->attrs.offsets),
       std::move(record->extra_metadata),
       record->attrs.batch_offset,
-      std::move(record->attrs.offsets),
       record->invalid_checksum);
 }
 

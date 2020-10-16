@@ -500,12 +500,12 @@ bool AsyncReaderImpl::handleBufferedWrite(std::unique_ptr<DataRecord>& record) {
             attrs.lsn,
             attrs.timestamp,
             flags & ~RECORD_Header::BUFFERED_WRITER_BLOB,
-            nullptr, // no rebuilding metadata
-            batch_offset++,
             // Report the same offsets for all subrecords. This may be
             // confusing but we don't have better options since offsets
             // currently count the bytes of compressed batches.
-            attrs.offsets);
+            attrs.offsets,
+            nullptr, // no rebuilding metadata
+            batch_offset++);
     if (buffer_rest) {
       // The application already rejected a previous record in this batch,
       // just buffer for later redelivery

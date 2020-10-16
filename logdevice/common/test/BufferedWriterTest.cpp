@@ -216,7 +216,8 @@ class TestAppendSink : public BufferedWriterAppendSink {
           PayloadHolder(PayloadHolder::COPY_BUFFER, blob.data(), blob.size()),
           lsn++,
           std::chrono::milliseconds(0),
-          RECORD_flags_t(RECORD_Header::BUFFERED_WRITER_BLOB)));
+          RECORD_flags_t(RECORD_Header::BUFFERED_WRITER_BLOB),
+          RecordOffset()));
     }
     const size_t nread = blob_payloads.size();
 

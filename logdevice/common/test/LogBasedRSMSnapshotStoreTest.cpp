@@ -93,7 +93,8 @@ static std::unique_ptr<DataRecordOwnsPayload> make_record(logid_t log_id,
       PayloadHolder::copyString(payload),
       lsn,
       std::chrono::milliseconds(timestamp++),
-      (RECORD_flags_t)0);
+      (RECORD_flags_t)0,
+      RecordOffset());
 }
 
 class LogBasedRsmTest : public ::testing::Test {

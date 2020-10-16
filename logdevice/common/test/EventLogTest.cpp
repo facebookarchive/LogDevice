@@ -228,8 +228,8 @@ class EventLogTest : public ::testing::TestWithParam<bool> {
         PayloadHolder::copyString(delta_payload),
         lsn,
         std::chrono::milliseconds{100},
-        0 // flags
-    );
+        0, // flags
+        RecordOffset());
   }
 
   std::unique_ptr<DataRecord>
@@ -241,8 +241,8 @@ class EventLogTest : public ::testing::TestWithParam<bool> {
         PayloadHolder::copyString(buf),
         lsn,
         std::chrono::milliseconds{100},
-        0 // flags
-    );
+        0, // flags
+        RecordOffset());
   }
 
   const std::shared_ptr<ServerConfig> getServerConfig() const {

@@ -408,7 +408,8 @@ TEST(VerificationTest, DuplicateDetectionTest) {
                            PayloadHolder::copyPayload(dup_record_ptr->payload),
                            dup_record_ptr->attrs.lsn,
                            dup_record_ptr->attrs.timestamp,
-                           dup_record_ptr->flags_)));
+                           dup_record_ptr->flags_,
+                           RecordOffset())));
     duplicated_it++;
   }
   all_payloads_incl_dup.resize(100);
@@ -554,7 +555,8 @@ TEST(VerificationTest, ReorderingDetectionTest) {
                                  log_records[old_idx].second->payload),
                              log_records[old_idx].second->attrs.lsn,
                              log_records[old_idx].second->attrs.timestamp,
-                             log_records[old_idx].second->flags_)));
+                             log_records[old_idx].second->flags_,
+                             log_records[old_idx].second->attrs.offsets)));
       log_records.erase(log_records.begin() + old_idx);
 
       std::string curr_ps = all_reordered_payloads[old_idx];

@@ -135,8 +135,8 @@ genMetaRecord(const EpochMetaData& info, lsn_t lsn = LSN_INVALID) {
       PayloadHolder(PayloadHolder::TAKE_OWNERSHIP, buf, size),
       lsn == LSN_INVALID ? compose_lsn(info.h.epoch, esn_t(1)) : lsn,
       ts,
-      0 // flags
-  );
+      0, // flags
+      RecordOffset());
 }
 
 // generate epoch metadata stored in metadata log

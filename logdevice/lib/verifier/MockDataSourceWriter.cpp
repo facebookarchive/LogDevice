@@ -42,7 +42,8 @@ int MockDataSourceWriter::append(logid_t logid,
                                               PayloadHolder::copyPayload(p),
                                               curr_lsn,
                                               std::chrono::milliseconds(0),
-                                              0)));
+                                              0,
+                                              RecordOffset())));
 
   return 0;
 }

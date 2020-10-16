@@ -707,6 +707,9 @@ void ReaderImpl::read_decodeBuffered(QueueEntry& entry) {
         attrs.lsn,
         attrs.timestamp,
         flags & ~RECORD_Header::BUFFERED_WRITER_BLOB,
+        // Same reasoning as in AsyncReaderImpl::handleBufferedWrite as to why
+        // same offsets value for all payloads.
+        attrs.offsets,
         nullptr, // no rebuilding metadata
         batch_offset++);
     pre_queue_.emplace_back( // creating a QueueEntry

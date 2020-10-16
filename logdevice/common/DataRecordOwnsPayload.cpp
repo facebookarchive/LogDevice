@@ -20,9 +20,9 @@ DataRecordOwnsPayload::DataRecordOwnsPayload(
     lsn_t lsn,
     std::chrono::milliseconds timestamp,
     RECORD_flags_t flags,
+    RecordOffset offsets,
     std::unique_ptr<ExtraMetadata> extra_metadata,
     int batch_offset,
-    RecordOffset offsets,
     bool invalid_checksum)
     : DataRecord(log_id,
                  payload_holder.getPayload(),
@@ -41,9 +41,9 @@ DataRecordOwnsPayload::DataRecordOwnsPayload(
     lsn_t lsn,
     std::chrono::milliseconds timestamp,
     RECORD_flags_t flags,
+    RecordOffset offsets,
     std::unique_ptr<ExtraMetadata> extra_metadata,
     int batch_offset,
-    RecordOffset offsets,
     bool invalid_checksum)
     : DataRecord(log_id,
                  std::move(payload_group),
@@ -62,9 +62,9 @@ DataRecordOwnsPayload::DataRecordOwnsPayload(
     lsn_t lsn,
     std::chrono::milliseconds timestamp,
     RECORD_flags_t flags,
+    RecordOffset offsets,
     std::unique_ptr<ExtraMetadata> extra_metadata,
     int batch_offset,
-    RecordOffset offsets,
     bool invalid_checksum)
     : DataRecord(log_id,
                  std::move(payload_group),
