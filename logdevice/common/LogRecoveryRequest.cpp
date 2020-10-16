@@ -957,6 +957,20 @@ void LogRecoveryRequest::sealLog() {
   }
 
   nodeset_size_ = node_statuses_.size();
+  if (nodeset_size_ == 0) {
+    // We don't have any nodes to seal to, let's fail the whole recovery
+    RATELIMIT_WARNING(
+        std::chrono::seconds(10),
+        10,
+        "Cannot seal the epoch [%u, %u] of log %lu because all shards in the "
+        "recovery set %s are not readable. Will will request a retry.",
+        last_clean_epoch.val_ + 1,
+        next_epoch_.val_ - 1,
+        log_id_.val_,
+        toString(recovery_nodes_).c_str());
+    complete(E::RETRY);
+    return;
+  }
   ld_check(nodeset_size_ > 0);
 
   // attempt to seal all the nodes in the recovery set

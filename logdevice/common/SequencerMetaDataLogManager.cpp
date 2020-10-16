@@ -149,6 +149,13 @@ void SequencerMetaDataLogManager::considerWritingMetaDataLogRecord(
                  owner_->getLogID().val(),
                  error_description(st));
       // TODO 18147886: evict all epochs from the sequencer
+    } else {
+      ld_error(
+          "Write to metadata log failed for log %lu: %s, This is an "
+          "unhandlded error case and needs to be investigated. This is not "
+          "a retryable error!",
+          owner_->getLogID().val(),
+          error_description(st));
     }
   };
   std::unique_ptr<Request> rq = std::make_unique<WriteMetaDataLogRequest>(

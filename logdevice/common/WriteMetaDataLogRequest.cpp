@@ -139,7 +139,6 @@ void WriteMetaDataLogRequest::onAppendResult(Status st, lsn_t lsn) {
     case E::NOTFOUND:
     case E::NOTINSERVERCONFIG:
     case E::NOSEQUENCER:
-    case E::NOTREADY:
       WORKER_STAT_INCR(write_metadata_request_failed);
       RATELIMIT_ERROR(
           std::chrono::seconds(1),
@@ -151,6 +150,7 @@ void WriteMetaDataLogRequest::onAppendResult(Status st, lsn_t lsn) {
       destroyRequest(st);
       return;
     case E::NOSPC:
+    case E::NOTREADY:
     case E::OVERLOADED:
     case E::SEQNOBUFS:
     case E::SEQSYSLIMIT:
