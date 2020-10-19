@@ -118,7 +118,7 @@ void GossipSettings::defineSettings(SettingEasyInit& init) {
        SettingsCategory::FailureDetector);
   init("gossip-intervals-without-processing-threshold",
        &gossip_intervals_without_processing_threshold,
-       "0",
+       "50",
        parse_nonnegative<int32_t>(),
        "How many intervals is a node allowed to go through without processing"
        "gossip messages. If this is crossed, the node will be marked as DEAD"
