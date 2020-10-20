@@ -7,10 +7,22 @@
 # LICENSE file in the root directory of this source tree.
 
 from enum import Enum, auto
-from typing import Any, AnyStr, Dict, Iterator, List, Mapping, Optional, Tuple, TypeVar
+from typing import (
+    Any,
+    AnyStr,
+    Dict,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 # Convenience
 Attrs = Dict[str, Any]
+PayloadGroup = Mapping[int, Union[str, bytes]]
 Directories = Mapping[str, "Directory"]
 lsn_t = int
 
@@ -58,7 +70,7 @@ class Client:
         credentials: Optional[str] = None,
         csid: Optional[str] = None,
     ) -> None: ...
-    def append(self, logid: int, data: AnyStr) -> lsn_t: ...
+    def append(self, logid: int, data: Union[AnyStr, PayloadGroup]) -> lsn_t: ...
     def create_reader(self, max_logs: int) -> Reader: ...
     def data_size(self, logid: int, start_sec: float, end_sec: float) -> int: ...
     def find_key(self, logid: int, key: str) -> Tuple[int, int]: ...
