@@ -32,7 +32,7 @@ using IntegrationTestUtils::waitUntilShardsHaveEventLogState;
 
 // Kill test process after this many seconds. These tests are complex and take
 // around 25s to execute so giving them a longer timeout.
-const std::chrono::seconds TEST_TIMEOUT(DEFAULT_TEST_TIMEOUT * 2);
+const std::chrono::seconds TEST_TIMEOUT(DEFAULT_TEST_TIMEOUT * 3);
 
 namespace fs = boost::filesystem;
 
