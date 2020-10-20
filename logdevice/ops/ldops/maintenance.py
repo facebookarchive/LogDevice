@@ -147,6 +147,75 @@ async def get_maintenances(
     return resp.maintenances
 
 
+def create_maintenance_definition(
+    node_ids: Optional[Collection[NodeID]] = None,
+    shards: Optional[Collection[ShardID]] = None,
+    shard_target_state: Optional[
+        ShardOperationalState
+    ] = ShardOperationalState.MAY_DISAPPEAR,
+    sequencer_nodes: Optional[Collection[NodeID]] = None,
+    group: Optional[bool] = True,
+    ttl: Optional[timedelta] = None,
+    user: Optional[str] = None,
+    reason: Optional[str] = None,
+    extras: Optional[Mapping[str, str]] = None,
+    skip_safety_checks: Optional[bool] = False,
+    allow_passive_drains: Optional[bool] = False,
+    force_restore_rebuilding: Optional[bool] = False,
+    priority: MaintenancePriority = MaintenancePriority.MEDIUM,
+    skip_capacity_checks: Optional[bool] = False,
+) -> MaintenanceDefinition:
+    """
+    Shorthand when creating maintenance definitions.
+
+    If `nodes` argument is specified, they're treated as shards and as
+        sequencers simultaneously.
+    """
+    node_ids = set(node_ids or [])
+    shards = set(shards or [])
+    sequencer_nodes = set(sequencer_nodes or []).union(node_ids)
+
+    if ttl is None:
+        ttl = timedelta(seconds=0)
+
+    if user is None:
+        user = "__ldops__"
+
+    if reason is None:
+        reason = "Not Specified"
+
+    if extras is None:
+        extras = {}
+
+    shards = shards.union({ShardID(node=n, shard_index=ALL_SHARDS) for n in node_ids})
+    shards = _recombine_shards(shards)
+
+    return MaintenanceDefinition(
+        shards=list(shards),
+        shard_target_state=shard_target_state,
+        sequencer_nodes=list(sequencer_nodes),
+        sequencer_target_state=SequencingState.DISABLED,
+        user=user,
+        reason=reason,
+        extras=extras,
+        skip_safety_checks=skip_safety_checks,
+        skip_capacity_checks=skip_capacity_checks,
+        group=group,
+        ttl_seconds=int(ttl.total_seconds()),
+        allow_passive_drains=allow_passive_drains,
+        force_restore_rebuilding=force_restore_rebuilding,
+        priority=priority,
+    )
+
+
+def get_node_ids(maintenance_definition: MaintenanceDefinition) -> Set[NodeID]:
+    """Return a set of hostnames from the given maintenance definition."""
+    return {
+        *maintenance_definition.sequencer_nodes,
+        *[shard_id.node for shard_id in maintenance_definition.shards],
+    }
+
+
 async def apply_maintenance(
     client: AdminAPI,
     node_ids: Optional[Collection[NodeID]] = None,
@@ -168,45 +237,27 @@ async def apply_maintenance(
 ) -> Collection[MaintenanceDefinition]:
     """
     Applies maintenance to MaintenanceManager.
-    If `nodes` argument is specified, they're treated as shards and as
-        sequencers simultaneously.
+
+    Shorthand for create_maintenance_definition and admin_api.apply_maintenance
+    and returns response.maintenances.
 
     Can return multiple maintenances if group==False.
     """
-    node_ids = set(node_ids or [])
-    shards = set(shards or [])
-    sequencer_nodes = set(sequencer_nodes or []).union(node_ids)
-
-    if ttl is None:
-        ttl = timedelta(seconds=0)
-
-    if user is None:
-        user = "__ldops__"
-
-    if reason is None:
-        reason = "Not Specified"
-
-    if extras is None:
-        extras = {}
-
-    shards = shards.union({ShardID(node=n, shard_index=ALL_SHARDS) for n in node_ids})
-    shards = _recombine_shards(shards)
-
-    req = MaintenanceDefinition(
-        shards=list(shards),
+    req = create_maintenance_definition(
+        node_ids=node_ids,
+        shards=shards,
         shard_target_state=shard_target_state,
-        sequencer_nodes=list(sequencer_nodes),
-        sequencer_target_state=SequencingState.DISABLED,
+        sequencer_nodes=sequencer_nodes,
+        group=group,
+        ttl=ttl,
         user=user,
         reason=reason,
         extras=extras,
         skip_safety_checks=skip_safety_checks,
-        skip_capacity_checks=skip_capacity_checks,
-        group=group,
-        ttl_seconds=int(ttl.total_seconds()),
         allow_passive_drains=allow_passive_drains,
         force_restore_rebuilding=force_restore_rebuilding,
         priority=priority,
+        skip_capacity_checks=skip_capacity_checks,
     )
     resp: MaintenanceDefinitionResponse = await admin_api.apply_maintenance(
         client=client, req=req
