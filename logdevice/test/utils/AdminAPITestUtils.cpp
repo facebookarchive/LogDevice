@@ -127,6 +127,35 @@ bool wait_until_service_state(thrift::AdminAPIAsyncClient& admin_client,
   return false;
 }
 
+bool wait_until_node_state(
+    thrift::AdminAPIAsyncClient& admin_client,
+    node_index_t node,
+    folly::Function<bool(const thrift::NodeState&)> predicate,
+    std::chrono::steady_clock::time_point deadline) {
+  int rv = wait_until(
+      ("Node State for N" + std::to_string(node) + " matches predicate")
+          .c_str(),
+      [&]() {
+        auto response = get_nodes_state(admin_client);
+        const std::vector<thrift::NodeState>& states = response.get_states();
+        for (const auto& node_state : states) {
+          if (node_state.get_config().get_node_index() == node) {
+            return predicate(node_state);
+          }
+        }
+        ld_error("Cannot find the node N%u while reading nodes state from "
+                 "Admin API",
+                 node);
+        return false;
+      },
+      deadline);
+  if (rv != 0) {
+    ld_info("Node %u state did not match predicate!", node);
+    return false;
+  }
+  return true;
+}
+
 thrift::NodesStateResponse
 get_nodes_state(thrift::AdminAPIAsyncClient& admin_client) {
   thrift::NodesStateRequest req;

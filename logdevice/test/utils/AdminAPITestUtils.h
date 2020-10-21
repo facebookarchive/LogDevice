@@ -41,6 +41,17 @@ bool wait_until_service_state(thrift::AdminAPIAsyncClient& admin_client,
                                   std::chrono::steady_clock::time_point::max());
 
 /**
+ * Fetches the specific node NodeState and allows the user to write a predicate
+ * on it. This fails (returns `false`) if the node ID doesn't exist.
+ */
+bool wait_until_node_state(
+    thrift::AdminAPIAsyncClient& admin_client,
+    node_index_t node,
+    folly::Function<bool(const thrift::NodeState&)> predicate,
+    std::chrono::steady_clock::time_point deadline =
+        std::chrono::steady_clock::time_point::max());
+
+/**
  * Returns the ShardState object for a given shard. Returns folly::none if not
  * found.
  */

@@ -29,8 +29,46 @@ using namespace facebook::logdevice;
 using namespace facebook::logdevice::maintenance;
 
 #define LOG_ID logid_t(1)
+constexpr size_t NUM_NODES = 6;
+
+// Kill test process after this many seconds. These tests are complex and take
+// around 25s to execute so giving them a longer timeout.
+const std::chrono::seconds TEST_TIMEOUT(DEFAULT_TEST_TIMEOUT * 3);
 
 class MaintenanceAPITestDisabled : public IntegrationTestBase {};
+
+bool write_record(Client& client, int log_id) {
+  while (true) {
+    ld_info("Appending a record to log %u", log_id);
+    lsn_t lsn = client.appendSync(logid_t(log_id), "RECORD");
+    if (lsn == LSN_INVALID) {
+      switch (err) {
+        // May happen during activation
+        case E::SEQNOBUFS:
+        case E::NOSEQUENCER:
+          // The log doesn't exist yet.
+        case E::INVALID_PARAM:
+          ld_error("Failed (retryable) to append records to log %u "
+                   "because: %s:%s",
+                   log_id,
+                   error_name(err),
+                   error_description(err));
+          std::this_thread::sleep_for(std::chrono::milliseconds(500));
+          continue;
+        default:
+          ld_error("Failed to append records to log %u because: %s:%s",
+                   log_id,
+                   error_name(err),
+                   error_description(err));
+          return false;
+      }
+    } else {
+      // We were able to append.
+      break;
+    }
+  }
+  return true;
+}
 
 TEST_F(MaintenanceAPITestDisabled, NotSupported) {
   auto cluster = IntegrationTestUtils::ClusterFactory()
@@ -52,6 +90,9 @@ TEST_F(MaintenanceAPITestDisabled, NotSupported) {
 
 class MaintenanceAPITest : public IntegrationTestBase {
  public:
+  MaintenanceAPITest() : IntegrationTestBase(TEST_TIMEOUT) {}
+  ~MaintenanceAPITest() override {}
+
   void init(size_t max_unavailable_storage_capacity_pct = 80,
             size_t max_unavailable_sequencing_capacity_pct = 80);
   std::unique_ptr<IntegrationTestUtils::Cluster> cluster_;
@@ -64,7 +105,7 @@ class MaintenanceAPITest : public IntegrationTestBase {
 
 void MaintenanceAPITest::init(size_t max_unavailable_storage_capacity_pct,
                               size_t max_unavailable_sequencing_capacity_pct) {
-  const size_t num_nodes = 6;
+  const size_t num_nodes = NUM_NODES;
   const size_t num_shards = 2;
 
   auto nodes_configuration =
@@ -87,7 +128,6 @@ void MaintenanceAPITest::init(size_t max_unavailable_storage_capacity_pct,
           .enableSelfInitiatedRebuilding("3600s")
           .setParam("--max-node-rebuilding-percentage", "50")
           .setParam("--event-log-grace-period", "1ms")
-          .setParam("--enable-safety-check-periodic-metadata-update", "true")
           .setParam("--disable-event-log-trimming", "true")
           .useHashBasedSequencerAssignment()
           .setHealthMonitorParameters(
@@ -98,7 +138,6 @@ void MaintenanceAPITest::init(size_t max_unavailable_storage_capacity_pct,
               /*enable_health_based_hashing*/ false)
           .setParam("--min-gossips-for-stable-state", "0")
           .setParam("--enable-cluster-maintenance-state-machine", "true")
-          .setParam("--enable-nodes-configuration-manager", "true")
           .setParam(
               "--nodes-configuration-manager-intermediary-shard-state-timeout",
               "2s")
@@ -107,6 +146,7 @@ void MaintenanceAPITest::init(size_t max_unavailable_storage_capacity_pct,
           .setParam("--max-unavailable-sequencing-capacity-pct",
                     std::to_string(max_unavailable_sequencing_capacity_pct))
           .setParam("--loglevel", "debug")
+          .enableLogsConfigManager()
           .useStandaloneAdminServer(true)
           .setNumDBShards(num_shards)
           .setLogGroupName("test_logrange")
@@ -243,6 +283,100 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesValidNoClash) {
     const thrift::MaintenanceDefinition& result2 = output[0];
     ASSERT_EQ("bunny", result2.get_user());
     ASSERT_EQ(created_id, result2.group_id_ref().value().c_str());
+  }
+}
+
+TEST_F(MaintenanceAPITest, RollingSequencerMovement) {
+  init();
+  cluster_->start();
+  cluster_->waitUntilAllAvailable();
+  std::shared_ptr<Client> client = cluster_->createClient();
+  cluster_->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster_->getAdminServer()->createAdminClient();
+  // Create a log group /log1 (1..100)
+  std::unique_ptr<client::LogGroup> lg1 = client->makeLogGroupSync(
+      "/log1",
+      logid_range_t(logid_t(1), logid_t(100)),
+      client::LogAttributes().with_replicationFactor(2),
+      false);
+  ASSERT_NE(nullptr, lg1);
+  client->syncLogsConfigVersion(lg1->version());
+
+  cluster_->waitForRecovery();
+  // Let's start by writing some data to some logs.
+  for (int log_id = 1; log_id <= 100; ++log_id) {
+    ASSERT_TRUE(write_record(*client, log_id));
+  }
+  const std::string maintenance_user = "giant";
+  cluster_->waitUntilAllSequencersQuiescent();
+  auto disable_sequencer = [&](node_index_t node) {
+    thrift::MaintenanceDefinition request;
+    request.set_user(maintenance_user);
+    request.set_sequencer_nodes({mkNodeID(node)});
+    request.set_sequencer_target_state(SequencingState::DISABLED);
+    // to validate we correctly respect the attributes
+    request.set_skip_safety_checks(true);
+    request.set_group(true);
+    thrift::MaintenanceDefinitionResponse resp;
+    admin_client->sync_applyMaintenance(resp, request);
+    auto output = resp.get_maintenances();
+    ASSERT_EQ(1, output.size());
+    // Let's wait until the sequencer is actually disabled.
+    wait_until(("Maintenance transition for N" + std::to_string(node) +
+                " to COMPLETED")
+                   .c_str(),
+               [&]() {
+                 thrift::MaintenancesFilter req1;
+                 thrift::MaintenanceDefinitionResponse resp1;
+                 admin_client->sync_getMaintenances(resp1, req1);
+                 const auto& def = resp1.get_maintenances()[0];
+                 return def.get_progress() ==
+                     thrift::MaintenanceProgress::COMPLETED;
+               });
+  };
+
+  auto enable_sequencer = [&](node_index_t node) {
+    thrift::RemoveMaintenancesRequest req;
+    thrift::MaintenancesFilter filter;
+    filter.set_user(maintenance_user);
+    req.set_filter(filter);
+    thrift::RemoveMaintenancesResponse resp;
+    admin_client->sync_removeMaintenances(resp, req);
+    // Wait until the sequencer is actually enabled
+    ASSERT_TRUE(wait_until_node_state(
+        *admin_client, node, [&](const thrift::NodeState& node_state) {
+          if (!node_state.sequencer_state_ref().has_value()) {
+            ld_error("N%u is not a sequencer node!", node);
+            return false;
+          }
+          thrift::SequencerState seq_state =
+              node_state.sequencer_state_ref().value();
+          return (seq_state.get_state() == thrift::SequencingState::ENABLED);
+        }));
+  };
+  const int attempts = 10;
+  // Now let's hunt random sequencer nodes and disable sequencers on them and
+  // see if this blocks recovery by any means. We try this for 10 times to
+  // torture the cluster.
+  for (int i = 0; i < attempts; i++) {
+    ld_info("Targeting N%u and disabling its sequencers", i);
+    auto target_node = node_index_t(folly::Random::rand32() % NUM_NODES);
+    disable_sequencer(target_node);
+    // We roll a dice, sometimes we decide to shutdown the node as well. 25%
+    // chance.
+    bool should_shutdown = (folly::Random::rand32() % 4) == 1;
+    if (should_shutdown) {
+      cluster_->getNode(target_node).shutdown();
+    }
+    cluster_->waitUntilAllSequencersQuiescent();
+    // Write some records to be super-sure.
+    for (int log_id = 1; log_id <= 100; ++log_id) {
+      ASSERT_TRUE(write_record(*client, log_id));
+    }
+    if (should_shutdown) {
+      cluster_->getNode(target_node).start();
+    }
+    enable_sequencer(target_node);
   }
 }
 
@@ -883,11 +1017,17 @@ TEST_F(MaintenanceAPITest, unblockRebuilding) {
   // Write some records
   ld_info("Creating client");
   auto client = cluster_->createClient();
-  ld_info("Writing records");
-  for (int i = 1; i <= 1000; ++i) {
-    std::string data("data" + std::to_string(i));
-    lsn_t lsn = client->appendSync(LOG_ID, Payload(data.data(), data.size()));
-    ASSERT_NE(LSN_INVALID, lsn);
+  std::unique_ptr<client::LogGroup> lg1 = client->makeLogGroupSync(
+      "/log1",
+      logid_range_t(logid_t(1), logid_t(100)),
+      client::LogAttributes().with_replicationFactor(2),
+      false);
+  ASSERT_NE(nullptr, lg1);
+  client->syncLogsConfigVersion(lg1->version());
+  cluster_->waitUntilAllSequencersQuiescent();
+  ld_info("Writing a record to every log");
+  for (int i = 1; i <= 100; ++i) {
+    ASSERT_TRUE(write_record(*client, i));
   }
 
   // Let's apply a maintenance
