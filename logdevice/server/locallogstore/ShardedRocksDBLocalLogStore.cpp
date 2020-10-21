@@ -285,54 +285,6 @@ void ShardedRocksDBLocalLogStore::init(
           nshards_);
 }
 
-bool ShardedRocksDBLocalLogStore::wipe(
-    const std::vector<shard_index_t>& shard_indexes) {
-  ld_check(!initialized_);
-  if (initialized_) {
-    ld_critical("Wipe called after RocksDB initialisation. Ignoring.");
-    return false;
-  }
-
-  if (!is_db_local_) {
-    ld_critical("Wipe not supported for remote storage");
-    // The caller is supposed to make sure the DB is local.
-    ld_check(false);
-    return false;
-  }
-
-  if (!createOrValidatePaths()) {
-    return false;
-  }
-
-  for (shard_index_t shard_idx : shard_indexes) {
-    fs::path shard_path = shard_paths_.at(shard_idx);
-
-    try {
-      // Do not wipe "disabled" shards
-      if (fs::exists(shard_path) && !fs::is_directory(shard_path)) {
-        ld_info("%s exists but is not a directory. Not wiping shard %d",
-                shard_path.string().c_str(),
-                shard_idx);
-        continue;
-      }
-
-      // Recursively delete the directory contents (but not directory itself)
-      ld_info("Wiping shard %d at %s", shard_idx, shard_path.string().c_str());
-      for (fs::directory_iterator end_dir_it, dir_it(shard_path);
-           dir_it != end_dir_it;
-           ++dir_it) {
-        fs::remove_all(dir_it->path());
-      }
-    } catch (const fs::filesystem_error& e) {
-      ld_critical("Failed to wipe/validate %s: %s. Failing safe and aborting",
-                  shard_path.string().c_str(),
-                  e.what());
-      return false;
-    }
-  }
-  return true;
-}
-
 ShardedRocksDBLocalLogStore::~ShardedRocksDBLocalLogStore() {
   shutdown_event_.signal();
 

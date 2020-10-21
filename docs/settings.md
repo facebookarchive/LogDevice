@@ -85,7 +85,6 @@ sidebar_label: Settings
 | tls-ticket-seeds-path | The path to the TLS ticket seed file, only useful when use-tls-ticket-seeds is set. Read TLSCredProcessor::processTLSTickets to understand the format of the seed. |  | requires&nbsp;restart, server&nbsp;only |
 | use-nodes-configuration-manager-nodes-configuration | If true and enable\_nodes\_configuration\_manager is set, logdevice will use the nodes configuration from the NodesConfigurationManager. | true |  |
 | use-tls-ticket-seeds | If enabled, TLS tickets seed will be read and used to initiate TLS ticket encryption keys. Once enabled, and all the servers share the same seeds file, they will all use the same ticket encrpytion key, and they all can decrypt each others generated tickets enabling clients to resume TLS sessions between all the servers in the same cluster. | false | requires&nbsp;restart, server&nbsp;only |
-| wipe-storage-when-storage-state-none | Allow wiping the local RocksDB store when its storage state is none | false | requires&nbsp;restart, server&nbsp;only |
 | zk-config-polling-interval | polling and retry interval for Zookeeper config source | 1000ms | CLI&nbsp;only |
 | zk-vsc-max-retries | Number of transient error retries for the zookeeper versioned config store. | 3 | requires&nbsp;restart |
 

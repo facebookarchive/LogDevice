@@ -678,7 +678,7 @@ void ServerSettings::defineSettings(SettingEasyInit& init) {
      "false",
      nullptr,
      "Allow wiping the local RocksDB store when its storage state is none",
-     SERVER | REQUIRES_RESTART,
+     SERVER | REQUIRES_RESTART | DEPRECATED,
      SettingsCategory::Configuration)
 
     ("use-tls-ticket-seeds",
