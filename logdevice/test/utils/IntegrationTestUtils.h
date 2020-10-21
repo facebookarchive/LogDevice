@@ -907,6 +907,22 @@ class Cluster {
    */
   int shrink(int nnodes);
 
+  /**
+   * Shrink the cluster by removing nodes with the given indices.
+   * @return 0 on success, -1 on error.
+   */
+  int shrinkViaAdminServer(thrift::AdminAPIAsyncClient& admin_client,
+                           std::vector<node_index_t> new_indices);
+
+  /**
+   * Shrink the cluster by removing `nnodes` last nodes.
+   *
+   * Note that these nodes must already be fully disabled/drained and stopped.
+   * @return 0 on success, -1 on error.
+   */
+  int shrinkViaAdminServer(thrift::AdminAPIAsyncClient& admin_client,
+                           int nnodes);
+
   std::shared_ptr<UpdateableConfig> getConfig() const {
     return config_;
   }
@@ -1346,7 +1362,8 @@ class Cluster {
                                const std::string& user = "integration_test",
                                bool drain = true,
                                bool force_restore = false,
-                               const std::string& reason = "testing");
+                               const std::string& reason = "testing",
+                               bool disable_sequencer = false);
   /**
    * Gracefully shut down the given nodes. Faster than calling shutdown() on
    * them one by one.

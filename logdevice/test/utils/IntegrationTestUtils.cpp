@@ -1185,27 +1185,25 @@ int Cluster::expandViaAdminServer(thrift::AdminAPIAsyncClient& admin_client,
   try {
     admin_client.sync_addNodes(resp, req);
   } catch (const thrift::ClusterMembershipOperationFailed& exception) {
-    ld_error("Failed to expand the cluster with nodes %s: %s",
+    ld_error("Failed to expand the cluster with nodes %s: %s (%s)",
              toString(new_indices).c_str(),
-             exception.what());
+             exception.what(),
+             thriftToJson(exception).c_str());
     return -1;
   }
-  std::cout << "RESPONSE" << std::endl << thriftToJson(resp) << std::endl;
   vcs_config_version_t new_config_version(
       static_cast<uint64_t>(resp.get_new_nodes_configuration_version()));
   ld_info("Nodes added via Admin API in new config version %lu",
           new_config_version.val_);
 
   waitForServersAndClientsToProcessNodesConfiguration(new_config_version);
-  if (!start_nodes) {
-    return 0;
-  }
-
   for (size_t i = 0; i < new_indices.size(); ++i) {
     node_index_t idx = new_indices[i];
     nodes_[idx] = createNode(idx, std::move(addrs[i]));
   }
-
+  if (!start_nodes) {
+    return 0;
+  }
   return start(new_indices);
 }
 
@@ -1379,6 +1377,80 @@ int Cluster::shrink(int nnodes) {
   }
 
   return shrink(indices);
+}
+
+int Cluster::shrinkViaAdminServer(thrift::AdminAPIAsyncClient& admin_client,
+                                  std::vector<node_index_t> indices) {
+  if (indices.empty()) {
+    ld_error("shrink() called with no nodes");
+    return -1;
+  }
+
+  std::sort(indices.begin(), indices.end());
+  if (std::unique(indices.begin(), indices.end()) != indices.end()) {
+    ld_error("shrink() called with duplicate indices");
+    return -1;
+  }
+
+  // Kill the nodes before we remove them from the cluster.
+  ld_info("Killing nodes (for shrink) %s", toString(indices).c_str());
+  for (node_index_t i : indices) {
+    if (getNode(i).isRunning()) {
+      getNode(i).kill();
+    }
+  }
+
+  ld_info("Shrinking with nodes %s", toString(indices).c_str());
+
+  // Submit the request to Admin Server
+  thrift::RemoveNodesRequest req;
+  thrift::RemoveNodesResponse resp;
+  for (node_index_t i : indices) {
+    thrift::NodesFilter filter;
+    thrift::NodeID node;
+    node.set_node_index(i);
+    filter.set_node(node);
+    req.node_filters_ref()->push_back(std::move(filter));
+  }
+
+  try {
+    admin_client.sync_removeNodes(resp, req);
+  } catch (const thrift::ClusterMembershipOperationFailed& exception) {
+    ld_error("Failed to shrink the cluster with nodes %s: %s (%s)",
+             toString(indices).c_str(),
+             exception.what(),
+             thriftToJson(exception).c_str());
+    return -1;
+  }
+  vcs_config_version_t new_config_version(
+      static_cast<uint64_t>(resp.get_new_nodes_configuration_version()));
+  ld_info("Nodes removed via Admin API in new config version %lu",
+          new_config_version.val_);
+
+  waitForServersAndClientsToProcessNodesConfiguration(new_config_version);
+  // After we have removed the nodes from config.
+  for (node_index_t i : indices) {
+    nodes_.erase(i);
+  }
+  return 0;
+}
+
+int Cluster::shrinkViaAdminServer(thrift::AdminAPIAsyncClient& admin_client,
+                                  int nnodes) {
+  auto cfg = config_->get();
+
+  // Find nnodes highest node indices.
+  std::vector<node_index_t> indices;
+  for (auto it = nodes_.crbegin(); it != nodes_.crend() && nnodes > 0;
+       ++it, --nnodes) {
+    indices.push_back(it->first);
+  }
+  if (nnodes != 0) {
+    ld_error("shrinkViaAdminServer() called with too many nodes");
+    return -1;
+  }
+
+  return shrinkViaAdminServer(admin_client, indices);
 }
 
 void Cluster::stop() {
@@ -1737,7 +1809,8 @@ std::string Cluster::applyMaintenance(thrift::AdminAPIAsyncClient& admin_client,
                                       const std::string& user,
                                       bool drain,
                                       bool force_restore,
-                                      const std::string& reason) {
+                                      const std::string& reason,
+                                      bool disable_sequencer) {
   thrift::MaintenanceDefinitionResponse resp;
   thrift::MaintenanceDefinition req;
   req.set_user(user);
@@ -1746,6 +1819,10 @@ std::string Cluster::applyMaintenance(thrift::AdminAPIAsyncClient& admin_client,
       drain ? thrift::ShardOperationalState::DRAINED
             : thrift::ShardOperationalState::MAY_DISAPPEAR);
   req.set_priority(thrift::MaintenancePriority::IMMINENT);
+  if (disable_sequencer) {
+    req.set_sequencer_nodes({mkNodeID(node_id)});
+    req.set_sequencer_target_state(thrift::SequencingState::DISABLED);
+  }
   req.set_force_restore_rebuilding(force_restore);
   req.set_shards({mkShardID(node_id, shard_idx)});
   req.set_force_restore_rebuilding(force_restore);
