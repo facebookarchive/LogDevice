@@ -156,6 +156,26 @@ STAT_DEFINE(read_stream_started_violations, SUM)
 STAT_DEFINE(read_stream_gap_violations, SUM)
 STAT_DEFINE(read_stream_record_violations, SUM)
 
+// Read stream byte offset computation
+// Number of instances where byte offset is missing in the record payload
+STAT_DEFINE(read_stream_missing_record_offset, SUM)
+// Number of instances where epoch offset was unavailable
+STAT_DEFINE(read_stream_missing_epoch_offset, SUM)
+// Number of instances where byte offset was delivered as part of read request
+STAT_DEFINE(read_stream_included_byte_offset, SUM)
+
+// Read stream error computing epoch offset
+// Epoch offset unavailable due to store uninitialized
+STAT_DEFINE(epoch_offset_store_uninitialized, SUM)
+// Epoch offset unavailable due to error getting log metadata for earlier epochs
+STAT_DEFINE(epoch_offset_logmetadata_previous_error, SUM)
+// Epoch offset unavailable due to log metadata unavailable in current epoch
+STAT_DEFINE(epoch_offset_logmetadata_current_notfound, SUM)
+// Epoch offset unavailable due to error in getting log metadata in current epoch
+STAT_DEFINE(epoch_offset_logmetadata_current_error, SUM)
+// Request to retrieve epoch offset through log state
+STAT_DEFINE(epoch_offset_recover_logstate, SUM)
+
 // How many times did we consult Read Throttling framework
 STAT_DEFINE(read_throttling_num_throttle_checks, SUM)
 // How many times a read attempt was throttled because of

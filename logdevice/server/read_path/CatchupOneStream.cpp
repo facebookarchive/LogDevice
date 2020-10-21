@@ -367,12 +367,22 @@ int ReadingCallback::processRecord(
   }
 
   OffsetMap offsets;
-  if (stream_->include_byte_offset_ && offsets_within_epoch.isValid()) {
-    // epoch OffsetMap value has to be known to determine global OffsetMap.
-    OffsetMap epoch_offsets = getEpochOffsets(lsn_to_epoch(lsn), log_state);
-    if (epoch_offsets.isValid()) {
-      offsets = OffsetMap::mergeOffsets(
-          std::move(epoch_offsets), offsets_within_epoch);
+  if (stream_->include_byte_offset_) {
+    if (offsets_within_epoch.isValid()) {
+      // epoch OffsetMap value has to be known to determine global OffsetMap.
+      OffsetMap epoch_offsets = getEpochOffsets(lsn_to_epoch(lsn), log_state);
+      if (epoch_offsets.isValid()) {
+        offsets = OffsetMap::mergeOffsets(
+            std::move(epoch_offsets), offsets_within_epoch);
+        STAT_INCR(
+            catchup_->deps_.getStatsHolder(), read_stream_included_byte_offset);
+      } else {
+        STAT_INCR(
+            catchup_->deps_.getStatsHolder(), read_stream_missing_epoch_offset);
+      }
+    } else {
+      STAT_INCR(
+          catchup_->deps_.getStatsHolder(), read_stream_missing_record_offset);
     }
   }
 
@@ -442,6 +452,8 @@ OffsetMap ReadingCallback::getEpochOffsets(epoch_t record_epoch,
                                            LogStorageState& log_state) {
   if (store_ == nullptr) {
     ld_error("Store is not initialized in ReadingCallback::getEpochOffsets");
+    STAT_INCR(
+        catchup_->deps_.getStatsHolder(), epoch_offset_store_uninitialized);
     return OffsetMap();
   }
   LogStorageState::LastReleasedLSN last_released_lsn =
@@ -491,6 +503,8 @@ OffsetMap ReadingCallback::getEpochOffsets(epoch_t record_epoch,
     } else if (rv != 0 && err == E::LOCAL_LOG_STORE_READ) {
       ld_error("Error while reading PerEpochLogMetadata for epoch %u",
                record_epoch.val_ - 1);
+      STAT_INCR(catchup_->deps_.getStatsHolder(),
+                epoch_offset_logmetadata_previous_error);
       return OffsetMap();
     } else {
       ld_check(err == E::NOTFOUND || err == E::WOULDBLOCK);
@@ -526,11 +540,15 @@ OffsetMap ReadingCallback::getEpochOffsets(epoch_t record_epoch,
                           "but missing PerEpochLogMetadata",
                           record_epoch.val_,
                           last_epoch.val_);
+        STAT_INCR(catchup_->deps_.getStatsHolder(),
+                  epoch_offset_logmetadata_current_notfound);
         return OffsetMap();
       } else if (err != E::WOULDBLOCK) {
         ld_check(err == E::LOCAL_LOG_STORE_READ);
         ld_error("Error while reading PerEpochLogMetadata for epoch %u",
                  record_epoch.val_);
+        STAT_INCR(catchup_->deps_.getStatsHolder(),
+                  epoch_offset_logmetadata_current_error);
         return OffsetMap();
       }
       ld_check(err == E::WOULDBLOCK);
@@ -549,19 +567,20 @@ OffsetMap ReadingCallback::getEpochOffsets(epoch_t record_epoch,
         ->getStorageTaskQueueForShard(stream_->shard_)
         ->putTask(std::move(task));
     STAT_INCR(catchup_->deps_.getStatsHolder(), epoch_offset_to_storage);
-  } else {
-    // epoch_offsets_from_log_state is not updated or was not fetched yet
-    // as checked above.
-    // Try to get epoch_offsets from contacting sequencer. The result of log
-    // state recovery may be available next times when record have
-    // offsets_within_epoch and epoch_offsets has to be found. Request will be
-    // rejected if previous one was sent recently.
-    catchup_->deps_.recoverLogState(stream_->log_id_,
-                                    stream_->shard_,
-                                    true // force to send request to sequencer
-    );
     return OffsetMap();
   }
+
+  // epoch_offsets_from_log_state is not updated or was not fetched yet
+  // as checked above.
+  // Try to get epoch_offsets from contacting sequencer. The result of log
+  // state recovery may be available next times when record have
+  // offsets_within_epoch and epoch_offsets has to be found. Request will be
+  // rejected if previous one was sent recently.
+  catchup_->deps_.recoverLogState(stream_->log_id_,
+                                  stream_->shard_,
+                                  true // force to send request to sequencer
+  );
+  STAT_INCR(catchup_->deps_.getStatsHolder(), epoch_offset_recover_logstate);
   return OffsetMap();
 }
 
