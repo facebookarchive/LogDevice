@@ -568,9 +568,9 @@ TEST_F(ConfigIntegrationTest, NumLogsConfiguredStat) {
         new_config,
         cluster->getConfig()->getNodesConfiguration(),
         selector,
-        true,
-        true /* provision_if_empty */,
-        false /* update_if_exists */);
+        EpochMetaData::Updater::Options()
+            .setUseStorageSetFormat()
+            .setProvisionIfEmpty());
     (*provisioner)(EXTRA_LOG_ID, metadata, /* MetaDataTracer */ nullptr);
     auto epoch_store = cluster->createEpochStore();
     int rv = static_cast<FileEpochStore*>(epoch_store.get())

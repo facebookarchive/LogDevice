@@ -326,7 +326,8 @@ class NextEpochTestRequest : public Request {
     // increment next epoch the first time to get its current value
     int rv_outer = epochstore_->createOrUpdateMetaData(
         logid_,
-        std::make_shared<EpochMetaDataUpdateToNextEpoch>(),
+        std::make_shared<EpochMetaDataUpdateToNextEpoch>(
+            EpochMetaData::Updater::Options().setProvisionIfEmpty()),
         [this](Status st,
                logid_t logid,
                std::unique_ptr<EpochMetaData> info,
@@ -349,7 +350,8 @@ class NextEpochTestRequest : public Request {
           EpochMetaData base_info(*info);
           int rv = epochstore_->createOrUpdateMetaData(
               logid_,
-              std::make_shared<EpochMetaDataUpdateToNextEpoch>(),
+              std::make_shared<EpochMetaDataUpdateToNextEpoch>(
+                  EpochMetaData::Updater::Options().setProvisionIfEmpty()),
               [base_info, this](
                   Status st1,
                   logid_t lid,
@@ -425,7 +427,9 @@ class UpdateMetaDataRequest : public Request {
     int rv1 = epochstore_->createOrUpdateMetaData(
         logid_,
         std::make_shared<EpochMetaDataUpdateToNextEpoch>(
-            config_, config_->getNodesConfiguration()),
+            EpochMetaData::Updater::Options().setProvisionIfEmpty(),
+            config_,
+            config_->getNodesConfiguration()),
         [this](Status st1,
                logid_t lid,
                std::unique_ptr<EpochMetaData> info,
@@ -456,8 +460,10 @@ class UpdateMetaDataRequest : public Request {
                   config_,
                   config_->getNodesConfiguration(),
                   nodeset_selector_,
-                  /* use_storage_set_format */ true,
-                  /* provision_if_empty */ true),
+                  EpochMetaData::Updater::Options()
+                      .setUseStorageSetFormat()
+                      .setProvisionIfEmpty()
+                      .setUpdateIfExists()),
               [base_info, next_storage_set, this](
                   Status st2,
                   logid_t lid2,
@@ -483,7 +489,9 @@ class UpdateMetaDataRequest : public Request {
                         config_,
                         config_->getNodesConfiguration(),
                         nodeset_selector_,
-                        true),
+                        EpochMetaData::Updater::Options()
+                            .setUseStorageSetFormat()
+                            .setUpdateIfExists()),
                     [prev_info, this](Status st3,
                                       logid_t /* logid */,
                                       std::unique_ptr<EpochMetaData> next_info2,
@@ -691,7 +699,9 @@ TEST_P(ZookeeperEpochStoreTestEmpty, NoRootNodeEpochMetaDataTestNoCreation) {
     rv = epochstore->createOrUpdateMetaData(
         logid,
         std::make_shared<EpochMetaDataUpdateToNextEpoch>(
-            config->get(), config->get()->getNodesConfiguration()),
+            EpochMetaData::Updater::Options().setProvisionIfEmpty(),
+            config->get(),
+            config->get()->getNodesConfiguration()),
         [&sem](Status st,
                logid_t,
                std::unique_ptr<EpochMetaData>,
@@ -976,7 +986,9 @@ TEST_P(ZookeeperEpochStoreTest, ProvisionNewLog) {
         int rv = epochstore->createOrUpdateMetaData(
             logid_t(4),
             std::make_shared<EpochMetaDataUpdateToNextEpoch>(
-                config->get(), config->get()->getNodesConfiguration()),
+                EpochMetaData::Updater::Options().setProvisionIfEmpty(),
+                config->get(),
+                config->get()->getNodesConfiguration()),
             [&sem](Status st,
                    logid_t,
                    std::unique_ptr<EpochMetaData> info,
@@ -1019,7 +1031,9 @@ TEST_F(ZookeeperEpochStoreTestBase, ZookeeperFailures) {
           int rv = epochstore->createOrUpdateMetaData(
               logid_t(1),
               std::make_shared<EpochMetaDataUpdateToNextEpoch>(
-                  config->get(), config->get()->getNodesConfiguration()),
+                  EpochMetaData::Updater::Options().setProvisionIfEmpty(),
+                  config->get(),
+                  config->get()->getNodesConfiguration()),
               [&sem, expected_status](
                   Status st,
                   logid_t,
@@ -1110,7 +1124,9 @@ TEST_F(ZookeeperEpochStoreMigrationTest, testMigration) {
     int rv = epochstore->createOrUpdateMetaData(
         logid,
         std::make_shared<EpochMetaDataUpdateToNextEpoch>(
-            config->get(), config->getNodesConfiguration()),
+            EpochMetaData::Updater::Options().setProvisionIfEmpty(),
+            config->get(),
+            config->getNodesConfiguration()),
         [&](Status st,
             logid_t,
             std::unique_ptr<EpochMetaData> info,

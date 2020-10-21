@@ -64,16 +64,6 @@ namespace facebook { namespace logdevice {
  *   provisioned log, uses nodeset size from log attributes and seed 0.
  * @param nodeset_selector  Used for picking a nodeset. If nullptr, a new
  *   nodeset selector will be created according to config.
- * @param provision_if_empty
- *   If `info` is null or empty, provisions a new one if this is
- *   true. If false, the operation will fail with E::EMPTY.
- * @param update_if_exists
- *   If `info` is not null and not empty, updates it if this is
- *   true. If false, the operation will fail with E::EXISTS.
- *   If `info` is not empty and not disabled and doesn't have
- *   WRITTEN_IN_METADATALOG flag, then update_if_exists must be false.
- * @param force_update
- *   Update the metadata even if the nodeset doesn't change.
  */
 EpochMetaData::UpdateResult updateMetaDataIfNeeded(
     logid_t log_id,
@@ -83,10 +73,7 @@ EpochMetaData::UpdateResult updateMetaDataIfNeeded(
     folly::Optional<nodeset_size_t> target_nodeset_size,
     folly::Optional<uint64_t> nodeset_seed,
     NodeSetSelector* nodeset_selector,
-    bool use_storage_set_format,
-    bool provision_if_empty = false,
-    bool update_if_exists = true,
-    bool force_update = false);
+    const EpochMetaData::Updater::Options& options);
 
 // This class is only used in tests and in deprecated metadata-utility.
 // Normally metadata updates happen together with activating sequencer using
@@ -99,37 +86,17 @@ class CustomEpochMetaDataUpdater final : public EpochMetaData::Updater {
    * @param nodes_configuration    contains configuration of nodes in the
    * cluster
    * @param nodeset_selector       nodeset_selector for picking a nodeset
-   * @param use_storage_set_format Use the new copyset serialization format for
-   *                               Flexible Log Sharding.
-   *                               TODO(T15517759): remove this options once all
-   *                               production tiers are converted to use this
-   *                               option by default.
-   * @param provision_if_empty     if there is no entry in the epoch store,
-   *                               provisions a new one, if this is true. If
-   *                               false, the operation will fail with
-   *                               E::EMPTY
-   * @param update_if_exists       if there is an existing entry in the epoch
-   *                               store, updates it, if this is true. If false,
-   *                               the operation will fail with E::EXISTS
-   * @param force_update           update the metadata even if the nodeset
-   *                               doesn't change
    */
   CustomEpochMetaDataUpdater(
       std::shared_ptr<Configuration> config,
       std::shared_ptr<const configuration::nodes::NodesConfiguration>
           nodes_configuration,
       std::shared_ptr<NodeSetSelector> nodeset_selector,
-      bool use_storage_set_format,
-      bool provision_if_empty = false,
-      bool update_if_exists = true,
-      bool force_update = false)
+      const EpochMetaData::Updater::Options& options)
       : config_(std::move(config)),
         nodes_configuration_(std::move(nodes_configuration)),
         nodeset_selector_(std::move(nodeset_selector)),
-        use_storage_set_format_(use_storage_set_format),
-        provision_if_empty_(provision_if_empty),
-        update_if_exists_(update_if_exists),
-        force_update_(force_update) {
+        options_(options) {
     ld_check(config_ != nullptr);
     ld_check(nodeset_selector_ != nullptr);
   }
@@ -155,10 +122,7 @@ class CustomEpochMetaDataUpdater final : public EpochMetaData::Updater {
   const std::shared_ptr<const configuration::nodes::NodesConfiguration>
       nodes_configuration_;
   const std::shared_ptr<NodeSetSelector> nodeset_selector_;
-  const bool use_storage_set_format_;
-  const bool provision_if_empty_;
-  const bool update_if_exists_;
-  const bool force_update_;
+  const EpochMetaData::Updater::Options options_;
 };
 
 /**
@@ -208,19 +172,17 @@ class CustomEpochMetaDataUpdater final : public EpochMetaData::Updater {
 class EpochMetaDataUpdateToNextEpoch final : public EpochMetaData::Updater {
  public:
   explicit EpochMetaDataUpdateToNextEpoch(
+      const EpochMetaData::Updater::Options& options,
       std::shared_ptr<Configuration> config = nullptr,
       std::shared_ptr<const configuration::nodes::NodesConfiguration>
           nodes_configuration = nullptr,
       std::shared_ptr<EpochMetaData> updated_metadata = nullptr,
-      folly::Optional<epoch_t> acceptable_activation_epoch = folly::none,
-      bool use_storage_set_format = false,
-      bool provision_if_empty = true)
+      folly::Optional<epoch_t> acceptable_activation_epoch = folly::none)
       : config_(std::move(config)),
         nodes_configuration_(std::move(nodes_configuration)),
         updated_metadata_(updated_metadata),
         acceptable_activation_epoch_(acceptable_activation_epoch),
-        use_storage_set_format_(use_storage_set_format),
-        provision_if_empty_(provision_if_empty) {
+        options_(options) {
     // If metadata was provided, make the write conditional on that metadata
     // being up-to-date.
     if (updated_metadata_ != nullptr) {
@@ -254,8 +216,7 @@ class EpochMetaDataUpdateToNextEpoch final : public EpochMetaData::Updater {
       nodes_configuration_;
   std::shared_ptr<EpochMetaData> updated_metadata_;
   folly::Optional<epoch_t> acceptable_activation_epoch_;
-  bool use_storage_set_format_;
-  bool provision_if_empty_;
+  const EpochMetaData::Updater::Options options_;
 };
 
 /**

@@ -436,7 +436,8 @@ TEST_F(MetaDataLogsIntegrationTest, MetaDataLogAppendWithStaleSequencerEpoch) {
   for (epoch_t e = epoch_t(EPOCH_MIN.val_ + 2); e < epoch_t(5); ++e.val_) {
     epoch_store->createOrUpdateMetaData(
         LOG_ID,
-        std::make_shared<EpochMetaDataUpdateToNextEpoch>(),
+        std::make_shared<EpochMetaDataUpdateToNextEpoch>(
+            EpochMetaData::Updater::Options().setProvisionIfEmpty()),
         [&](Status status,
             logid_t log_id,
             std::unique_ptr<EpochMetaData> info,

@@ -176,9 +176,10 @@ void NodeSetTest::updateMetaDataInEpochStore(logid_t log) {
                   config,
                   cluster_->getConfig()->getNodesConfiguration(),
                   selector,
-                  true,
-                  true /* provision_if_empty */,
-                  true /* update_if_exists */),
+                  EpochMetaData::Updater::Options()
+                      .setUseStorageSetFormat()
+                      .setProvisionIfEmpty()
+                      .setUpdateIfExists()),
               [this](Status st,
                      logid_t logid,
                      std::unique_ptr<EpochMetaData> info,

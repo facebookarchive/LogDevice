@@ -308,17 +308,17 @@ ReactivationDecision SequencerBackgroundActivator::processMetadataChanges(
       Worker::settings().epoch_metadata_use_new_storage_set_format;
 
   // Use the same logic for updating metadata as during sequencer activation.
-  UpdateResult result = updateMetaDataIfNeeded(logid,
-                                               new_metadata,
-                                               *config,
-                                               *nodes_configuration,
-                                               target_nodeset_size,
-                                               nodeset_seed,
-                                               /* nodeset_selector */ nullptr,
-                                               use_new_storage_set_format,
-                                               /* provision_if_empty */ false,
-                                               /* update_if_exists */ true,
-                                               /* force_update */ false);
+  UpdateResult result = updateMetaDataIfNeeded(
+      logid,
+      new_metadata,
+      *config,
+      *nodes_configuration,
+      target_nodeset_size,
+      nodeset_seed,
+      /* nodeset_selector */ nullptr,
+      EpochMetaData::Updater::Options()
+          .setUseStorageSetFormat(use_new_storage_set_format)
+          .setUpdateIfExists());
   if (result == UpdateResult::FAILED) {
     RATELIMIT_ERROR(
         std::chrono::seconds(10),
@@ -343,17 +343,17 @@ ReactivationDecision SequencerBackgroundActivator::processMetadataChanges(
   // infinite loop of nodeset updates.
   {
     auto another_metadata = std::make_unique<EpochMetaData>(*new_metadata);
-    auto another_res = updateMetaDataIfNeeded(logid,
-                                              another_metadata,
-                                              *config,
-                                              *nodes_configuration,
-                                              target_nodeset_size,
-                                              nodeset_seed,
-                                              /* nodeset_selector */ nullptr,
-                                              use_new_storage_set_format,
-                                              false,
-                                              true,
-                                              false);
+    auto another_res = updateMetaDataIfNeeded(
+        logid,
+        another_metadata,
+        *config,
+        *nodes_configuration,
+        target_nodeset_size,
+        nodeset_seed,
+        /* nodeset_selector */ nullptr,
+        EpochMetaData::Updater::Options()
+            .setUseStorageSetFormat(use_new_storage_set_format)
+            .setUpdateIfExists());
 
     // The first check is redundant but provides a better error message.
     if (!ld_catch(another_res != UpdateResult::FAILED,

@@ -56,9 +56,9 @@ class FileEpochStoreTest : public ::testing::Test {
             config,
             config->getNodesConfiguration(),
             std::move(selector),
-            true,
-            true /* provision_if_empty */,
-            false /* update_if_exists */),
+            EpochMetaData::Updater::Options()
+                .setUseStorageSetFormat()
+                .setProvisionIfEmpty()),
         config);
     ASSERT_EQ(0, rv);
   }
@@ -75,7 +75,8 @@ class FileEpochStoreTest : public ::testing::Test {
 TEST_F(FileEpochStoreTest, NextEpochWithMetaData) {
   store_->createOrUpdateMetaData(
       logid_t(1),
-      std::make_shared<EpochMetaDataUpdateToNextEpoch>(),
+      std::make_shared<EpochMetaDataUpdateToNextEpoch>(
+          EpochMetaData::Updater::Options().setProvisionIfEmpty()),
       [](Status status,
          logid_t,
          std::unique_ptr<EpochMetaData> info,
@@ -88,7 +89,8 @@ TEST_F(FileEpochStoreTest, NextEpochWithMetaData) {
       MetaDataTracer());
   store_->createOrUpdateMetaData(
       logid_t(1),
-      std::make_shared<EpochMetaDataUpdateToNextEpoch>(),
+      std::make_shared<EpochMetaDataUpdateToNextEpoch>(
+          EpochMetaData::Updater::Options().setProvisionIfEmpty()),
       [](Status status,
          logid_t,
          std::unique_ptr<EpochMetaData> info,
@@ -105,7 +107,8 @@ TEST_F(FileEpochStoreTest, UpdateMetaData) {
   StorageSet shards;
   store_->createOrUpdateMetaData(
       logid_t(1),
-      std::make_shared<EpochMetaDataUpdateToNextEpoch>(),
+      std::make_shared<EpochMetaDataUpdateToNextEpoch>(
+          EpochMetaData::Updater::Options().setProvisionIfEmpty()),
       [&shards](Status status,
                 logid_t,
                 std::unique_ptr<EpochMetaData> info,
@@ -123,8 +126,10 @@ TEST_F(FileEpochStoreTest, UpdateMetaData) {
       cluster_config_->get(),
       cluster_config_->get()->getNodesConfiguration(),
       selector,
-      true,
-      true);
+      EpochMetaData::Updater::Options()
+          .setUseStorageSetFormat()
+          .setProvisionIfEmpty()
+          .setUpdateIfExists());
   // change to a different storage_set
   shards = shards == StorageSet{N1, N2, N3} ? StorageSet{N2, N3, N4}
                                             : StorageSet{N1, N2, N3};

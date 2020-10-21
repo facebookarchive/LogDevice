@@ -228,8 +228,12 @@ TEST_F(EpochMetaDataTest, MetaDataLogWritten) {
   ASSERT_TRUE(cfg);
   ASSERT_NE(nullptr, cfg.get());
   auto selector = std::make_shared<TestNodeSetSelector>();
-  CustomEpochMetaDataUpdater updater(
-      cfg, cfg->getNodesConfiguration(), selector, true);
+  CustomEpochMetaDataUpdater updater(cfg,
+                                     cfg->getNodesConfiguration(),
+                                     selector,
+                                     EpochMetaData::Updater::Options()
+                                         .setUseStorageSetFormat()
+                                         .setUpdateIfExists());
   selector->setStorageSet(StorageSet{N1, N2, N3});
   rv = updater(LOGID, valid_info, /* MetaDataTracer */ nullptr);
   EXPECT_EQ(EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION, rv);
@@ -648,8 +652,12 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
   LogsConfig::LogAttributes& attrs =
       const_cast<LogsConfig::LogAttributes&>(logcfg->attrs());
   auto selector = std::make_shared<TestNodeSetSelector>();
-  CustomEpochMetaDataUpdater updater(
-      cfg, cfg->getNodesConfiguration(), selector, true);
+  CustomEpochMetaDataUpdater updater(cfg,
+                                     cfg->getNodesConfiguration(),
+                                     selector,
+                                     EpochMetaData::Updater::Options()
+                                         .setUseStorageSetFormat()
+                                         .setUpdateIfExists());
 
   auto zk_record_default = std::make_unique<EpochMetaData>();
   auto rv =
@@ -731,12 +739,13 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdaterTest) {
   EXPECT_EQ(initial_epoch_incremented_at, zk_record->epoch_incremented_at);
 
   // test metadata initial provision
-  CustomEpochMetaDataUpdater provisioning_updater(cfg,
-                                                  cfg->getNodesConfiguration(),
-                                                  selector,
-                                                  true,
-                                                  true /* provision_if_empty */,
-                                                  false /* update_if_exists */);
+  CustomEpochMetaDataUpdater provisioning_updater(
+      cfg,
+      cfg->getNodesConfiguration(),
+      selector,
+      EpochMetaData::Updater::Options()
+          .setUseStorageSetFormat()
+          .setProvisionIfEmpty());
   zk_record.reset();
   StorageSet shards{N1, N2, N3};
   attrs = attrs.with_replicationFactor(2).with_nodeSetSize(3);
@@ -758,7 +767,10 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdateToNextEpochTest) {
   ASSERT_NE(nullptr, cfg.get()->serverConfig());
   ASSERT_NE(nullptr, cfg.get()->logsConfig());
   auto logcfg = cfg->getLogGroupByIDShared(logid_t(2));
-  EpochMetaDataUpdateToNextEpoch updater(cfg, cfg->getNodesConfiguration());
+  EpochMetaDataUpdateToNextEpoch updater(
+      EpochMetaData::Updater::Options().setProvisionIfEmpty(),
+      cfg,
+      cfg->getNodesConfiguration());
 
   auto zk_record_default = std::make_unique<EpochMetaData>();
   auto rv =
@@ -778,7 +790,11 @@ TEST_F(EpochMetaDataTest, EpochMetaDataUpdateToNextEpochTest) {
   EXPECT_EQ(cmp, *zk_record);
 
   EpochMetaDataUpdateToNextEpoch updater_conditional(
-      cfg, cfg->getNodesConfiguration(), nullptr, cmp.h.epoch);
+      EpochMetaData::Updater::Options().setProvisionIfEmpty(),
+      cfg,
+      cfg->getNodesConfiguration(),
+      nullptr,
+      cmp.h.epoch);
 
   rv = updater_conditional(logid_t(2), zk_record, /* MetaDataTracer */ nullptr);
   EXPECT_EQ(EpochMetaData::UpdateResult::SUBSTANTIAL_RECONFIGURATION, rv);

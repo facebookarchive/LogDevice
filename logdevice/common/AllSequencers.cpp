@@ -209,12 +209,14 @@ int AllSequencers::getEpochMetaData(
   int rv = epoch_store_->createOrUpdateMetaData(
       logid,
       std::make_shared<EpochMetaDataUpdateToNextEpoch>(
+          EpochMetaData::Updater::Options()
+              .setUseStorageSetFormat(
+                  settings_->epoch_metadata_use_new_storage_set_format)
+              .setProvisionIfEmpty(!check_metadata_log_before_provisioning),
           cfg,
           nodes_configuration,
           new_metadata,
-          acceptable_activation_epoch,
-          settings_->epoch_metadata_use_new_storage_set_format,
-          /*provision_if_empty=*/!check_metadata_log_before_provisioning),
+          acceptable_activation_epoch),
       cb,
       std::move(tracer),
       EpochStore::WriteNodeID::MY);

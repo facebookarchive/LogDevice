@@ -56,10 +56,11 @@ int MetaDataProvisioner::provisionEpochMetaDataForLog(
           config,
           config_->getNodesConfiguration(),
           std::move(selector),
-          use_storage_set_format,
-          provision_if_empty,
-          update_if_exists,
-          force_update),
+          EpochMetaData::Updater::Options()
+              .setUseStorageSetFormat(use_storage_set_format)
+              .setProvisionIfEmpty(provision_if_empty)
+              .setUpdateIfExists(update_if_exists)
+              .setForceUpdate(force_update)),
       write_metadata_log);
 }
 
@@ -87,7 +88,8 @@ int MetaDataProvisioner::provisionEpochMetaDataForLog(
   // higher epoch than the metadata epoch in metadata logs
   file_store->createOrUpdateMetaData(
       log_id,
-      std::make_shared<EpochMetaDataUpdateToNextEpoch>(),
+      std::make_shared<EpochMetaDataUpdateToNextEpoch>(
+          EpochMetaData::Updater::Options().setProvisionIfEmpty()),
       [log_id, &sem, &metadata](Status st,
                                 logid_t logid,
                                 std::unique_ptr<EpochMetaData> info,

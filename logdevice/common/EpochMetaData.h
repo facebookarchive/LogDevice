@@ -373,6 +373,67 @@ class EpochMetaData {
    */
   class Updater {
    public:
+    class Options {
+     public:
+      Options() = default;
+      /** Use the new copyset serialization format for  Flexible Log Sharding.
+       * TODO(T15517759): remove this options once all production tiers are
+       * converted to use this option by default.
+       */
+      Options& setUseStorageSetFormat(bool arg = true) {
+        use_storage_set_format_ = arg;
+        return *this;
+      }
+
+      bool useStorageSetFormat() const {
+        return use_storage_set_format_;
+      }
+
+      /**
+       * If there is no entry in the epoch store, provisions a new one, if this
+       * is true. If false, the operation will fail with E::EMPTY
+       */
+      Options& setProvisionIfEmpty(bool arg = true) {
+        provision_if_empty_ = arg;
+        return *this;
+      }
+
+      bool provisionIfEmpty() const {
+        return provision_if_empty_;
+      }
+
+      /**
+       * If there is an existing entry in the epoch store, updates it, if this
+       * is true. If false, the operation will fail with E::EXISTS
+       */
+      Options& setUpdateIfExists(bool arg = true) {
+        update_if_exists_ = arg;
+        return *this;
+      }
+
+      bool updateIfExists() const {
+        return update_if_exists_;
+      }
+
+      /**
+       *   Update the metadata even if the nodeset doesn't change.
+       */
+      Options& setForceUpdate(bool arg = true) {
+        force_update_ = arg;
+        return *this;
+      }
+
+      bool forceUpdate() const {
+        return force_update_;
+      }
+
+     protected:
+      bool use_storage_set_format_{false};
+      bool provision_if_empty_{false};
+      bool update_if_exists_{false};
+      bool force_update_{false};
+    };
+
     virtual UpdateResult operator()(logid_t,
                                     std::unique_ptr<EpochMetaData>&,
                                     MetaDataTracer* tracer) = 0;
