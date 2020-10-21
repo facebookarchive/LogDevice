@@ -128,10 +128,6 @@ int ReplicationProperty::validateLogAttributes(
   ld_check(prop.isValid());
   ld_assert(prop == fromLogAttributes(log));
 
-  if (log.extraCopies().hasValue() && log.extraCopies().value() < 0) {
-    ERR("extraCopies is negative (" +
-        std::to_string(log.extraCopies().value()) + ").");
-  }
   if (log.syncedCopies().hasValue() && log.syncedCopies().value() < 0) {
     ERR("syncedCopies is negative (" +
         std::to_string(log.syncedCopies().value()) + ").");
@@ -141,11 +137,9 @@ int ReplicationProperty::validateLogAttributes(
   // directory if you want all copies to be synced, regardless of
   // replication factors of particular log groups.
 
-  int64_t copyset_size = (int64_t)prop.getReplicationFactor() +
-      (int64_t)log.extraCopies().asOptional().value_or(0);
-  if (copyset_size > COPYSET_SIZE_MAX) {
-    ERR("The sum of replication factor and extraCopies is way too big (" +
-        std::to_string(copyset_size) + ").");
+  if (prop.getReplicationFactor() > COPYSET_SIZE_MAX) {
+    ERR("The replication factor is way too big (" +
+        std::to_string(prop.getReplicationFactor()) + ").");
   }
 
   if (prop.getDistinctReplicationFactors().size() > 2) {

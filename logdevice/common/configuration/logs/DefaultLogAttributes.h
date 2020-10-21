@@ -20,8 +20,6 @@ class DefaultLogAttributes : public LogAttributes {
       : LogAttributes(
             /* replicationFactor >= 1 [REQUIRED] */
             Attribute<int>(),
-            /* extraCopies >=0 [Optional] */
-            0,
             /* syncedCopies >= 0*/
             0,
             // maxWritesInFlight >= SLIDING_WINDOW_MIN_CAPACITY

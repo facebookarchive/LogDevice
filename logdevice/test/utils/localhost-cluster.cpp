@@ -34,7 +34,6 @@ int nlogs = 100;
 int nracks = 1;
 int replication = -1;
 int nodeset_size = -1;
-int extra_copies = -1;
 int synced_copies = -1;
 bool use_existing_metadata = false;
 bool enable_logsconfig_manager = true;
@@ -92,10 +91,6 @@ void parse_command_line(int argc, const char* argv[]) {
     ("replication,r",
      value<int>(&options::replication),
      "store and keep this many copies of each record")
-
-    ("extra-copies,x",
-     value<int>(&options::extra_copies),
-     "write this many extra copies when processing an APPEND")
 
     ("synced-copies",
      value<int>(&options::synced_copies),
@@ -557,9 +552,6 @@ int main(int argc, const char* argv[]) {
   }
   if (options::replication != -1) {
     log_attrs = log_attrs.with_replicationFactor(options::replication);
-  }
-  if (options::extra_copies != -1) {
-    log_attrs = log_attrs.with_extraCopies(options::extra_copies);
   }
   if (options::synced_copies != -1) {
     log_attrs = log_attrs.with_syncedCopies(options::synced_copies);

@@ -79,7 +79,6 @@ class NodeSetTest : public IntegrationTestBase {
   // Log properties
   size_t nodes_ = 5; // 0 sequencer, 1 - 4 valid storage nodes
   size_t replication_ = 2;
-  size_t extra_ = 0;
   size_t synced_ = 0;
 
   // current nodeset
@@ -110,7 +109,6 @@ void NodeSetTest::init() {
                        .with_maxWritesInFlight(256)
                        .with_singleWriter(false)
                        .with_replicationFactor(replication_)
-                       .with_extraCopies(extra_)
                        .with_syncedCopies(synced_);
 
   auto factory =
@@ -910,7 +908,6 @@ TEST_F(NodeSetTest, EpochMetaDataCache) {
                        .with_maxWritesInFlight(256)
                        .with_singleWriter(false)
                        .with_replicationFactor(replication_)
-                       .with_extraCopies(extra_)
                        .with_syncedCopies(synced_);
 
   // we have a specific setup:

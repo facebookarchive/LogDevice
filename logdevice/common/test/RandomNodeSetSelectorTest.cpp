@@ -204,9 +204,9 @@ TEST(RandomCrossDomainNodeSetSelectorTest, RackAssignment) {
   ld_check(nodes->clusterSize() == 100);
 
   auto logs_config = std::make_shared<LocalLogsConfig>();
-  addLog(logs_config.get(), logid_t{1}, 3, 0, 10, {}, NodeLocationScope::RACK);
-  addLog(logs_config.get(), logid_t{2}, 3, 0, 20, {}, NodeLocationScope::RACK);
-  addLog(logs_config.get(), logid_t{3}, 5, 0, 18, {}, NodeLocationScope::RACK);
+  addLog(logs_config.get(), logid_t{1}, 3, 10, {}, NodeLocationScope::RACK);
+  addLog(logs_config.get(), logid_t{2}, 3, 20, {}, NodeLocationScope::RACK);
+  addLog(logs_config.get(), logid_t{3}, 5, 18, {}, NodeLocationScope::RACK);
 
   auto config = std::make_shared<Configuration>(
       ServerConfig::fromDataTest("nodeset_selector_test"),
@@ -253,9 +253,9 @@ TEST(RandomNodeSetSelectorTest, NodeExclusion) {
   ld_check(nodes->clusterSize() == 10);
 
   auto logs_config = std::make_shared<LocalLogsConfig>();
-  addLog(logs_config.get(), logid_t{1}, 3, 0, 5, {}, NodeLocationScope::NODE);
-  addLog(logs_config.get(), logid_t{5}, 3, 0, 8, {}, NodeLocationScope::NODE);
-  addLog(logs_config.get(), logid_t{6}, 3, 0, 8, {}, NodeLocationScope::NODE);
+  addLog(logs_config.get(), logid_t{1}, 3, 5, {}, NodeLocationScope::NODE);
+  addLog(logs_config.get(), logid_t{5}, 3, 8, {}, NodeLocationScope::NODE);
+  addLog(logs_config.get(), logid_t{6}, 3, 8, {}, NodeLocationScope::NODE);
 
   auto config = std::make_shared<Configuration>(
       ServerConfig::fromDataTest("nodeset_selector_test"),
@@ -326,7 +326,6 @@ TEST(RandomNodeSetSelector, ImpreciseNodeSetSize) {
     addLog(logs_config.get(),
            logid_t(i),
            replication_factor,
-           0,
            nodeset_size,
            {},
            NodeLocationScope::RACK);
@@ -405,7 +404,6 @@ TEST(RandomCrossDomainNodeSetSelectorTest, NodeExclusion) {
   addLog(logs_config.get(),
          logid_t(1),
          3 /* replication_factor */,
-         0,
          25 /* nodeset_size */,
          {},
          NodeLocationScope::RACK);
@@ -500,29 +498,24 @@ void basic_test(NodeSetSelectorType ns_type) {
          logid_t(1),
          ReplicationProperty(
              {{NodeLocationScope::RACK, 2}, {NodeLocationScope::NODE, 3}}),
-         0,
          14 /* nodeset_size */);
   addLog(logs_config.get(),
          logid_t(2),
          ReplicationProperty(
              {{NodeLocationScope::RACK, 1}, {NodeLocationScope::NODE, 3}}),
-         0,
          5 /* nodeset_size */);
   addLog(logs_config.get(),
          logid_t(3),
          ReplicationProperty({{NodeLocationScope::NODE, 4}}),
-         0,
          2 /* nodeset_size */);
   addLog(logs_config.get(),
          logid_t(4),
          ReplicationProperty(
              {{NodeLocationScope::RACK, 3}, {NodeLocationScope::NODE, 4}}),
-         0,
          150 /* nodeset_size */);
   addLog(logs_config.get(),
          logid_t(5),
          ReplicationProperty({{NodeLocationScope::RACK, 3}}),
-         0,
          6 /* nodeset_size */);
 
   auto config = std::make_shared<Configuration>(
@@ -697,7 +690,6 @@ TEST(WeightAwareNodeSetSelectorTest, ExcludeFromNodesets) {
          logid_t(1),
          ReplicationProperty(
              {{NodeLocationScope::RACK, 2}, {NodeLocationScope::NODE, 3}}),
-         0,
          5 /* nodeset_size */);
 
   auto config = std::make_shared<Configuration>(
@@ -752,7 +744,7 @@ TEST(WeightAwareNodeSetSelectorTest, InternalLogs) {
                                      InternalLogs::MAINTENANCE_LOG_SNAPSHOTS,
                                      InternalLogs::MAINTENANCE_LOG_DELTAS};
   auto lcfg = logs_config.get();
-  addLog(lcfg, data_log, replication, 0, nodeset_size);
+  addLog(lcfg, data_log, replication, nodeset_size);
 
   InternalLogs il;
   auto log_attrs =
@@ -845,7 +837,6 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, AddNode) {
            logid_t(i),
            ReplicationProperty(
                {{NodeLocationScope::RACK, 2}, {NodeLocationScope::NODE, 3}}),
-           0,
            21 /* nodeset_size */);
   }
   auto logs_config2 = logs_config;
@@ -952,7 +943,6 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, DisabledNodes) {
          logid_t(1),
          ReplicationProperty(
              {{NodeLocationScope::RACK, 2}, {NodeLocationScope::NODE, 3}}),
-         0,
          6 /* nodeset_size */);
 
   auto config = std::make_shared<Configuration>(
@@ -1001,7 +991,6 @@ TEST(ConsistentHashingWeightAwareNodeSetSelectorTest, Seed) {
   addLog(logs_config.get(),
          logid_t(1),
          replication,
-         0,
          3 /* nodeset_size (unused) */);
 
   auto config = std::make_shared<Configuration>(

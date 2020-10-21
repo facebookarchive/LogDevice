@@ -80,7 +80,7 @@ class ReplicationProperty {
   // Returns 0 if log attributes define a valid replication property.
   // Otherwise sets *out_error to a human-readable error string and returns -1.
   // Only validates the replication-related things: replicationFactor,
-  // syncReplicationScope, replicateAcross, extraCopies, syncedCopies.
+  // syncReplicationScope, replicateAcross, syncedCopies.
   static int validateLogAttributes(const logsconfig::LogAttributes& log,
                                    std::string* out_error = nullptr);
 

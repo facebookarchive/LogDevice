@@ -52,8 +52,7 @@ operator==(const EpochSequencerImmutableOptions& rhs) {
   static_assert(sizeof(EpochSequencerImmutableOptions) == 32,
                 "Don't forget to update operator==() when adding fields.");
   auto tup = [](const EpochSequencerImmutableOptions& o) {
-    return std::make_tuple(o.extra_copies,
-                           o.synced_copies,
+    return std::make_tuple(o.synced_copies,
                            o.window_size,
                            o.esn_max,
                            o.write_streams_map_max_capacity,
@@ -66,8 +65,7 @@ operator!=(const EpochSequencerImmutableOptions& rhs) {
   return !(*this == rhs);
 }
 std::string EpochSequencerImmutableOptions::toString() const {
-  return folly::sformat("extras: {}, synced: {}, window: {}, esn_max: {}",
-                        extra_copies,
+  return folly::sformat("synced: {}, window: {}, esn_max: {}",
                         synced_copies,
                         window_size,
                         esn_max.val());
@@ -76,7 +74,6 @@ std::string EpochSequencerImmutableOptions::toString() const {
 EpochSequencerImmutableOptions::EpochSequencerImmutableOptions(
     const logsconfig::LogAttributes& log_attrs,
     const Settings& settings) {
-  extra_copies = log_attrs.extraCopies().value();
   synced_copies = log_attrs.syncedCopies().value();
   window_size = log_attrs.maxWritesInFlight().value();
   const size_t ESN_T_BITS = 8 * sizeof(esn_t::raw_type);

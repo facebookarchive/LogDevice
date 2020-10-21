@@ -383,19 +383,13 @@ ClusterFactory::createLogAttributesStub(int nstorage_nodes) {
           false);
   switch (nstorage_nodes) {
     case 1:
-      attrs =
-          attrs.with_replicationFactor(1).with_extraCopies(0).with_syncedCopies(
-              0);
+      attrs = attrs.with_replicationFactor(1).with_syncedCopies(0);
       break;
     case 2:
-      attrs =
-          attrs.with_replicationFactor(2).with_extraCopies(0).with_syncedCopies(
-              0);
+      attrs = attrs.with_replicationFactor(2).with_syncedCopies(0);
       break;
     default:
-      attrs =
-          attrs.with_replicationFactor(2).with_extraCopies(0).with_syncedCopies(
-              0);
+      attrs = attrs.with_replicationFactor(2).with_syncedCopies(0);
   }
   return attrs;
 }
@@ -603,7 +597,7 @@ std::unique_ptr<Cluster> ClusterFactory::create(int nnodes) {
 
   // Generic log configuration for internal logs
   logsconfig::LogAttributes internal_log_attrs =
-      createLogAttributesStub(nstorage_nodes).with_extraCopies(0);
+      createLogAttributesStub(nstorage_nodes);
 
   // Internal logs shouldn't have a lower replication factor than data logs
   if (log_attributes_.has_value() &&

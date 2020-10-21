@@ -404,7 +404,6 @@ TEST_P(MaintenanceManagerTest, RestoreDowngradedToTimeRangeRebuilding) {
 
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(2)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(2048);
 

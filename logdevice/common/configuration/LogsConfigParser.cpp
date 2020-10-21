@@ -90,7 +90,6 @@ static const std::set<std::string> logs_config_recognized_keys = {
     "name",
 
     REPLICATION_FACTOR,
-    EXTRA_COPIES,
     SYNCED_COPIES,
     MAX_WRITES_IN_FLIGHT,
     SINGLE_WRITER,
@@ -521,7 +520,6 @@ parseAttributes(const folly::dynamic& attrs,
     // The rest of the fields are not configurable for metadata logs.
     return LogAttributes(
         replicationFactor,
-        0, /* extraCopies */
         syncedCopies.hasValue() ? syncedCopies : Attribute<int>(0),
         SLIDING_WINDOW_MIN_CAPACITY, /* maxWritesInFlight */
         false,                       /* singleWriter */
@@ -555,9 +553,6 @@ parseAttributes(const folly::dynamic& attrs,
         false,                                  /* tail optimized */
         Attribute<LogAttributes::ExtrasMap>()); /* extras */
   }
-
-  Attribute<int> extraCopies;
-  getIntAttributeFromMap<int>(attrs, EXTRA_COPIES, extraCopies, nullptr);
 
   Attribute<int> maxWritesInFlight;
   getIntAttributeFromMap<int>(
@@ -895,7 +890,6 @@ parseAttributes(const folly::dynamic& attrs,
   }
 
   LogAttributes output{replicationFactor,
-                       extraCopies,
                        syncedCopies,
                        maxWritesInFlight,
                        singleWriter,

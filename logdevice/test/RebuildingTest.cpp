@@ -47,7 +47,6 @@ const std::vector<logid_t> LOG_IDS = {logid_t(1), logid_t(2), logid_t(3)};
 logsconfig::LogAttributes logAttributes(int replication) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(replication)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(300);
   return log_attrs;
@@ -323,14 +322,12 @@ class RebuildingTest : public IntegrationTestBase,
    *
    * @param nnodes Number of nodes in the cluster. First node is a sequencer.
    * @param r      Replication factor.
-   * @param x      Number of extras.
    * @param trim   Should the event log be trimmed?
    */
   IntegrationTestUtils::ClusterFactory
-  rollingRebuildingClusterFactory(int /*nnodes*/, int r, int x, bool trim) {
+  rollingRebuildingClusterFactory(int /*nnodes*/, int r, bool trim) {
     auto log_attrs = logsconfig::LogAttributes()
                          .with_replicationFactor(r)
-                         .with_extraCopies(x)
                          .with_syncedCopies(0)
                          .with_maxWritesInFlight(30)
                          .with_stickyCopySets(true);
@@ -588,9 +585,8 @@ class RebuildingTest : public IntegrationTestBase,
 TEST_P(RebuildingTest, RollingRebuilding) {
   int nnodes = 5;
   int r = 3;
-  int x = 0;
   bool trim = true;
-  auto cf = rollingRebuildingClusterFactory(nnodes, r, x, trim);
+  auto cf = rollingRebuildingClusterFactory(nnodes, r, trim);
   rollingRebuilding(cf, nnodes, 1, 4, 1);
 }
 
@@ -602,9 +598,8 @@ TEST_P(RebuildingTest, RollingRebuilding) {
 TEST_P(RebuildingTest, RollingRebuildingNoTrimming) {
   int nnodes = 5;
   int r = 3;
-  int x = 0;
   bool trim = false;
-  auto cf = rollingRebuildingClusterFactory(nnodes, r, x, trim);
+  auto cf = rollingRebuildingClusterFactory(nnodes, r, trim);
   rollingRebuilding(cf, nnodes, 1, 4, 1);
 }
 
@@ -612,9 +607,8 @@ TEST_P(RebuildingTest, RollingRebuildingNoTrimming) {
 TEST_P(RebuildingTest, NodeRebuiltTwice) {
   int nnodes = 5;
   int r = 3;
-  int x = 0;
   bool trim = true;
-  auto cf = rollingRebuildingClusterFactory(nnodes, r, x, trim);
+  auto cf = rollingRebuildingClusterFactory(nnodes, r, trim);
   rollingRebuilding(cf, nnodes, 1, 1, 1);
   rollingRebuilding(cf, nnodes, 1, 1, 1);
 }
@@ -622,7 +616,6 @@ TEST_P(RebuildingTest, NodeRebuiltTwice) {
 TEST_P(RebuildingTest, OnlineDiskRepair) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(3)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(30);
 
@@ -724,7 +717,6 @@ TEST_P(RebuildingTest, OnlineDiskRepair) {
 TEST_P(RebuildingTest, AllNodesRebuildingSameShard) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(3)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(30);
 
@@ -976,7 +968,6 @@ TEST_P(RebuildingTest, RecoveryWhenManyNodesAreRebuilding) {
 TEST_P(RebuildingTest, ClusterExpandedWhileRebuilding) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(3)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(30);
 
@@ -1057,7 +1048,6 @@ TEST_P(RebuildingTest, ClusterExpandedWhileRebuilding) {
 TEST_P(RebuildingTest, ClusterExpandedWhileRebuilding2) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(3)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(30);
 
@@ -1118,7 +1108,6 @@ TEST_P(RebuildingTest, ClusterExpandedWhileRebuilding2) {
 TEST_P(RebuildingTest, NodeComesBackAfterRebuildingIsComplete) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(3)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(30);
 
@@ -1165,7 +1154,6 @@ TEST_P(RebuildingTest, NodeComesBackAfterRebuildingIsComplete) {
 TEST_P(RebuildingTest, ShardAckFromNodeAlreadyRebuilt) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(3)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(30);
 
@@ -1235,7 +1223,6 @@ TEST_P(RebuildingTest, ShardAckFromNodeAlreadyRebuilt) {
 TEST_P(RebuildingTest, NodeDrain) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(3)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(30);
 
@@ -1279,7 +1266,6 @@ TEST_P(RebuildingTest, NodeDrain) {
 TEST_P(RebuildingTest, NodeDrainCanceled) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(3)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(30);
 
@@ -1365,7 +1351,6 @@ TEST_P(RebuildingTest, NodeDrainCanceled) {
 TEST_P(RebuildingTest, NodeDiesAfterDrain) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(3)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(30);
 
@@ -1425,7 +1410,6 @@ TEST_P(RebuildingTest, NodeDiesAfterDrain) {
 TEST_P(RebuildingTest, RollingMiniRebuilding) {
   int nnodes = 5;
   int r = 3;
-  int x = 0;
   bool trim = true;
   // Because the failed node may still hame some copies of the data,
   // tolerate copyset divergence.
@@ -1438,7 +1422,7 @@ TEST_P(RebuildingTest, RollingMiniRebuilding) {
       // in tests with sequencer-written metadata, which is why we skip checking
       // replication for bridge records that this may impact. See t13850978
       "--dont-count-bridge-records"};
-  auto cf = rollingRebuildingClusterFactory(nnodes, r, x, trim);
+  auto cf = rollingRebuildingClusterFactory(nnodes, r, trim);
   cf.setParam("--append-store-durability", "memory")
       // Writes with ASYNC_WRITE durability (the default) may be lost even
       // though they are appended to the WAL. Use SYNC_WRITE durability for
@@ -1469,7 +1453,6 @@ TEST_P(RebuildingTest, RollingMiniRebuilding) {
 TEST_P(RebuildingTest, MiniRebuildingIsAuthoritative) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(3)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(30);
 
@@ -1725,14 +1708,12 @@ TEST_P(RebuildingTest, MiniRebuildingAlwaysNonRecoverable) {
 TEST_P(RebuildingTest, RebuildingWithDifferentDurabilities) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(4)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(30)
                        .with_backlogDuration(std::chrono::seconds{6 * 3600});
 
   auto event_log_attrs = logsconfig::LogAttributes()
                              .with_replicationFactor(3)
-                             .with_extraCopies(0)
                              .with_syncedCopies(0)
                              .with_maxWritesInFlight(30);
 
@@ -1806,7 +1787,7 @@ TEST_P(RebuildingTest, RebuildingWithDifferentDurabilities) {
 // check that their metadata is still intact
 TEST_P(RebuildingTest, RebuildMetaDataLogsOfDeletedLogs) {
   int nnodes = 5;
-  auto cf = rollingRebuildingClusterFactory(nnodes, 3, 0, true).setNumLogs(4);
+  auto cf = rollingRebuildingClusterFactory(nnodes, 3, true).setNumLogs(4);
   auto cluster = cf.create(nnodes);
   auto get_metadata_record_count = [&](logid_t log_id) {
     std::shared_ptr<Client> client = cluster->createClient();
@@ -1889,7 +1870,6 @@ TEST_P(RebuildingTest, RebuildMetaDataLogsOfDeletedLogs) {
 TEST_P(RebuildingTest, UnderReplicatedRegions) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(3)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(30);
 
@@ -1974,13 +1954,11 @@ TEST_P(RebuildingTest, UnderReplicatedRegions) {
 TEST_P(RebuildingTest, SkipEverything) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(2)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(1000);
 
   auto event_log_attrs = logsconfig::LogAttributes()
                              .with_replicationFactor(2)
-                             .with_extraCopies(0)
                              .with_syncedCopies(0)
                              .with_maxWritesInFlight(30);
 
@@ -2344,14 +2322,12 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsWiped) {
 
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(3)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(30)
                        .with_backlogDuration(maxBacklogDuration);
 
   auto event_log_attrs = logsconfig::LogAttributes()
                              .with_replicationFactor(3)
-                             .with_extraCopies(0)
                              .with_syncedCopies(0)
                              .with_maxWritesInFlight(30);
 
@@ -2463,14 +2439,12 @@ TEST_P(RebuildingTest, DisableDataLogRebuildShardsAborted) {
 
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(3)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(30)
                        .with_backlogDuration(maxBacklogDuration);
 
   auto event_log_attrs = logsconfig::LogAttributes()
                              .with_replicationFactor(3)
-                             .with_extraCopies(0)
                              .with_syncedCopies(0)
                              .with_maxWritesInFlight(60);
 
@@ -2553,14 +2527,12 @@ TEST_P(RebuildingTest, DisableDataLogRebuildNodeFailed) {
 
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(3)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(30)
                        .with_backlogDuration(maxBacklogDuration);
 
   auto event_log_attrs = logsconfig::LogAttributes()
                              .with_replicationFactor(3)
-                             .with_extraCopies(0)
                              .with_syncedCopies(0)
                              .with_maxWritesInFlight(30);
 
@@ -2638,14 +2610,12 @@ TEST_P(RebuildingTest, DirtyRangeAdminCommands) {
 
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(3)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(30)
                        .with_backlogDuration(maxBacklogDuration);
 
   auto event_log_attrs = logsconfig::LogAttributes()
                              .with_replicationFactor(3)
-                             .with_extraCopies(0)
                              .with_syncedCopies(0)
                              .with_maxWritesInFlight(30);
 

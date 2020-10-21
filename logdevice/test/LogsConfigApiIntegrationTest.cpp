@@ -34,7 +34,6 @@ TEST_P(ParametrizedLogsConfigIntegrationTest, ConnectionHandling) {
   auto internal_log_attrs = logsconfig::LogAttributes()
                                 .with_singleWriter(false)
                                 .with_replicationFactor(3)
-                                .with_extraCopies(0)
                                 .with_syncedCopies(0);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .enableLogsConfigManager()

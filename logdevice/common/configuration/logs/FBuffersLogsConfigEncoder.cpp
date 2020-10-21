@@ -131,7 +131,6 @@ FBuffersLogsConfigCodec::fbuffers_serialize(
   std::vector<flatbuffers::Offset<fbuffers::LogAttr>> attrs;
 
   SERIALIZE_ATTRIBUTE(REPLICATION_FACTOR, Int, attributes.replicationFactor);
-  SERIALIZE_ATTRIBUTE(EXTRA_COPIES, Int, attributes.extraCopies);
   SERIALIZE_ATTRIBUTE(SYNCED_COPIES, Int, attributes.syncedCopies);
   SERIALIZE_ATTRIBUTE(MAX_WRITES_IN_FLIGHT, Int, attributes.maxWritesInFlight);
   SERIALIZE_ATTRIBUTE(SINGLE_WRITER, Bool, attributes.singleWriter);

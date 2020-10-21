@@ -47,18 +47,6 @@ _attributes = [
         ),
     ),
     argument(
-        "extra_copies",
-        type=int,
-        description=dedent(
-            """
-                Number of extra copies the sequencer sends out to storage nodes
-                ('x' in the design doc).  If x > 0, this is done to improve
-                latency and availability; the sequencer will try to delete extra
-                copies after the write is finalized.
-             """
-        ),
-    ),
-    argument(
         "synced_copies",
         type=int,
         description=dedent(

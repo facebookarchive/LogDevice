@@ -102,7 +102,6 @@ TEST(ConfigurationTest, SimpleValid) {
   }
 
   EXPECT_EQ(3, log->attrs().replicationFactor().value());
-  EXPECT_EQ(3, log->attrs().extraCopies().value());
   EXPECT_EQ(10, log->attrs().maxWritesInFlight().value());
   EXPECT_TRUE(log->attrs().singleWriter().value());
   EXPECT_EQ(
@@ -117,7 +116,6 @@ TEST(ConfigurationTest, SimpleValid) {
     EXPECT_EQ(log >= 11, log_attrs.replicateAcross().hasValue());
     if (log >= 8 && log <= 10) {
       EXPECT_EQ(3, log_attrs.replicationFactor());
-      EXPECT_EQ(2, log_attrs.extraCopies());
       EXPECT_EQ(0, log_attrs.syncedCopies());
       EXPECT_EQ(10, log_attrs.maxWritesInFlight());
     }
@@ -400,7 +398,6 @@ TEST(ConfigurationTest, Defaults) {
   const auto& attrs = log->attrs();
   ASSERT_TRUE(config->logsConfig()->logExists(logid_t(1)));
   EXPECT_EQ(2, *attrs.replicationFactor());
-  EXPECT_EQ(1, *attrs.extraCopies());
   EXPECT_EQ(0, *attrs.syncedCopies());
   EXPECT_EQ(1000, *attrs.maxWritesInFlight());
   EXPECT_EQ(0, *attrs.singleWriter());
@@ -423,7 +420,6 @@ TEST(ConfigurationTest, Defaults) {
   log = config->getLogGroupByIDShared(logid_t(500));
   const auto& attrs3 = log->attrs();
   EXPECT_EQ(3, *attrs3.replicationFactor());
-  EXPECT_EQ(0, *attrs3.extraCopies());
   EXPECT_EQ(0, *attrs3.syncedCopies());
   EXPECT_EQ(1001, *attrs3.maxWritesInFlight());
   EXPECT_TRUE(*attrs3.singleWriter());
@@ -607,8 +603,6 @@ TEST(ConfigurationTest, LogsConfigSerialization) {
   ASSERT_EQ(log->log_group->name(), parsed->name());
   ASSERT_EQ(*log->log_group->attrs().replicationFactor(),
             *parsed->attrs().replicationFactor());
-  ASSERT_EQ(
-      *log->log_group->attrs().extraCopies(), *parsed->attrs().extraCopies());
   ASSERT_EQ(
       *log->log_group->attrs().syncedCopies(), *parsed->attrs().syncedCopies());
 

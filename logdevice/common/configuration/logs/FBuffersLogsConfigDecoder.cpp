@@ -220,7 +220,6 @@ FBuffersLogsConfigCodec::fbuffers_deserialize<logsconfig::LogAttributes,
           attrs->attributes()->LookupByKey(key), parent.name())
 
   DESERIALIZE_ATTR(replicationFactor, REPLICATION_FACTOR, int32_t);
-  DESERIALIZE_ATTR(extraCopies, EXTRA_COPIES, int32_t);
   DESERIALIZE_ATTR(syncedCopies, SYNCED_COPIES, int32_t);
   DESERIALIZE_ATTR(maxWritesInFlight, MAX_WRITES_IN_FLIGHT, int32_t);
   DESERIALIZE_ATTR(singleWriter, SINGLE_WRITER, bool);
@@ -376,7 +375,6 @@ FBuffersLogsConfigCodec::fbuffers_deserialize<logsconfig::LogAttributes,
   }
 
   return LogAttributes{std::move(replicationFactor),
-                       std::move(extraCopies),
                        std::move(syncedCopies),
                        std::move(maxWritesInFlight),
                        std::move(singleWriter),

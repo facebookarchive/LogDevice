@@ -46,13 +46,11 @@ static NodeSetIndices getFullNodeSet() {
 static void commonSetup(IntegrationTestUtils::ClusterFactory& cluster) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(std::min(3, NUM_NODES - 1))
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(MAX_IN_FLIGHT);
 
   auto event_log_attrs = logsconfig::LogAttributes()
                              .with_replicationFactor(std::min(4, NUM_NODES - 1))
-                             .with_extraCopies(0)
                              .with_syncedCopies(0)
                              .with_maxWritesInFlight(100);
 

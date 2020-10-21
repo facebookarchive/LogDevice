@@ -228,7 +228,6 @@ TEST_F(TrimIntegrationTest, AutoLegacy) {
 
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(1)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_backlogDuration(std::chrono::seconds(2))
                        .with_maxWritesInFlight(NRECORDS);
@@ -307,7 +306,6 @@ TEST_F(TrimIntegrationTest, Auto) {
 
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(1)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_backlogDuration(std::chrono::seconds(2))
                        .with_maxWritesInFlight(NRECORDS);

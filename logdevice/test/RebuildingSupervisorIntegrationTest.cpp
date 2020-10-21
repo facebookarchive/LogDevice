@@ -423,7 +423,6 @@ TEST_F(RebuildingSupervisorIntegrationTest, IsolatedRack) {
   auto event_log_attrs =
       logsconfig::LogAttributes()
           .with_replicationFactor(2)
-          .with_extraCopies(0)
           .with_syncedCopies(0)
           .with_singleWriter(false)
           .with_syncReplicationScope(NodeLocationScope::RACK);
@@ -517,7 +516,6 @@ TEST_F(RebuildingSupervisorIntegrationTest, s143309) {
   auto event_log_attrs =
       logsconfig::LogAttributes()
           .with_replicationFactor(2)
-          .with_extraCopies(0)
           .with_syncedCopies(0)
           .with_singleWriter(false)
           .with_syncReplicationScope(NodeLocationScope::RACK);
@@ -670,7 +668,6 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingHitThreshold) {
   auto event_log_attrs =
       logsconfig::LogAttributes()
           .with_replicationFactor(3)
-          .with_extraCopies(0)
           .with_syncedCopies(0)
           .with_singleWriter(false)
           .with_syncReplicationScope(NodeLocationScope::NODE);
@@ -770,7 +767,6 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingExitThresholdOnAck) {
 
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(3)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_singleWriter(false)
                        .with_syncReplicationScope(NodeLocationScope::NODE);
@@ -910,7 +906,6 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingHitThresholdAtOnce) {
   auto event_log_attrs =
       logsconfig::LogAttributes()
           .with_replicationFactor(3)
-          .with_extraCopies(0)
           .with_syncedCopies(0)
           .with_singleWriter(false)
           .with_syncReplicationScope(NodeLocationScope::NODE);
@@ -1040,7 +1035,6 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   auto event_log_attrs =
       logsconfig::LogAttributes()
           .with_replicationFactor(3)
-          .with_extraCopies(0)
           .with_syncedCopies(0)
           .with_singleWriter(false)
           .with_syncReplicationScope(NodeLocationScope::NODE);
@@ -1159,7 +1153,6 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   auto event_log_attrs =
       logsconfig::LogAttributes()
           .with_replicationFactor(3)
-          .with_extraCopies(0)
           .with_syncedCopies(0)
           .with_singleWriter(false)
           .with_syncReplicationScope(NodeLocationScope::NODE);
@@ -1237,7 +1230,6 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   auto event_log_attrs =
       logsconfig::LogAttributes()
           .with_replicationFactor(3)
-          .with_extraCopies(0)
           .with_syncedCopies(0)
           .with_singleWriter(false)
           .with_syncReplicationScope(NodeLocationScope::NODE);
@@ -1350,7 +1342,6 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   auto event_log_attrs =
       logsconfig::LogAttributes()
           .with_replicationFactor(3)
-          .with_extraCopies(0)
           .with_syncedCopies(0)
           .with_singleWriter(false)
           .with_syncReplicationScope(NodeLocationScope::NODE);
@@ -1513,7 +1504,6 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   auto event_log_attrs =
       logsconfig::LogAttributes()
           .with_replicationFactor(3)
-          .with_extraCopies(0)
           .with_syncedCopies(0)
           .with_singleWriter(false)
           .with_syncReplicationScope(NodeLocationScope::NODE);

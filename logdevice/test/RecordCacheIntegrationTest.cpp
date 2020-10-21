@@ -35,8 +35,7 @@ TEST_F(RecordCacheIntegrationTest, RecordCacheHitForNewAppends) {
   auto log_attrs =
       IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2)
           .with_maxWritesInFlight(1024)
-          .with_replicationFactor(2)
-          .with_extraCopies(0);
+          .with_replicationFactor(2);
 
   auto cluster =
       IntegrationTestUtils::ClusterFactory()

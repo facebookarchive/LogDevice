@@ -233,7 +233,7 @@ void PurgeUncleanEpochsTest::setUp() {
           *nodes, ReplicationProperty{{NodeLocationScope::NODE, 1}}));
 
   auto logs_config = std::make_shared<configuration::LocalLogsConfig>();
-  addLog(logs_config.get(), log_id_, 1, 0, 1, {});
+  addLog(logs_config.get(), log_id_, 1, 1, {});
 
   config_ = std::make_shared<Configuration>(
       ServerConfig::fromDataTest("purge_unclean_epochs_test"),

@@ -34,7 +34,6 @@ constexpr char const* IS_INHERITED = "is_inherited";
  */
 constexpr auto logs_config_recognized_attributes = {
     REPLICATION_FACTOR,
-    EXTRA_COPIES,
     SYNCED_COPIES,
     MAX_WRITES_IN_FLIGHT,
     SINGLE_WRITER,
@@ -248,11 +247,6 @@ dict LogAttributes_to_dict(const LogAttributes& attrs) {
                               REPLICATION_FACTOR,
                               output);
 
-  add_log_attribute<int, int>(attrs.extraCopies(),
-                              [](auto attr) { return attr.value(); },
-                              EXTRA_COPIES,
-                              output);
-
   add_log_attribute<int, int>(attrs.syncedCopies(),
                               [](auto attr) { return attr.value(); },
                               SYNCED_COPIES,
@@ -456,9 +450,6 @@ LogAttributes dict_to_LogAttributes(const dict& attrs) {
     if (key_string == REPLICATION_FACTOR) {
       int v = convert_or_throw<int>(value, REPLICATION_FACTOR);
       log_attributes = log_attributes.with_replicationFactor(v);
-    } else if (key_string == EXTRA_COPIES) {
-      int v = convert_or_throw<int>(value, EXTRA_COPIES);
-      log_attributes = log_attributes.with_extraCopies(v);
     } else if (key_string == SYNCED_COPIES) {
       int v = convert_or_throw<int>(value, SYNCED_COPIES);
       log_attributes = log_attributes.with_syncedCopies(v);

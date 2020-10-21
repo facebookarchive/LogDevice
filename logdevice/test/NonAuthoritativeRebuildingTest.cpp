@@ -88,7 +88,6 @@ class NonAuthoritativeRebuildingTest : public IntegrationTestBase {
     auto log_attrs = logsconfig::LogAttributes()
                          .with_replicateAcross({{NodeLocationScope::NODE, 3},
                                                 {NodeLocationScope::RACK, 2}})
-                         .with_extraCopies(0)
                          .with_syncedCopies(0)
                          .with_maxWritesInFlight(30)
                          // We want more randomness in the placement of records.

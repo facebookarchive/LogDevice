@@ -24,7 +24,6 @@ class ClientReadStreamFailureDetectorIntegrationTest
 TEST_F(ClientReadStreamFailureDetectorIntegrationTest, Simple) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(3)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(256)
                        .with_scdEnabled(true);

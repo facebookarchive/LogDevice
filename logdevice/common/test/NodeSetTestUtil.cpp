@@ -56,7 +56,6 @@ void addNodes(std::shared_ptr<const NodesConfiguration>& nodes,
 void addLog(configuration::LocalLogsConfig* logs_config,
             logid_t logid,
             ReplicationProperty replication,
-            int extras,
             size_t nodeset_size,
             folly::Optional<std::chrono::seconds> backlog) {
   // log must not already exist
@@ -66,7 +65,6 @@ void addLog(configuration::LocalLogsConfig* logs_config,
       logsconfig::LogAttributes()
           .with_maxWritesInFlight(256)
           .with_replicationFactor(replication.getReplicationFactor())
-          .with_extraCopies(extras)
           .with_nodeSetSize(nodeset_size)
           .with_backlogDuration(backlog)
           .with_replicateAcross(replication.getDistinctReplicationFactors());

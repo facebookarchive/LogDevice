@@ -74,7 +74,6 @@ folly::dynamic LogGroupInDirectory::toFollyDynamic(bool metadata_logs) const {
   std::string interval_str = intervalToString(this->log_group->range());
   json_log["id"] = interval_str;
   json_log["name"] = getFullyQualifiedName();
-  json_log[EXTRA_COPIES] = *attrs.extraCopies();
   json_log[SYNCED_COPIES] = *attrs.syncedCopies();
   json_log[MAX_WRITES_IN_FLIGHT] = *attrs.maxWritesInFlight();
   json_log[SINGLE_WRITER] = *attrs.singleWriter();

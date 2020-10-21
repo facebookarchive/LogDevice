@@ -33,7 +33,6 @@ Since a lot of LogDevice internals depend on these logs, you want higher fault-t
 ```
 "internal_logs": {
     "config_log_deltas": {
-        "extra_copies": 0,
         "max_writes_in_flight": 2000,
         "nodeset_size": 20,
         "replicate_across": {
@@ -44,7 +43,6 @@ Since a lot of LogDevice internals depend on these logs, you want higher fault-t
         "synced_copies": 0
     },
     "config_log_snapshots": {
-        "extra_copies": 0,
         "max_writes_in_flight": 2000,
         "nodeset_size": 20,
         "replicate_across": {
@@ -55,7 +53,6 @@ Since a lot of LogDevice internals depend on these logs, you want higher fault-t
         "synced_copies": 0
     },
     "event_log_deltas": {
-        "extra_copies": 0,
         "max_writes_in_flight": 2000,
         "nodeset_size": 20,
         "replicate_across": {
@@ -66,7 +63,6 @@ Since a lot of LogDevice internals depend on these logs, you want higher fault-t
         "synced_copies": 0
     },
     "event_log_snapshots": {
-        "extra_copies": 0,
         "max_writes_in_flight": 2000,
         "nodeset_size": 20,
         "replicate_across": {
@@ -77,7 +73,6 @@ Since a lot of LogDevice internals depend on these logs, you want higher fault-t
         "synced_copies": 0
     }
     "maintenance_log_deltas": {
-        "extra_copies": 0,
         "max_writes_in_flight": 2000,
         "nodeset_size": 20,
         "replicate_across": {
@@ -88,7 +83,6 @@ Since a lot of LogDevice internals depend on these logs, you want higher fault-t
         "synced_copies": 0
     },
     "maintenance_log_snapshots": {
-        "extra_copies": 0,
         "max_writes_in_flight": 2000,
         "nodeset_size": 20,
         "replicate_across": {

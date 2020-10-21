@@ -103,7 +103,6 @@ TEST(DeduplicationTest, CommonValuesRegistry) {
           .with_replicationFactor(14)
           .with_stickyCopySets(true)
           .with_extras(extras)
-          .with_extraCopies(2)
           .with_deliveryLatency(std::chrono::milliseconds(150))
           .with_maxWritesInFlight(15)
           .with_writeToken(folly::Optional<std::string>("Hola"))
@@ -168,13 +167,11 @@ TEST(DeduplicationTest, LogsConfigTreeNodes) {
 
 std::unique_ptr<LogsConfigTree> createTestTree() {
   LogAttributes::ExtrasMap extras = {{"K", "V"}};
-  LogAttributes attr1 = LogAttributes()
-                            .with_replicationFactor(4)
-                            .with_extras(extras)
-                            .with_extraCopies(1);
-  LogAttributes attr2 = attr1.with_stickyCopySets(false).with_extraCopies(2);
-  LogAttributes attr3 = attr2.with_replicationFactor(1).with_extraCopies(3);
-  LogAttributes attr4 = attr3.with_singleWriter(true).with_extraCopies(4);
+  LogAttributes attr1 =
+      LogAttributes().with_replicationFactor(4).with_extras(extras);
+  LogAttributes attr2 = attr1.with_stickyCopySets(false);
+  LogAttributes attr3 = attr2.with_replicationFactor(1);
+  LogAttributes attr4 = attr3.with_singleWriter(true);
 
   auto defaults = DefaultLogAttributes();
   std::unique_ptr<LogsConfigTree> tree = LogsConfigTree::create();
@@ -277,7 +274,6 @@ TEST(LogAttributesTest, LogAttributesMergeTest) {
           .with_replicationFactor(14)
           .with_stickyCopySets(true)
           .with_extras(extras)
-          .with_extraCopies(2)
           .with_deliveryLatency(std::chrono::milliseconds(150))
           .with_maxWritesInFlight(15)
           .with_writeToken(folly::Optional<std::string>("Hola"))
@@ -304,7 +300,6 @@ TEST(LogAttributesTest, LogAttributesMergeTest) {
 
   LogAttributes combined = LogAttributes(attrs, parent);
   ASSERT_EQ(Attribute<int>(22, false), combined.replicationFactor());
-  ASSERT_EQ(Attribute<int>(2, true), combined.extraCopies());
   ASSERT_EQ(Attribute<int>(1, false), combined.syncedCopies());
   ASSERT_EQ(Attribute<int>(15, true), combined.maxWritesInFlight());
   ASSERT_EQ(Attribute<bool>(true, false), combined.singleWriter());
@@ -385,7 +380,7 @@ TEST(LogsConfigTreeTest, ImmutabilityTest) {
   auto lg1 = tree->addLogGroup(dir2,
                                "normal_log1",
                                logid_range_t{logid_t(1), logid_t(10)},
-                               LogAttributes().with_extraCopies(0));
+                               LogAttributes());
 
   ASSERT_EQ(1, lg1->attrs().syncedCopies().value());
   std::unique_ptr<LogsConfigTree> snapshot1 = tree->copy();
@@ -455,8 +450,7 @@ TEST(LogsConfigTreeTest, TestFindDirectory) {
 
 TEST(LogsConfigTreeTest, TestFindLogByID) {
   std::unique_ptr<LogsConfigTree> tree = LogsConfigTree::create();
-  LogAttributes base_attrs =
-      LogAttributes().with_replicationFactor(2).with_extraCopies(0);
+  LogAttributes base_attrs = LogAttributes().with_replicationFactor(2);
   auto dir1 = tree->addDirectory(
       tree->root(), "super_logs", base_attrs.with_replicationFactor(10));
   auto dir2 = tree->addDirectory(
@@ -478,8 +472,7 @@ TEST(LogsConfigTreeTest, TestFindLogByID) {
 
 TEST(LogsConfigTreeTest, TestMetadataLogAddFail) {
   std::unique_ptr<LogsConfigTree> tree = LogsConfigTree::create();
-  LogAttributes base_attrs =
-      LogAttributes().with_replicationFactor(2).with_extraCopies(0);
+  LogAttributes base_attrs = LogAttributes().with_replicationFactor(2);
   auto dir1 = tree->addDirectory(
       tree->root(), "normal_logs", base_attrs.with_syncedCopies(10));
   auto lg1 = tree->addLogGroup(
@@ -530,8 +523,7 @@ TEST(LogsConfigTreeTest, TestLogIDExists) {
 
 TEST(LogsConfigTreeTest, TestLogGroupExists) {
   std::unique_ptr<LogsConfigTree> tree = LogsConfigTree::create();
-  LogAttributes base_attrs =
-      LogAttributes().with_replicationFactor(2).with_extraCopies(0);
+  LogAttributes base_attrs = LogAttributes().with_replicationFactor(2);
   tree->addDirectory(
       tree->root(), "super_logs", base_attrs.with_replicationFactor(10));
   auto dir2 = tree->addDirectory(
@@ -549,7 +541,6 @@ TEST(LogsConfigTreeTest, TestReplaceLogGroup) {
   LogAttributes base_attrs =
       DefaultLogAttributes()
           .with_replicationFactor(2)
-          .with_extraCopies(0)
           .with_syncReplicationScope(NodeLocationScope::REGION);
   std::unique_ptr<LogsConfigTree> tree =
       LogsConfigTree::create("/", base_attrs);
@@ -584,32 +575,20 @@ TEST(LogsConfigTreeTest, TestReplaceLogGroup) {
   ASSERT_TRUE(tree->getLogGroupByID(logid_t(4)));
   // replace with invalid attributes
   auto replacement3 =
-      group1->withLogAttributes(LogAttributes().with_extraCopies(-1));
+      group1->withLogAttributes(LogAttributes().with_syncedCopies(-1));
   ASSERT_FALSE(tree->replaceLogGroup("/normal_logs/log_group1", replacement3));
   ASSERT_EQ(E::INVALID_ATTRIBUTES, err);
   ASSERT_NE(nullptr, tree->find("/normal_logs/log_group1"));
   ASSERT_TRUE(tree->getLogGroupByID(logid_t(4)));
-  ASSERT_NE(-1,
-            tree->getLogGroupByID(logid_t(4))
-                ->log_group->attrs()
-                .extraCopies()
-                .value());
   // actually replacings
-  auto replacement4 =
-      group1->withLogAttributes(LogAttributes().with_extraCopies(20));
+  auto replacement4 = group1->withLogAttributes(LogAttributes());
   ASSERT_TRUE(tree->replaceLogGroup("/normal_logs/log_group1", replacement4));
   ASSERT_NE(nullptr, tree->find("/normal_logs/log_group1"));
-  ASSERT_EQ(20,
-            tree->getLogGroupByID(logid_t(4))
-                ->log_group->attrs()
-                .extraCopies()
-                .value());
 }
 
 TEST(LogsConfigTreeTest, TestRename) {
   std::unique_ptr<LogsConfigTree> tree = LogsConfigTree::create();
-  LogAttributes base_attrs =
-      LogAttributes().with_replicationFactor(2).with_extraCopies(0);
+  LogAttributes base_attrs = LogAttributes().with_replicationFactor(2);
   // /super_logs
   tree->addDirectory(
       tree->root(), "super_logs", base_attrs.with_replicationFactor(10));
@@ -639,7 +618,7 @@ TEST(LogsConfigTreeTest, TestRename) {
 
 TEST(LogsConfigTreeTest, TestNarrowestReplication) {
   std::unique_ptr<LogsConfigTree> tree = LogsConfigTree::create();
-  LogAttributes base_attrs = LogAttributes().with_extraCopies(0);
+  LogAttributes base_attrs = LogAttributes();
   // /super_logs
   ASSERT_TRUE(tree->addDirectory(
       tree->root(),
@@ -668,7 +647,6 @@ TEST(LogsConfigTreeTest, TestSetAttributes) {
   LogAttributes base_attrs =
       DefaultLogAttributes()
           .with_replicationFactor(2)
-          .with_extraCopies(0)
           .with_syncReplicationScope(NodeLocationScope::REGION);
   std::unique_ptr<LogsConfigTree> tree =
       LogsConfigTree::create("/", base_attrs);
@@ -754,7 +732,6 @@ TEST(LogsConfigTreeTest, TestDelete) {
   LogAttributes base_attrs =
       DefaultLogAttributes()
           .with_replicationFactor(2)
-          .with_extraCopies(0)
           .with_syncReplicationScope(NodeLocationScope::REGION);
   std::unique_ptr<LogsConfigTree> tree =
       LogsConfigTree::create("/", base_attrs);

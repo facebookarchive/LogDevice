@@ -382,7 +382,6 @@ TEST_P(ReadingIntegrationTest, ReaderTest) {
 TEST_P(ReadingIntegrationTest, SeededSCDReaderTest) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(2)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(256)
                        .with_scdEnabled(true);
@@ -663,7 +662,6 @@ TEST_P(ReadingIntegrationTest, ReadHealth) {
   // Make sure replication factor is 2
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(2)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(256);
   auto cluster = clusterFactory()
@@ -726,7 +724,6 @@ TEST_P(ReadingIntegrationTest, HealthChangeCallback) {
   // Make sure replication factor is 2
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(2)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(256);
   auto cluster = clusterFactory()
@@ -1087,7 +1084,6 @@ TEST_P(ReadingIntegrationTest, LogTailAttributes) {
 TEST_P(ReadingIntegrationTest, PurgingStuck) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(2)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(256)
                        .with_scdEnabled(true);

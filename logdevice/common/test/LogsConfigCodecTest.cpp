@@ -238,7 +238,6 @@ TEST(LogsConfigCodecTest, LogsConfigTreeCodecTest) {
           .with_singleWriter(true)
           .with_nodeSetSize(Attribute<folly::Optional<int>>{26, true})
           .with_scdEnabled(false)
-          .with_extraCopies(0)
           .with_backlogDuration(std::chrono::seconds(15))
           .with_syncReplicationScope(NodeLocationScope::REGION);
 
@@ -286,11 +285,10 @@ TEST(LogsConfigCodecTest, LogsConfigTreeCodecTest) {
       "/dir2/dir2_2", false, LogAttributes().with_scdEnabled(true));
 
   tree->addLogGroup(child2, "log1", logid_range_t{logid_t(15), logid_t(66)});
-  ASSERT_TRUE(tree->addLogGroup(
-      child1,
-      "log1",
-      logid_range_t{logid_t(67), logid_t(75)},
-      LogAttributes().with_replicationFactor(6).with_extraCopies(0)));
+  ASSERT_TRUE(tree->addLogGroup(child1,
+                                "log1",
+                                logid_range_t{logid_t(67), logid_t(75)},
+                                LogAttributes().with_replicationFactor(6)));
 
   flatbuffers::FlatBufferBuilder builder;
   auto buffer =
@@ -372,7 +370,6 @@ TEST(LogsConfigCodecTest, LogsConfigTreeCodecTest2) {
           .with_singleWriter(true)
           .with_nodeSetSize(Attribute<folly::Optional<int>>{26, true})
           .with_scdEnabled(false)
-          .with_extraCopies(0)
           .with_backlogDuration(std::chrono::seconds(15))
           .with_syncReplicationScope(NodeLocationScope::REGION);
 
@@ -393,11 +390,10 @@ TEST(LogsConfigCodecTest, LogsConfigTreeCodecTest2) {
       "/dir2/dir2_2", false, LogAttributes().with_scdEnabled(true));
 
   tree->addLogGroup(child2, "log1", logid_range_t{logid_t(15), logid_t(66)});
-  ASSERT_TRUE(tree->addLogGroup(
-      child1,
-      "log1",
-      logid_range_t{logid_t(67), logid_t(75)},
-      LogAttributes().with_replicationFactor(6).with_extraCopies(0)));
+  ASSERT_TRUE(tree->addLogGroup(child1,
+                                "log1",
+                                logid_range_t{logid_t(67), logid_t(75)},
+                                LogAttributes().with_replicationFactor(6)));
 
   PayloadHolder payload =
       FBuffersLogsConfigCodec::serialize<LogsConfigTree>(*tree, false);
@@ -458,7 +454,6 @@ TEST(LogsConfigCodecTest, LogsConfigTreeCodecTest3) {
           .with_replicationFactor(2)
           .with_nodeSetSize(Attribute<folly::Optional<int>>{3, true})
           .with_scdEnabled(false)
-          .with_extraCopies(0)
           .with_backlogDuration(
               std::chrono::seconds(7 * 24 * 60 * 60)) // 7 days
           .with_syncReplicationScope(NodeLocationScope::REGION);
@@ -531,7 +526,6 @@ TEST(LogsConfigCodecTest, SerializeDirectory) {
           .with_singleWriter(true)
           .with_nodeSetSize(Attribute<folly::Optional<int>>{26, true})
           .with_scdEnabled(false)
-          .with_extraCopies(0)
           .with_backlogDuration(std::chrono::seconds(15))
           .with_syncReplicationScope(NodeLocationScope::REGION);
 
@@ -552,11 +546,10 @@ TEST(LogsConfigCodecTest, SerializeDirectory) {
       "/dir2/dir2_2", false, LogAttributes().with_scdEnabled(true));
 
   tree->addLogGroup(child2, "log1", logid_range_t{logid_t(15), logid_t(66)});
-  ASSERT_TRUE(tree->addLogGroup(
-      child1,
-      "log1",
-      logid_range_t{logid_t(67), logid_t(75)},
-      LogAttributes().with_replicationFactor(6).with_extraCopies(0)));
+  ASSERT_TRUE(tree->addLogGroup(child1,
+                                "log1",
+                                logid_range_t{logid_t(67), logid_t(75)},
+                                LogAttributes().with_replicationFactor(6)));
 
   PayloadHolder payload = FBuffersLogsConfigCodec::serialize(*child2, false);
   ASSERT_NE(0, payload.size());

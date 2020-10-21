@@ -41,7 +41,6 @@ TEST_F(AdminAPILowLevelTest, LogTreeReplicationInfo) {
   auto internal_log_attrs = logsconfig::LogAttributes()
                                 .with_singleWriter(false)
                                 .with_replicationFactor(2)
-                                .with_extraCopies(0)
                                 .with_syncedCopies(0);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setConfigLogAttributes(internal_log_attrs)
@@ -120,7 +119,6 @@ TEST_F(AdminAPILowLevelTest, TakeLogTreeSnapshot) {
   auto internal_log_attrs = logsconfig::LogAttributes()
                                 .with_singleWriter(false)
                                 .with_replicationFactor(2)
-                                .with_extraCopies(0)
                                 .with_syncedCopies(0);
   auto cluster = IntegrationTestUtils::ClusterFactory()
                      .setConfigLogAttributes(internal_log_attrs)
@@ -169,7 +167,6 @@ TEST_F(AdminAPILowLevelTest, TakeMaintenanceLogSnapshot) {
   auto internal_log_attrs = logsconfig::LogAttributes()
                                 .with_singleWriter(false)
                                 .with_replicationFactor(2)
-                                .with_extraCopies(0)
                                 .with_syncedCopies(0);
   auto cluster =
       IntegrationTestUtils::ClusterFactory()

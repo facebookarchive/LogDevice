@@ -530,7 +530,6 @@ TEST_F(ConfigIntegrationTest, ConfigSyncMethodFailure) {
 TEST_F(ConfigIntegrationTest, NumLogsConfiguredStat) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(2)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(100);
 

@@ -46,7 +46,6 @@ class TailRecord;
 // Settings and log attributes affecting sequencer that EpochSequencer doesn't
 // update on the fly. When these change, sequencer needs to be reactivated.
 struct EpochSequencerImmutableOptions {
-  copyset_size_t extra_copies = 0;
   copyset_size_t synced_copies = 0;
   int window_size = SLIDING_WINDOW_MIN_CAPACITY;
   esn_t esn_max = ESN_MAX;

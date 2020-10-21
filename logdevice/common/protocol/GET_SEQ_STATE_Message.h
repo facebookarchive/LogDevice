@@ -230,10 +230,6 @@ class GET_SEQ_STATE_Message : public Message {
    *          - OR an unexpected error was returned from underlying selector
    *          - OR sequencer's copyset manager is not present
    *
-   *          CopySetSelector::Result::PARTIAL
-   *          - when extras can't be selected, this shouldn't apply in this
-   *            case, since we don't specify extras
-   *
    *          CopySetSelector::Result::SUCCESS
    *          - when a copyset was selected successfully
    */

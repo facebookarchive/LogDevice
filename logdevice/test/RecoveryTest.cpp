@@ -189,7 +189,6 @@ class RecoveryTest : public ::testing::TestWithParam<PopulateRecordCache> {
   // Log properties
   size_t nodes_ = 3;
   size_t replication_ = 2;
-  size_t extra_ = 0;
   size_t synced_ = 0;
   size_t max_writes_in_flight_ = 256;
   bool tail_optimized_{false};
@@ -312,7 +311,6 @@ void RecoveryTest::init(bool can_tail_optimize) {
                        .with_maxWritesInFlight(max_writes_in_flight_)
                        .with_singleWriter(false)
                        .with_replicationFactor(replication_)
-                       .with_extraCopies(extra_)
                        .with_syncedCopies(synced_)
                        .with_syncReplicationScope(sync_replication_scope_)
                        .with_stickyCopySets(true)
@@ -324,7 +322,6 @@ void RecoveryTest::init(bool can_tail_optimize) {
           .with_maxWritesInFlight(256)
           .with_singleWriter(false)
           .with_replicationFactor(std::min(nodes_ - (nodes_ > 1), 3ul))
-          .with_extraCopies(0)
           .with_syncedCopies(0)
           .with_syncReplicationScope(sync_replication_scope_);
 
@@ -335,7 +332,6 @@ void RecoveryTest::init(bool can_tail_optimize) {
           .with_maxWritesInFlight(256)
           .with_singleWriter(false)
           .with_replicationFactor(std::min(nodes_ - (nodes_ > 1), 3ul))
-          .with_extraCopies(0)
           .with_syncedCopies(0)
           .with_syncReplicationScope(sync_replication_scope_);
 
@@ -344,7 +340,6 @@ void RecoveryTest::init(bool can_tail_optimize) {
           .with_maxWritesInFlight(256)
           .with_singleWriter(false)
           .with_replicationFactor(std::min(nodes_ - (nodes_ > 1), 3ul))
-          .with_extraCopies(0)
           .with_syncedCopies(0)
           .with_syncReplicationScope(sync_replication_scope_);
 
@@ -899,7 +894,6 @@ INSTANTIATE_TEST_CASE_P(RecoveryTest,
 TEST_P(RecoveryTest, MutationsWithImmutableConsensus) {
   nodes_ = 4;
   replication_ = 3;
-  extra_ = 0;
 
   init();
 
@@ -1137,7 +1131,6 @@ TEST_P(RecoveryTest, MutationsWithImmutableConsensus) {
 TEST_P(RecoveryTest, NonAuthoritativeRecovery) {
   nodes_ = 6;
   replication_ = 2;
-  extra_ = 0;
   enable_rebuilding_ = true;
 
   // pre-provisioning metadata not to break the "num_holes_plugged" math with
@@ -1274,7 +1267,6 @@ TEST_P(RecoveryTest, NonAuthoritativeRecovery) {
 TEST_P(RecoveryTest, Purging) {
   nodes_ = 5; // four storage nodes
   replication_ = 2;
-  extra_ = 0;
   init();
 
   const copyset_t copyset = {N1, N2};
@@ -1552,7 +1544,6 @@ TEST_P(RecoveryTest, MetadatalogPreempted) {
 TEST_P(RecoveryTest, AuthoritativeRecoveryWithNodeSet) {
   nodes_ = 5;
   replication_ = 3; // replication factor of the starting epoch
-  extra_ = 0;
   pre_provision_epoch_metadata_ = false; // do not provision metadata
   let_sequencers_provision_metadata_ = false;
   init();
@@ -1757,7 +1748,6 @@ TEST_P(RecoveryTest, AuthoritativeRecoveryWithNodeSet) {
 TEST_P(RecoveryTest, FailureDomainAuthoritative) {
   nodes_ = 6;
   replication_ = 3;
-  extra_ = 0;
   sync_replication_scope_ = NodeLocationScope::REGION;
 
   // Region 1:  {0, 1, 2}
@@ -1909,7 +1899,6 @@ TEST_P(RecoveryTest, FailureDomainAuthoritative) {
 TEST_P(RecoveryTest, NonAuthoritativePurging) {
   nodes_ = 6;
   replication_ = 2;
-  extra_ = 0;
   enable_rebuilding_ = true;
   // two logs are used in this test
   num_logs_ = 2;
@@ -2029,7 +2018,6 @@ TEST_P(RecoveryTest, NonAuthoritativePurging) {
 TEST_P(RecoveryTest, PerEpochLogMetadata) {
   nodes_ = 5; // four storage nodes
   replication_ = 2;
-  extra_ = 0;
   // prepopulate metadata logs to be able to do exact epoch math
   pre_provision_epoch_metadata_ = true;
   init();
@@ -2184,7 +2172,6 @@ TEST_P(RecoveryTest, PerEpochLogMetadata) {
 TEST_P(RecoveryTest, AuthoritativeRecoveryAndPurgingWithRNodesEmpty) {
   nodes_ = 10;
   replication_ = 2;
-  extra_ = 0;
   enable_rebuilding_ = true;
   pre_provision_epoch_metadata_ = false; // do not provision metadata
   let_sequencers_provision_metadata_ = false;
@@ -2401,7 +2388,6 @@ TEST_P(RecoveryTest, AuthoritativeRecoveryAndPurgingWithRNodesEmpty) {
 TEST_P(RecoveryTest, RecoveryCannotFullyReplicate) {
   nodes_ = 10;
   replication_ = 3;
-  extra_ = 0;
   enable_rebuilding_ = true;
   pre_provision_epoch_metadata_ = false; // do not provision metadata
   let_sequencers_provision_metadata_ = false;
@@ -2647,7 +2633,6 @@ TEST_P(RecoveryTest, RecoveryCannotFullyReplicate) {
 TEST_P(RecoveryTest, PurgingAvailabilityTest) {
   nodes_ = 6;
   replication_ = 2; // replication factor of the starting epoch
-  extra_ = 0;
   pre_provision_epoch_metadata_ = false; // do not provision metadata
   let_sequencers_provision_metadata_ = false;
   single_empty_erm_ = true;
@@ -2899,7 +2884,6 @@ TEST_P(RecoveryTest, PurgingAvailabilityTest) {
 TEST_P(RecoveryTest, IncompleteDigest) {
   nodes_ = 5; // 5 nodes, N0 is sequencer only, N4 is absent from recovery
   replication_ = 3;
-  extra_ = 0;
   // prepopulate metadata logs to be able to keep track of the exact number of
   // mutations
   pre_provision_epoch_metadata_ = true;
@@ -3000,7 +2984,6 @@ TEST_P(RecoveryTest, IncompleteDigest) {
 TEST_P(RecoveryTest, D4187744) {
   nodes_ = 5; // four storage nodes
   replication_ = 2;
-  extra_ = 0;
   // prepopulate metadata logs to avoid spontaneous sequencer reactivations
   pre_provision_epoch_metadata_ = true;
   init();
@@ -3122,7 +3105,6 @@ TEST_P(RecoveryTest, D4187744) {
 TEST_P(RecoveryTest, BridgeRecords) {
   nodes_ = 4;
   replication_ = 3;
-  extra_ = 0;
 
   init();
 
@@ -3262,7 +3244,6 @@ TEST_P(RecoveryTest, BridgeRecords) {
 TEST_P(RecoveryTest, PurgingAfterSkippedNonAuthoritativeRecovery) {
   nodes_ = 7;
   replication_ = 2;
-  extra_ = 0;
   enable_rebuilding_ = true;
   // only one data log
   num_logs_ = 1;
@@ -3456,7 +3437,6 @@ TEST_P(RecoveryTest, PurgingAfterSkippedNonAuthoritativeRecovery) {
 TEST_P(RecoveryTest, LNGNearESNMAX) {
   nodes_ = 4; // four storage nodes
   replication_ = 2;
-  extra_ = 0;
   init();
 
   const copyset_t copyset = {N1, N2};
@@ -3498,7 +3478,6 @@ TEST_P(RecoveryTest, LNGNearESNMAX) {
 TEST_P(RecoveryTest, TailRecordAtLNG) {
   nodes_ = 4;
   replication_ = 3;
-  extra_ = 0;
 
   init();
   const copyset_t copyset = {N1, N2, N3};
@@ -3558,7 +3537,6 @@ TEST_P(RecoveryTest, TailRecordAtLNG) {
 TEST_P(RecoveryTest, TailRecordAtLNGDataLoss) {
   nodes_ = 4;
   replication_ = 3;
-  extra_ = 0;
 
   init();
   const copyset_t copyset = {N1, N2, N3};
@@ -3612,7 +3590,6 @@ TEST_P(RecoveryTest, TailRecordAtLNGDataLoss) {
 TEST_P(RecoveryTest, ComputeTailRecord) {
   nodes_ = 4;
   replication_ = 2;
-  extra_ = 0;
 
   // allow quick reactivations in this test
   seq_reactivation_limit_ = "100/1s";
@@ -3810,7 +3787,6 @@ TEST_P(RecoveryTest, ComputeTailRecord) {
 TEST_P(RecoveryTest, BridgeRecordForEmptyEpochs) {
   nodes_ = 4;
   replication_ = 3;
-  extra_ = 0;
   bridge_empty_epoch_ = true;
 
   init();
@@ -3891,7 +3867,6 @@ TEST_P(RecoveryTest, BridgeRecordForEmptyEpochs) {
 TEST_P(RecoveryTest, AuthoritativeRecoveryWithReadOnlyNodes) {
   nodes_ = 6;
   replication_ = 2;
-  extra_ = 0;
   enable_rebuilding_ = true;
   // shorten the mutation timeout for faster retries
   recovery_timeout_ = std::chrono::milliseconds(5000);
@@ -4173,7 +4148,6 @@ TEST_P(RecoveryTest, AuthoritativeRecoveryWithReadOnlyNodes) {
 TEST_P(RecoveryTest, BasicWriteStream) {
   nodes_ = 4;
   replication_ = 3;
-  extra_ = 0;
 
   init();
 

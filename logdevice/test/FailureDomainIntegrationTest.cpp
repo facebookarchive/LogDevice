@@ -71,7 +71,6 @@ TEST_F(FailureDomainIntegrationTest, TolerateRegionFailure) {
 
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(2)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(2048)
                        // cross-region replication
@@ -191,7 +190,6 @@ TEST_F(FailureDomainIntegrationTest, ReadHealthWithFailureDomain) {
 
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(2)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(256)
                        // cross-region replication
@@ -284,7 +282,6 @@ TEST_F(FailureDomainIntegrationTest,
 
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(2)
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(2048)
                        // cross-region replication

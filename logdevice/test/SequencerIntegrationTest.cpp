@@ -1132,8 +1132,7 @@ std::unique_ptr<IntegrationTestUtils::Cluster> createClusterFromNodes(
   auto log_attrs =
       IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(
           num_nodes)
-          .with_replicationFactor(num_nodes - 1)
-          .with_extraCopies(1);
+          .with_replicationFactor(num_nodes - 1);
 
   auto factory = IntegrationTestUtils::ClusterFactory()
                      .setNodes(nodes)
@@ -2392,8 +2391,7 @@ TEST_F(SequencerIntegrationTest, WeightChangeToZero) {
   auto log_attrs =
       IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2)
           .with_maxWritesInFlight(1024)
-          .with_replicationFactor(1)
-          .with_extraCopies(0);
+          .with_replicationFactor(1);
 
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig(/*nodeset=*/{1}, /*replication=*/1);
@@ -2472,8 +2470,7 @@ TEST_F(SequencerIntegrationTest, SequencerMetaDataManagerNullptrCrash) {
   auto log_attrs =
       IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2)
           .with_maxWritesInFlight(1024)
-          .with_replicationFactor(1)
-          .with_extraCopies(0);
+          .with_replicationFactor(1);
 
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig(/*nodeset=*/{1}, /*replication=*/1);
@@ -2837,8 +2834,7 @@ TEST_F(SequencerIntegrationTest, MetaDataLogSequencerReactToWeightChanges) {
   auto log_attrs =
       IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2)
           .with_maxWritesInFlight(1024)
-          .with_replicationFactor(2)
-          .with_extraCopies(0);
+          .with_replicationFactor(2);
 
   const int NNODES = 5;
   Configuration::Nodes nodes;
@@ -2958,7 +2954,6 @@ TEST_F(SequencerIntegrationTest, SequencerReadTrimPointTest) {
       IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2)
           .with_maxWritesInFlight(1024)
           .with_replicationFactor(2)
-          .with_extraCopies(0)
           .with_nodeSetSize(4);
 
   const int NNODES = 6;
@@ -3051,7 +3046,6 @@ TEST_F(SequencerIntegrationTest, SequencerTrimsMetadataLogTest) {
       IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2)
           .with_maxWritesInFlight(1024)
           .with_replicationFactor(2)
-          .with_extraCopies(0)
           .with_nodeSetSize(4);
 
   const int NNODES = 6;
@@ -3152,8 +3146,7 @@ TEST_F(SequencerIntegrationTest, MetaDataWritePreempted) {
   auto log_attrs =
       IntegrationTestUtils::ClusterFactory::createDefaultLogAttributes(2)
           .with_maxWritesInFlight(1024)
-          .with_replicationFactor(1)
-          .with_extraCopies(0);
+          .with_replicationFactor(1);
 
   Configuration::MetaDataLogsConfig meta_config =
       createMetaDataLogsConfig(/*nodeset=*/{1}, /*replication=*/1);

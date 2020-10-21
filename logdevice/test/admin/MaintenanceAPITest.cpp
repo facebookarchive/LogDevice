@@ -115,7 +115,6 @@ void MaintenanceAPITest::init(size_t max_unavailable_storage_capacity_pct,
 
   auto internal_log_attrs = logsconfig::LogAttributes()
                                 .with_replicationFactor(3)
-                                .with_extraCopies(0)
                                 .with_syncedCopies(0)
                                 .with_maxWritesInFlight(2048);
 

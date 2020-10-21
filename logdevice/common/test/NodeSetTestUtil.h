@@ -33,7 +33,6 @@ void addNodes(
 void addLog(configuration::LocalLogsConfig* logs_config,
             logid_t logid,
             ReplicationProperty replication,
-            int extras,
             size_t nodeset_size,
             folly::Optional<std::chrono::seconds> backlog = folly::none);
 
@@ -41,14 +40,12 @@ inline void
 addLog(configuration::LocalLogsConfig* logs_config,
        logid_t logid,
        int replication,
-       int extras,
        size_t nodeset_size,
        folly::Optional<std::chrono::seconds> backlog,
        NodeLocationScope sync_replication_scope = NodeLocationScope::NODE) {
   addLog(logs_config,
          logid,
          ReplicationProperty(replication, sync_replication_scope),
-         extras,
          nodeset_size,
          backlog);
 }

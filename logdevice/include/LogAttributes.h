@@ -27,7 +27,6 @@
 namespace facebook { namespace logdevice { namespace logsconfig {
 
 constexpr char const* REPLICATION_FACTOR = "replication_factor";
-constexpr char const* EXTRA_COPIES = "extra_copies";
 constexpr char const* SYNCED_COPIES = "synced_copies";
 constexpr char const* MAX_WRITES_IN_FLIGHT = "max_writes_in_flight";
 constexpr char const* SINGLE_WRITER = "single_writer";
@@ -300,7 +299,6 @@ class LogAttributes {
    private:
     static auto as_tuple(const CommonValues& cv) {
       return std::tie(cv.replicationFactor_,
-                      cv.extraCopies_,
                       cv.syncedCopies_,
                       cv.maxWritesInFlight_,
                       cv.singleWriter_,
@@ -332,7 +330,6 @@ class LogAttributes {
 
     CommonValues(
         const Attribute<int>& replicationFactor,
-        const Attribute<int>& extraCopies,
         const Attribute<int>& syncedCopies,
         const Attribute<int>& maxWritesInFlight,
         const Attribute<bool>& singleWriter,
@@ -360,7 +357,6 @@ class LogAttributes {
         const Attribute<Shadow>& shadow,
         const Attribute<bool>& tailOptimized)
         : replicationFactor_(replicationFactor),
-          extraCopies_(extraCopies),
           syncedCopies_(syncedCopies),
           maxWritesInFlight_(maxWritesInFlight),
           singleWriter_(singleWriter),
@@ -408,13 +404,6 @@ class LogAttributes {
      * Optional if replicateAcross_ is present.
      */
     Attribute<int> replicationFactor_;
-    /**
-     * Number of extra copies the sequencer sends out to storage nodes
-     * ('x' in the design doc).  If x > 0, this is done to improve
-     * latency and availability; the sequencer will try to delete extra
-     * copies after the write is finalized.
-     */
-    Attribute<int> extraCopies_;
     /**
      * The number of copies that must be acknowledged by storage nodes
      * as synced to disk before the record is acknowledged to client as
@@ -575,7 +564,6 @@ class LogAttributes {
     return copy;                                                      \
   }
     ACCESSOR(replicationFactor)
-    ACCESSOR(extraCopies)
     ACCESSOR(syncedCopies)
     ACCESSOR(maxWritesInFlight)
     ACCESSOR(singleWriter)
@@ -619,7 +607,6 @@ class LogAttributes {
   friend class LogsConfigTreeNode;
   LogAttributes(
       const Attribute<int>& replicationFactor,
-      const Attribute<int>& extraCopies,
       const Attribute<int>& syncedCopies,
       const Attribute<int>& maxWritesInFlight,
       const Attribute<bool>& singleWriter,
@@ -648,7 +635,6 @@ class LogAttributes {
       const Attribute<ExtrasMap>& extras)
       : common_(std::make_shared<const CommonValues>(
             replicationFactor,
-            extraCopies,
             syncedCopies,
             maxWritesInFlight,
             singleWriter,
@@ -683,8 +669,6 @@ class LogAttributes {
       : common_(std::make_shared<const CommonValues>(
             Attribute(attrs.common_->replicationFactor_,
                       parent.common_->replicationFactor_),
-            Attribute(attrs.common_->extraCopies_,
-                      parent.common_->extraCopies_),
             Attribute(attrs.common_->syncedCopies_,
                       parent.common_->syncedCopies_),
             Attribute(attrs.common_->maxWritesInFlight_,
@@ -790,7 +774,6 @@ class LogAttributes {
   // This creates a set of accessors for the attributes, the getter is the name
   // of the attribute defined as a function.
   ACCESSOR1(replicationFactor)
-  ACCESSOR1(extraCopies)
   ACCESSOR1(syncedCopies)
   ACCESSOR1(maxWritesInFlight)
   ACCESSOR1(singleWriter)

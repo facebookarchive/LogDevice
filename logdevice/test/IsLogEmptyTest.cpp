@@ -69,13 +69,11 @@ void IsLogEmptyTest::commonSetup(
     IntegrationTestUtils::ClusterFactory& cluster) {
   auto log_attrs = logsconfig::LogAttributes()
                        .with_replicationFactor(std::min(NUM_NODES - 1, 2))
-                       .with_extraCopies(0)
                        .with_syncedCopies(0)
                        .with_maxWritesInFlight(250);
 
   auto event_log_attrs = logsconfig::LogAttributes()
                              .with_replicationFactor(std::min(NUM_NODES - 1, 2))
-                             .with_extraCopies(0)
                              .with_syncedCopies(0)
                              .with_maxWritesInFlight(250);
 
