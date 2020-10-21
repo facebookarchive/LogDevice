@@ -154,6 +154,15 @@ void ShardWorkflow::computeMaintenanceStatusForDrain() {
       // maintenance that needs this node to be drained will appear completed
       // immediately.
     case membership::StorageState::PROVISIONING:
+      // Trigger rebuilding if one wasn't already triggered
+      // If we trigger rebuilding, we want this to be a RESTORE rebuilding.
+      if (current_data_health_ != ShardDataHealth::EMPTY) {
+        ld_info("The Shard %s is disabled in NCM but not fully drained in "
+                "eventlog, triggering a RESTORE rebuilding for it.",
+                toString(shard_).c_str());
+        restore_mode_rebuilding_ = true;
+        createRebuildEventIfRequired(/* force = */ false);
+      }
       // We have reached the target already, there is no further transitions
       // needed to declare the shard as DRAINED.
       updateStatus(MaintenanceStatus::COMPLETED);
