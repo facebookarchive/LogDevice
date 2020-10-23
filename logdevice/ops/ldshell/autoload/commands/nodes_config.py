@@ -8,7 +8,6 @@
 
 import difflib
 import json
-import logging
 import os
 import subprocess
 import tempfile
@@ -25,7 +24,6 @@ from logdevice.admin.cluster_membership.types import (
     RemoveNodesRequest,
 )
 from logdevice.admin.nodes.types import NodesFilter
-from logdevice.admin.settings.types import SettingsRequest
 from logdevice.common.types import LocationScope, NodeID, ReplicationProperty
 from logdevice.ops import nodes_configuration_manager as ncm
 from pygments import formatters, lexers
@@ -48,36 +46,13 @@ class NCMError(Exception):
     pass
 
 
-async def _get_client():
-    required_setting = "enable-nodes-configuration-manager"
-    ctx = nubia.context.get_context()
-    is_ncm_enabled = False
-    async with ctx.get_cluster_admin_client() as client:
-        settings = (
-            await client.getSettings(SettingsRequest(settings={required_setting}))
-        ).settings
-        if not settings:
-            logging.warning(
-                "Couldn't find the setting {} on this cluster, assuming disabled.".format(
-                    required_setting
-                )
-            )
-            is_ncm_enabled = False
-        else:
-            is_ncm_enabled = settings[required_setting].currentValue == "true"
-    if not is_ncm_enabled:
-        raise NodesConfigError("This cluster is not NodesConfig-aware")
-
-    client = ctx.build_client(
+def _get_client():
+    return nubia.context.get_context().build_client(
         settings={
-            "admin-client-capabilities": "true",
-            "num-workers": "3",
-            # It's possible that NCM is not enabled for all clients of the cluster,
-            # so we override the NCM settings for these operations.
-            "enable-nodes-configuration-manager": "true",
+            # Read NCM from Zookeeper direectly instead of other nodes.
+            "admin-client-capabilities": "true"
         }
     )
-    return client
 
 
 def _get_nodes_config(client):
@@ -116,7 +91,7 @@ class NodesConfig:
         """Print tier's NodesConfig to stdout"""
 
         try:
-            client = await _get_client()
+            client = _get_client()
             nc = _get_nodes_config(client)
         except Exception as e:
             termcolor.cprint(str(e), "red")
@@ -138,7 +113,7 @@ class NodesConfig:
         """
 
         try:
-            client = await _get_client()
+            client = _get_client()
             nc = _get_nodes_config(client)
         except Exception as e:
             termcolor.cprint(str(e), "red")
@@ -194,13 +169,13 @@ class NodesConfig:
                 try:
                     nc_bin = ncm.json_to_nodes_configuration(edited_nc_json_str)
                 except Exception as e:
-                    raise NCMError(f"Error on serializing config: {str(e)}")
+                    raise NCMError(f"Error on serializing config: {e}")
 
                 try:
                     ncm.overwrite_nodes_configuration(client, nc_bin)
                     break
                 except Exception as e:
-                    raise NCMError(f"Error on overwriting config: {str(e)}")
+                    raise NCMError(f"Error on overwriting config: {e}")
 
             except (EditorError, json.JSONDecodeError, NCMError) as e:
                 termcolor.cprint(str(e), "red")
