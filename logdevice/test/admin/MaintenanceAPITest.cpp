@@ -29,7 +29,6 @@ using namespace facebook::logdevice;
 using namespace facebook::logdevice::maintenance;
 
 #define LOG_ID logid_t(1)
-constexpr size_t NUM_NODES = 6;
 
 // Kill test process after this many seconds. These tests are complex and take
 // around 25s to execute so giving them a longer timeout.
@@ -101,15 +100,14 @@ class MaintenanceAPITest : public IntegrationTestBase {
   void SetUp() override {
     IntegrationTestBase::SetUp();
   }
+  size_t num_nodes_ = 6;
+  size_t num_shards_ = 2;
 };
 
 void MaintenanceAPITest::init(size_t max_unavailable_storage_capacity_pct,
                               size_t max_unavailable_sequencing_capacity_pct) {
-  const size_t num_nodes = NUM_NODES;
-  const size_t num_shards = 2;
-
   auto nodes_configuration =
-      createSimpleNodesConfig(num_nodes, num_shards, true, 3);
+      createSimpleNodesConfig(num_nodes_, num_shards_, true, 3);
 
   auto log_attrs = logsconfig::LogAttributes().with_replicationFactor(2);
 
@@ -147,14 +145,14 @@ void MaintenanceAPITest::init(size_t max_unavailable_storage_capacity_pct,
           .setParam("--loglevel", "debug")
           .enableLogsConfigManager()
           .useStandaloneAdminServer(true)
-          .setNumDBShards(num_shards)
+          .setNumDBShards(num_shards_)
           .setLogGroupName("test_logrange")
           .setLogAttributes(log_attrs)
           .setMaintenanceLogAttributes(internal_log_attrs)
           .setEventLogAttributes(internal_log_attrs)
           .setConfigLogAttributes(internal_log_attrs)
           .deferStart()
-          .create(num_nodes);
+          .create(num_nodes_);
 }
 
 TEST_F(MaintenanceAPITest, ApplyMaintenancesInvalid1) {
@@ -301,6 +299,8 @@ TEST_F(MaintenanceAPITest, RollingSequencerMovement) {
   ASSERT_NE(nullptr, lg1);
   client->syncLogsConfigVersion(lg1->version());
 
+  auto rpc_options = apache::thrift::RpcOptions();
+  rpc_options.setTimeout(std::chrono::minutes(1));
   cluster_->waitForRecovery();
   // Let's start by writing some data to some logs.
   for (int log_id = 1; log_id <= 100; ++log_id) {
@@ -317,7 +317,7 @@ TEST_F(MaintenanceAPITest, RollingSequencerMovement) {
     request.set_skip_safety_checks(true);
     request.set_group(true);
     thrift::MaintenanceDefinitionResponse resp;
-    admin_client->sync_applyMaintenance(resp, request);
+    admin_client->sync_applyMaintenance(rpc_options, resp, request);
     auto output = resp.get_maintenances();
     ASSERT_EQ(1, output.size());
     // Let's wait until the sequencer is actually disabled.
@@ -327,7 +327,7 @@ TEST_F(MaintenanceAPITest, RollingSequencerMovement) {
                [&]() {
                  thrift::MaintenancesFilter req1;
                  thrift::MaintenanceDefinitionResponse resp1;
-                 admin_client->sync_getMaintenances(resp1, req1);
+                 admin_client->sync_getMaintenances(rpc_options, resp1, req1);
                  const auto& def = resp1.get_maintenances()[0];
                  return def.get_progress() ==
                      thrift::MaintenanceProgress::COMPLETED;
@@ -340,7 +340,7 @@ TEST_F(MaintenanceAPITest, RollingSequencerMovement) {
     filter.set_user(maintenance_user);
     req.set_filter(filter);
     thrift::RemoveMaintenancesResponse resp;
-    admin_client->sync_removeMaintenances(resp, req);
+    admin_client->sync_removeMaintenances(rpc_options, resp, req);
     // Wait until the sequencer is actually enabled
     ASSERT_TRUE(wait_until_node_state(
         *admin_client, node, [&](const thrift::NodeState& node_state) {
@@ -359,7 +359,7 @@ TEST_F(MaintenanceAPITest, RollingSequencerMovement) {
   // torture the cluster.
   for (int i = 0; i < attempts; i++) {
     ld_info("Targeting N%u and disabling its sequencers", i);
-    auto target_node = node_index_t(folly::Random::rand32() % NUM_NODES);
+    auto target_node = node_index_t(folly::Random::rand32() % num_nodes_);
     disable_sequencer(target_node);
     // We roll a dice, sometimes we decide to shutdown the node as well. 25%
     // chance.
@@ -375,6 +375,7 @@ TEST_F(MaintenanceAPITest, RollingSequencerMovement) {
     if (should_shutdown) {
       cluster_->getNode(target_node).start();
     }
+    cluster_->waitUntilAllSequencersQuiescent();
     enable_sequencer(target_node);
   }
 }
@@ -576,6 +577,7 @@ TEST_F(MaintenanceAPITest, ApplyMaintenancesSafetyCheckResults) {
 }
 
 TEST_F(MaintenanceAPITest, MayDisappearInSequencerFailsSafetyCheck) {
+  num_nodes_ = 4;
   init();
   cluster_->start();
   cluster_->waitUntilAllAvailable();
@@ -603,20 +605,20 @@ TEST_F(MaintenanceAPITest, MayDisappearInSequencerFailsSafetyCheck) {
     return thrift::MaintenanceProgress::COMPLETED == def.get_progress();
   });
 
-  // Create a maintenance that sets N3 to MAY_DISAPPEAR
+  // Create a maintenance that sets N2 to MAY_DISAPPEAR
   // This should fail safety check becasue we will lose read
   // availability with 2 nodes in MAY_DISAPPEAR
   thrift::MaintenanceDefinition request3;
   request3.set_user("user2");
   request3.set_shard_target_state(ShardOperationalState::MAY_DISAPPEAR);
-  request3.set_shards({mkShardID(3, -1)});
+  request3.set_shards({mkShardID(2, -1)});
   request3.set_sequencer_target_state(SequencingState::DISABLED);
   request3.set_group(true);
   thrift::MaintenanceDefinitionResponse resp3;
   admin_client->sync_applyMaintenance(resp3, request3);
   ASSERT_EQ(1, resp3.get_maintenances().size());
 
-  wait_until("Maintenance for N3 transitions to BLOCKED_UNTIL_SAFE", [&]() {
+  wait_until("Maintenance for N2 transitions to BLOCKED_UNTIL_SAFE", [&]() {
     thrift::MaintenancesFilter request4;
     request4.set_user("user2");
     thrift::MaintenanceDefinitionResponse resp4;
@@ -626,20 +628,20 @@ TEST_F(MaintenanceAPITest, MayDisappearInSequencerFailsSafetyCheck) {
         def.get_progress();
   });
 
-  // Now create a maintenance to set N4 to MAY_DISAPPEAR.
+  // Now create a maintenance to set N3 to MAY_DISAPPEAR.
   // This should fail safety check becasue we will lose read
   // availability with 3 nodes in MAY_DISAPPEAR
   thrift::MaintenanceDefinition request4;
   request4.set_user("user3");
   request4.set_shard_target_state(ShardOperationalState::MAY_DISAPPEAR);
-  request4.set_shards({mkShardID(4, -1)});
+  request4.set_shards({mkShardID(3, -1)});
   request4.set_sequencer_target_state(SequencingState::DISABLED);
   request4.set_group(true);
   thrift::MaintenanceDefinitionResponse resp4;
   admin_client->sync_applyMaintenance(resp4, request4);
   ASSERT_EQ(1, resp4.get_maintenances().size());
 
-  wait_until("Maintenance for N4 transitions to BLOCKED_UNTIL_SAFE", [&]() {
+  wait_until("Maintenance for N3 transitions to BLOCKED_UNTIL_SAFE", [&]() {
     thrift::MaintenancesFilter request5;
     request5.set_user("user3");
     thrift::MaintenanceDefinitionResponse resp5;
@@ -685,7 +687,7 @@ TEST_F(MaintenanceAPITest, MayDisappearInSequencerFailsSafetyCheck) {
     });
   }
 
-  // Verify that maintenance for N4 is still blocked
+  // Verify that maintenance for N3 is still blocked
   thrift::MaintenancesFilter request7;
   request7.set_user("user3");
   thrift::MaintenanceDefinitionResponse resp7;
@@ -706,7 +708,7 @@ TEST_F(MaintenanceAPITest, MayDisappearInSequencerFailsSafetyCheck) {
   admin_client->sync_removeMaintenances(resp8, request8);
 
   // Now N4's maintenance should be unblocked and run to completion
-  wait_until("Maintenance for N4 transitions to COMPLETED", [&]() {
+  wait_until("Maintenance for N3 transitions to COMPLETED", [&]() {
     thrift::MaintenancesFilter request9;
     request9.set_user("user3");
     thrift::MaintenanceDefinitionResponse resp9;
@@ -966,12 +968,12 @@ TEST_F(MaintenanceAPITest, unblockRebuilding) {
   cluster_->getAdminServer()->waitUntilFullyLoaded();
   auto admin_client = cluster_->getAdminServer()->createAdminClient();
 
+  // Under stress runs, the initial initialization might take a while, let's
+  // be patient and increase the timeout here.
+  auto rpc_options = apache::thrift::RpcOptions();
   wait_until("MaintenanceManager is ready", [&]() {
     thrift::NodesStateRequest req;
     thrift::NodesStateResponse resp;
-    // Under stress runs, the initial initialization might take a while, let's
-    // be patient and increase the timeout here.
-    auto rpc_options = apache::thrift::RpcOptions();
     rpc_options.setTimeout(std::chrono::minutes(1));
     try {
       admin_client->sync_getNodesState(rpc_options, resp, req);
@@ -987,31 +989,10 @@ TEST_F(MaintenanceAPITest, unblockRebuilding) {
     }
   });
 
-  {
-    thrift::NodesStateRequest request;
-    thrift::NodesStateResponse response;
-    admin_client->sync_getNodesState(response, request);
-    ASSERT_EQ(6, response.get_states().size());
-    for (const auto& state : response.get_states()) {
-      ASSERT_EQ(thrift::ServiceState::ALIVE, state.get_daemon_state());
-      ASSERT_NE(thrift::ServiceHealthStatus::UNKNOWN,
-                state.get_daemon_health_status());
-      const thrift::SequencerState& seq_state =
-          state.sequencer_state_ref().value();
-      ASSERT_EQ(SequencingState::ENABLED, seq_state.get_state());
-      const auto& shard_states = state.shard_states_ref().value();
-      ASSERT_EQ(2, shard_states.size());
-      for (const auto& shard : shard_states) {
-        ASSERT_EQ(ShardDataHealth::HEALTHY, shard.get_data_health());
-        ASSERT_EQ(membership::thrift::StorageState::READ_WRITE,
-                  shard.get_storage_state());
-        ASSERT_EQ(membership::thrift::MetaDataStorageState::METADATA,
-                  shard.get_metadata_state());
-        ASSERT_EQ(ShardOperationalState::ENABLED,
-                  shard.get_current_operational_state());
-      }
-    }
-  }
+  std::vector<node_index_t> all_nodes(num_nodes_);
+  std::iota(all_nodes.begin(), all_nodes.end(), 0);
+  wait_until_service_state(
+      *admin_client, all_nodes, thrift::ServiceState::ALIVE);
 
   // Write some records
   ld_info("Creating client");
@@ -1062,7 +1043,8 @@ TEST_F(MaintenanceAPITest, unblockRebuilding) {
     thrift::NodesStateResponse response;
     wait_until("Maintenance Status is REBUILDING_IS_BLOCKED for N0", [&]() {
       try {
-        admin_client->sync_getNodesState(response, request);
+        admin_client = cluster_->getAdminServer()->createAdminClient();
+        admin_client->sync_getNodesState(rpc_options, response, request);
         const auto& state = response.get_states()[0];
         const auto& shard_states = state.shard_states_ref().value();
         // We need to wait for all shard maintenances to finish
@@ -1079,6 +1061,10 @@ TEST_F(MaintenanceAPITest, unblockRebuilding) {
         return all_shards_blocked == true;
       } catch (thrift::NodeNotReady& e) {
         return false;
+      } catch (apache::thrift::transport::TTransportException& e) {
+        ld_warning(
+            "Thrift server is returning TTransportExceptions: %s", e.what());
+        return false;
       }
       return false;
     });
@@ -1090,7 +1076,7 @@ TEST_F(MaintenanceAPITest, unblockRebuilding) {
   request.set_user("test");
   request.set_reason("test");
   thrift::MarkAllShardsUnrecoverableResponse response;
-  admin_client->sync_markAllShardsUnrecoverable(response, request);
+  admin_client->sync_markAllShardsUnrecoverable(rpc_options, response, request);
 
   IntegrationTestUtils::waitUntilShardsHaveEventLogState(
       client, expected_shards, AuthoritativeStatus::AUTHORITATIVE_EMPTY, true);
@@ -1099,7 +1085,7 @@ TEST_F(MaintenanceAPITest, unblockRebuilding) {
 TEST_F(MaintenanceAPITest, RemoveNodesInMaintenance) {
   init();
 
-  // Start with a disabled N5, to make the remove easier.
+  // Start with a disabled N4, to make the remove easier.
   cluster_->updateNodeAttributes(
       node_index_t(4), configuration::StorageState::DISABLED, 1, false);
 
@@ -1139,6 +1125,7 @@ TEST_F(MaintenanceAPITest, RemoveNodesInMaintenance) {
     thrift::MaintenanceDefinitionResponse m2_def;
     admin_client->sync_applyMaintenance(m2_def, m2);
   }
+  wait_until_service_state(*admin_client, {4}, thrift::ServiceState::DEAD);
 
   // Remove N5 from the config
   {
