@@ -154,14 +154,30 @@ void RebuildingSupervisor::addForRebuilding(
     return;
   }
 
-  if (!nodes_configuration->getStorageMembership()->hasShardShouldReadFrom(
-          node_id)) {
+  if (!nodes_configuration->isStorageNode(node_id)) {
     RATELIMIT_INFO(std::chrono::seconds(1),
                    1,
-                   "Not triggering rebuilding of N%d: not a storage node or "
-                   "all shards are disabled",
+                   "Not triggering rebuilding of N%d: not a storage node",
                    node_id);
     WORKER_STAT_INCR(node_rebuilding_not_triggered_notstorage);
+    return;
+  }
+
+  // If this is a rebuilding for a specific shard, we know that it's (our)
+  // shard. We only want to trigger rebuilding if there is no other requests
+  // in-flight. In this case we don't want to re-trigger rebuilding since there
+  // must be one that started this rebuilding already.
+  if (shard_idx && // shard_id is folly::none if this is a rebuilding for a full
+                   // node (not my shard)
+      !nodes_configuration->getStorageMembership()->shouldReadFromShard(
+          ShardID(node_id, *shard_idx)) &&
+      (node_id == myNodeId_.index())) {
+    RATELIMIT_INFO(std::chrono::seconds(1),
+                   1,
+                   "Not triggering rebuilding of my shard N%d since it's "
+                   "already not-readable/rebuilding/rebuilt.",
+                   node_id);
+    WORKER_STAT_INCR(shard_rebuilding_not_triggered_started);
     return;
   }
 
@@ -551,12 +567,17 @@ bool RebuildingSupervisor::canTriggerNodeRebuilding(
     return false;
   }
 
-  if (!nodes_configuration->getStorageMembership()->hasShardShouldReadFrom(
-          trigger.node_id_)) {
+  if (!nodes_configuration->isStorageNode(trigger.node_id_)) {
+    // Note 1: that if this node is a new storage node and not fully started,
+    // rebuilding will be scheduled for it to make sure that it
+    // transitions to AUTHORITATIVE_EMPTY.
+    //
+    // Note 2: Nodes that are storage nodes and fully disabled will have their
+    // triggers cancelled because they will be in UNAVAILABLE or
+    // AUTHORITATIVE_EMPTY.
     RATELIMIT_INFO(std::chrono::seconds(1),
                    1,
-                   "Not triggering rebuilding of N%d: not a storage node or "
-                   "all shards are disabled",
+                   "Not triggering rebuilding of N%d not a storage node",
                    trigger.node_id_);
     WORKER_STAT_INCR(node_rebuilding_not_triggered_notstorage);
     return false;

@@ -7,10 +7,13 @@
  */
 #include <gtest/gtest.h>
 
+#include "logdevice/admin/toString.h"
 #include "logdevice/common/configuration/ConfigParser.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/event_log/EventLogStateMachine.h"
 #include "logdevice/include/Client.h"
+#include "logdevice/lib/ClientImpl.h"
+#include "logdevice/test/utils/AdminAPITestUtils.h"
 #include "logdevice/test/utils/IntegrationTestBase.h"
 #include "logdevice/test/utils/IntegrationTestUtils.h"
 
@@ -33,10 +36,56 @@ static int count_requested_rebuildings(IntegrationTestUtils::Cluster* cluster) {
   return rebuildings;
 }
 
+static lsn_t write_to_event_log(Client& client, EventLogRecord& event) {
+  logid_t event_log_id = configuration::InternalLogs::EVENT_LOG_DELTAS;
+
+  ld_info("Writing to event log: %s", event.describe().c_str());
+
+  // Retry for at most 30s to avoid test failures due to transient failures
+  // writing to the event log.
+  std::chrono::steady_clock::time_point deadline =
+      std::chrono::steady_clock::now() + std::chrono::seconds{30};
+
+  const int size = event.toPayload(nullptr, 0);
+  ld_check(size > 0);
+  void* buf = malloc(size);
+  ld_check(buf);
+  SCOPE_EXIT {
+    free(buf);
+  };
+  int rv = event.toPayload(buf, size);
+  ld_check(rv == size);
+  Payload payload(buf, size);
+
+  lsn_t lsn = LSN_INVALID;
+  auto clientImpl = dynamic_cast<ClientImpl*>(&client);
+  clientImpl->allowWriteInternalLog();
+  rv = wait_until("writes to the event log succeed",
+                  [&]() {
+                    lsn = clientImpl->appendSync(event_log_id, payload);
+                    return lsn != LSN_INVALID;
+                  },
+                  deadline);
+
+  if (rv != 0) {
+    ld_check(lsn == LSN_INVALID);
+    ld_error("Could not write record %s in event log(%lu): %s(%s)",
+             event.describe().c_str(),
+             event_log_id.val_,
+             error_name(err),
+             error_description(err));
+    return LSN_INVALID;
+  }
+
+  ld_info("Wrote event log record with lsn %s", lsn_to_string(lsn).c_str());
+  return lsn;
+}
+
 // Checks that rebuilding is requested for `shards' and nothing else.
 static void expect_rebuildings(std::set<ShardID> shards,
                                IntegrationTestUtils::Cluster* cluster) {
   auto client = cluster->createClient();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
 
   // Wait for rebuildings to be requested.
   wait_until("Rebuilding supervisor done", [&]() {
@@ -45,62 +94,30 @@ static void expect_rebuildings(std::set<ShardID> shards,
     EXPECT_TRUE(count <= shards.size());
     return count == shards.size();
   });
-
-  // Read event log to check that rebuildings were requested no more than once.
-
-  const logid_t event_log_id = configuration::InternalLogs::EVENT_LOG_DELTAS;
-
-  lsn_t until_lsn = client->getTailLSNSync(event_log_id);
-  ASSERT_NE(LSN_INVALID, until_lsn);
-
-  auto reader = client->createReader(1);
-  reader->startReading(event_log_id, LSN_OLDEST, until_lsn);
+  // Shards that we have seen internal maintenances created for.
   std::set<ShardID> seen;
-  while (reader->isReadingAny()) {
-    std::vector<std::unique_ptr<DataRecord>> data;
-    GapRecord gap;
-    ssize_t nread = reader->read(1, &data, &gap);
-    if (nread < 0) {
-      EXPECT_EQ(-1, nread);
-      EXPECT_EQ(E::GAP, err);
-      EXPECT_TRUE(gap.type == GapType::BRIDGE || gap.type == GapType::HOLE ||
-                  gap.type == GapType::TRIM);
-      continue;
-    }
-    if (nread == 0) {
-      continue;
-    }
-    ASSERT_EQ(1, nread);
 
-    // TODO: improve this by providing proper api
-    EventLogStateMachine::DeltaHeader header;
-    std::unique_ptr<EventLogRecord> rec;
-    int rv;
-    if (EventLogStateMachine::deserializeDeltaHeader(
-            data[0]->payload, header)) {
-      const uint8_t* ptr =
-          reinterpret_cast<const uint8_t*>(data[0]->payload.data());
-      rv = EventLogRecord::fromPayload(
-          Payload(ptr + header.header_sz,
-                  data[0]->payload.size() - header.header_sz),
-          rec);
-    } else {
-      rv = EventLogRecord::fromPayload(data[0]->payload, rec);
-    }
-    ASSERT_EQ(0, rv);
-    EXPECT_NE(EventType::SHARD_ABORT_REBUILD, rec->getType());
-    if (rec->getType() != EventType::SHARD_NEEDS_REBUILD) {
-      continue;
-    }
-    ld_info("Got SHARD_NEEDS_REBUILD with lsn=%s timestamp=%s: %s",
-            lsn_to_string(data[0]->attrs.lsn).c_str(),
-            format_time(data[0]->attrs.timestamp).c_str(),
-            rec->describe().c_str());
-    auto ev = dynamic_cast<SHARD_NEEDS_REBUILD_Event*>(rec.get());
-    auto s = ShardID(ev->header.nodeIdx, ev->header.shardIdx);
-    EXPECT_TRUE(shards.count(s));
-    EXPECT_FALSE(seen.count(s));
-    seen.insert(s);
+  for (const ShardID& shard : shards) {
+    cluster->getNode(shard.node())
+        .waitUntilInternalMaintenances(
+            *admin_client,
+            [&](const auto& maintenances) {
+              if (maintenances.empty()) {
+                return false;
+              }
+              for (const auto& maintenance : maintenances) {
+                for (const auto& s : maintenance.get_shards()) {
+                  if (s.get_shard_index() == shard.shard()) {
+                    ld_info("Found internal maintenance: %s",
+                            thriftToJson(maintenance).c_str());
+                    seen.insert(shard);
+                  }
+                }
+              }
+              // We need to wait a bit more.
+              return true;
+            },
+            "Internal maintenances must not be empty");
   }
   EXPECT_EQ(shards.size(), seen.size());
   // Check rebuilding supervisor stats, once more
@@ -129,16 +146,24 @@ void waitForNodesToReadEventLog(IntegrationTestUtils::Cluster& cluster) {
 
 TEST_F(RebuildingSupervisorIntegrationTest, BasicFD) {
   // Replication factor is 2 by default.
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .enableSelfInitiatedRebuilding("10s")
-                     .setParam("--event-log-grace-period", "1ms")
-                     .setParam("--disable-event-log-trimming", "true")
-                     .useHashBasedSequencerAssignment()
-                     .setNumDBShards(2)
-                     .deferStart()
-                     .create(5);
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .enableSelfInitiatedRebuilding("10s")
+          .setParam("--event-log-grace-period", "1ms")
+          .setParam("--disable-event-log-trimming", "true")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
+          .setParam("--gossip-enabled", "true")
+          .useStandaloneAdminServer(true)
+          .useHashBasedSequencerAssignment()
+          .setNumDBShards(2)
+          .deferStart()
+          .create(5);
 
   cluster->start({0, 1, 2, 3});
+  cluster->getAdminServer()->waitUntilFullyLoaded();
 
   ld_info("Waiting for rebuilding of N4 to be triggered");
   expect_rebuildings({{4, 0}, {4, 1}}, cluster.get());
@@ -147,14 +172,21 @@ TEST_F(RebuildingSupervisorIntegrationTest, BasicFD) {
 TEST_F(RebuildingSupervisorIntegrationTest,
        RebuildingSettingsUpdatedFromConfig) {
   // Replication factor is 2 by default.
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .enableSelfInitiatedRebuilding("20min")
-                     .setParam("--event-log-grace-period", "1ms")
-                     .setParam("--disable-event-log-trimming", "true")
-                     .useHashBasedSequencerAssignment()
-                     .setNumDBShards(2)
-                     .deferStart()
-                     .create(5);
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .enableSelfInitiatedRebuilding("20min")
+          .setParam("--event-log-grace-period", "1ms")
+          .setParam("--disable-event-log-trimming", "true")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
+          .setParam("--gossip-enabled", "true")
+          .useStandaloneAdminServer(true)
+          .useHashBasedSequencerAssignment()
+          .setNumDBShards(2)
+          .deferStart()
+          .create(5);
 
   cluster->start({0, 1, 2, 3});
 
@@ -163,6 +195,7 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   // add an admin command to dump rebuilding supervisor state), so we'll just
   // wait for gossip to converge, then sleep for a bit.
   cluster->waitUntilAllStartedAndPropagatedInGossip();
+  cluster->getAdminServer()->waitUntilFullyLoaded();
   /* sleep override */
   std::this_thread::sleep_for(std::chrono::seconds(10));
 
@@ -197,18 +230,26 @@ TEST_F(RebuildingSupervisorIntegrationTest,
 TEST_F(RebuildingSupervisorIntegrationTest,
        RebuildingSettingsUpdatedFromAdminCommand) {
   // Replication factor is 2 by default.
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .enableSelfInitiatedRebuilding("20min")
-                     .setParam("--event-log-grace-period", "1ms")
-                     .setParam("--disable-event-log-trimming", "true")
-                     .useHashBasedSequencerAssignment()
-                     .setNumDBShards(2)
-                     .deferStart()
-                     .create(5);
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .enableSelfInitiatedRebuilding("20min")
+          .setParam("--event-log-grace-period", "1ms")
+          .setParam("--disable-event-log-trimming", "true")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
+          .setParam("--gossip-enabled", "true")
+          .useStandaloneAdminServer(true)
+          .useHashBasedSequencerAssignment()
+          .setNumDBShards(2)
+          .deferStart()
+          .create(5);
 
   cluster->start({0, 1, 2, 3});
 
   cluster->waitUntilAllStartedAndPropagatedInGossip();
+  cluster->getAdminServer()->waitUntilFullyLoaded();
   /* sleep override */
   std::this_thread::sleep_for(std::chrono::seconds(10));
 
@@ -229,25 +270,58 @@ TEST_F(RebuildingSupervisorIntegrationTest, ShrinkAtBeginning) {
   shard_size_t num_shards = 2;
 
   // Replication factor is 2 by default.
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .enableSelfInitiatedRebuilding("10s")
-                     // Start with self-initiated rebuilding disabled
-                     .setParam("--enable-self-initiated-rebuilding", "false")
-                     .setParam("--event-log-grace-period", "1ms")
-                     .setParam("--disable-event-log-trimming", "true")
-                     .useHashBasedSequencerAssignment()
-                     .setNumDBShards(num_shards)
-                     .create(num_nodes);
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .enableSelfInitiatedRebuilding("10s")
+          // Start with self-initiated rebuilding disabled
+          .setParam("--enable-self-initiated-rebuilding", "false")
+          .setParam("--event-log-grace-period", "1ms")
+          .setParam("--disable-event-log-trimming", "true")
+          .setParam("--disable-event-log-trimming", "true")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
+          .setParam("--gossip-enabled", "true")
+          .useStandaloneAdminServer(true)
+          .useHashBasedSequencerAssignment()
+          .setNumDBShards(num_shards)
+          .create(num_nodes);
 
   waitForNodesToReadEventLog(*cluster);
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
 
+  auto maintenance_id =
+      cluster->applyMaintenance(*admin_client,
+                                0,
+                                -1,
+                                "draining",
+                                /* drain = */ true,
+                                /* force_restore = */ false,
+                                "for a shrink",
+                                /* disable_sequencer = */ true);
+  // Wait until it's fully drained.
+  for (int i = 0; i < num_shards; ++i) {
+    cluster->getNode(0).waitUntilShardState(
+        *admin_client,
+        i,
+        [](const thrift::ShardState& shard) {
+          return shard.get_storage_state() ==
+              membership::thrift::StorageState::NONE;
+        },
+        "Shard must be in NONE");
+  }
   // Shutdown 0
   cluster->getNode(0).shutdown();
 
+  wait_until_service_state(*admin_client, {0}, thrift::ServiceState::DEAD);
   // Now remove it from the config
-  cluster->shrink(std::vector<node_index_t>({
-      0,
-  }));
+  ASSERT_EQ(0,
+            cluster->shrinkViaAdminServer(*admin_client,
+                                          std::vector<node_index_t>({
+                                              0,
+                                          })));
 
   // And finally kill one node (eg: last).
   node_index_t dead_node_id = num_nodes - 1;
@@ -270,17 +344,26 @@ TEST_F(RebuildingSupervisorIntegrationTest, ExpandWithDeadNodes) {
   shard_size_t num_shards = 2;
 
   // Replication factor is 2 by default.
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .enableSelfInitiatedRebuilding("10s")
-                     // Start with self-initiated rebuilding disabled
-                     .setParam("--enable-self-initiated-rebuilding", "false")
-                     .setParam("--event-log-grace-period", "1ms")
-                     .setParam("--disable-event-log-trimming", "true")
-                     .useHashBasedSequencerAssignment()
-                     .setNumDBShards(num_shards)
-                     .create(num_nodes);
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .enableSelfInitiatedRebuilding("10s")
+          // Start with self-initiated rebuilding disabled
+          .setParam("--enable-self-initiated-rebuilding", "false")
+          .setParam("--event-log-grace-period", "1ms")
+          .setParam("--disable-event-log-trimming", "true")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
+          .setParam("--gossip-enabled", "true")
+          .useStandaloneAdminServer(true)
+          .useHashBasedSequencerAssignment()
+          .setNumDBShards(num_shards)
+          .create(num_nodes);
 
   waitForNodesToReadEventLog(*cluster);
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
 
   // Enable self-initiated rebuilding
   cluster->applyToNodes([](auto& node) {
@@ -288,9 +371,9 @@ TEST_F(RebuildingSupervisorIntegrationTest, ExpandWithDeadNodes) {
   });
 
   // Now expand cluster with one node, but do not start it.
-  cluster->expand(1, false);
+  cluster->expandViaAdminServer(*admin_client, 1, false);
   // Dead node is the last one
-  node_index_t dead_node_id = cluster->getNodes().size();
+  node_index_t dead_node_id = cluster->getNodes().size() - 1;
   ld_info("Waiting for rebuilding of N%u to be triggered", dead_node_id);
   expect_rebuildings({{dead_node_id, 0}, {dead_node_id, 1}}, cluster.get());
 }
@@ -305,30 +388,33 @@ TEST_F(RebuildingSupervisorIntegrationTest, DontRebuildNonStorageNode) {
     Configuration::Node node;
     node.generation = 1;
     node.addSequencerRole();
-    node.addStorageRole(num_shards);
+    if (i != dead_node) {
+      node.addStorageRole(num_shards);
+    }
+    node.setName("Node-" + std::to_string(i));
     nodes[i] = std::move(node);
   }
 
   auto nodes_configuration =
       NodesConfigurationTestUtil::provisionNodes(std::move(nodes));
 
-  nodes_configuration = nodes_configuration->applyUpdate(
-      NodesConfigurationTestUtil::setStorageMembershipUpdate(
-          *nodes_configuration,
-          {ShardID(dead_node, -1)},
-          membership::StorageState::NONE,
-          folly::none));
-
   // Replication factor is 2 by default.
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .enableSelfInitiatedRebuilding("10s")
-                     .setParam("--event-log-grace-period", "1ms")
-                     .setParam("--disable-event-log-trimming", "true")
-                     .useHashBasedSequencerAssignment()
-                     .setNumDBShards(num_shards)
-                     .setNodes(std::move(nodes_configuration))
-                     .deferStart()
-                     .create(num_nodes);
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .enableSelfInitiatedRebuilding("10s")
+          .setParam("--event-log-grace-period", "1ms")
+          .setParam("--disable-event-log-trimming", "true")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
+          .setParam("--gossip-enabled", "true")
+          .useStandaloneAdminServer(true)
+          .useHashBasedSequencerAssignment()
+          .setNumDBShards(num_shards)
+          .setNodes(std::move(nodes_configuration))
+          .deferStart()
+          .create(num_nodes);
 
   // Start all nodes but N3
   cluster->start({0, 1, 2});
@@ -360,16 +446,23 @@ TEST_F(RebuildingSupervisorIntegrationTest, IsolatedNode) {
   int num_nodes = 6;
   int num_shards = 2;
 
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .enableSelfInitiatedRebuilding("10s")
-                     // Start with self-initiated rebuilding disabled
-                     .setParam("--enable-self-initiated-rebuilding", "false")
-                     .setParam("--event-log-grace-period", "1ms")
-                     .setParam("--disable-event-log-trimming", "true")
-                     .useHashBasedSequencerAssignment()
-                     .setParam("--min-gossips-for-stable-state", "0")
-                     .setNumDBShards(num_shards)
-                     .create(num_nodes);
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .enableSelfInitiatedRebuilding("10s")
+          // Start with self-initiated rebuilding disabled
+          .setParam("--enable-self-initiated-rebuilding", "false")
+          .setParam("--event-log-grace-period", "1ms")
+          .setParam("--disable-event-log-trimming", "true")
+          .useHashBasedSequencerAssignment()
+          .setParam("--min-gossips-for-stable-state", "0")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
+          .setParam("--gossip-enabled", "true")
+          .useStandaloneAdminServer(true)
+          .setNumDBShards(num_shards)
+          .create(num_nodes);
 
   waitForNodesToReadEventLog(*cluster);
 
@@ -420,26 +513,34 @@ TEST_F(RebuildingSupervisorIntegrationTest, IsolatedRack) {
   int num_shards = 2;
   int num_racks = 3;
 
-  auto event_log_attrs =
+  auto internal_log_attrs =
       logsconfig::LogAttributes()
           .with_replicationFactor(2)
           .with_syncedCopies(0)
           .with_singleWriter(false)
           .with_syncReplicationScope(NodeLocationScope::RACK);
 
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .enableSelfInitiatedRebuilding("10s")
-                     // Start with self-initiated rebuilding disabled
-                     .setParam("--enable-self-initiated-rebuilding", "false")
-                     .setParam("--event-log-grace-period", "1ms")
-                     .setParam("--reader-stalled-grace-period", "1s")
-                     .setParam("--disable-event-log-trimming", "true")
-                     .useHashBasedSequencerAssignment()
-                     .setNumDBShards(num_shards)
-                     .setNumRacks(num_racks)
-                     .setEventLogAttributes(event_log_attrs)
-                     .deferStart()
-                     .create(num_nodes);
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .enableSelfInitiatedRebuilding("10s")
+          // Start with self-initiated rebuilding disabled
+          .setParam("--enable-self-initiated-rebuilding", "false")
+          .setParam("--event-log-grace-period", "1ms")
+          .setParam("--reader-stalled-grace-period", "1s")
+          .setParam("--disable-event-log-trimming", "true")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
+          .setParam("--gossip-enabled", "true")
+          .useStandaloneAdminServer(true)
+          .useHashBasedSequencerAssignment()
+          .setNumDBShards(num_shards)
+          .setNumRacks(num_racks)
+          .setEventLogAttributes(internal_log_attrs)
+          .setMaintenanceLogAttributes(internal_log_attrs)
+          .deferStart()
+          .create(num_nodes);
 
   cluster->start({});
 
@@ -513,27 +614,36 @@ TEST_F(RebuildingSupervisorIntegrationTest, s143309) {
   int num_shards = 2;
   int num_racks = 3;
 
-  auto event_log_attrs =
+  auto internal_log_attrs =
       logsconfig::LogAttributes()
           .with_replicationFactor(2)
           .with_syncedCopies(0)
           .with_singleWriter(false)
           .with_syncReplicationScope(NodeLocationScope::RACK);
 
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .setParam("--event-log-grace-period", "1ms")
-                     .setParam("--reader-stalled-grace-period", "1s")
-                     .setParam("--disable-event-log-trimming", "true")
-                     .enableSelfInitiatedRebuilding("10s")
-                     // Start with self-initiated rebuilding disabled
-                     .setParam("--enable-self-initiated-rebuilding", "false")
-                     .useHashBasedSequencerAssignment(100, "2s")
-                     .setNumDBShards(num_shards)
-                     .setNumRacks(num_racks)
-                     .setEventLogAttributes(event_log_attrs)
-                     .create(num_nodes);
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .setParam("--event-log-grace-period", "1ms")
+          .setParam("--reader-stalled-grace-period", "1s")
+          .setParam("--disable-event-log-trimming", "true")
+          .enableSelfInitiatedRebuilding("10s")
+          // Start with self-initiated rebuilding disabled
+          .setParam("--enable-self-initiated-rebuilding", "false")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
+          .setParam("--gossip-enabled", "true")
+          .useStandaloneAdminServer(true)
+          .useHashBasedSequencerAssignment(100, "2s")
+          .setNumDBShards(num_shards)
+          .setNumRacks(num_racks)
+          .setEventLogAttributes(internal_log_attrs)
+          .setMaintenanceLogAttributes(internal_log_attrs)
+          .create(num_nodes);
 
   waitForNodesToReadEventLog(*cluster);
+  cluster->getAdminServer()->waitUntilFullyLoaded();
 
   // Enable self-initiated rebuilding
   cluster->applyToNodes([](auto& node) {
@@ -601,6 +711,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, BasicShard) {
       node.addSequencerRole();
     }
     node.addStorageRole(/*num_shards*/ 3);
+    node.setName("Node-" + std::to_string(i));
     nodes_config[i] = std::move(node);
   }
 
@@ -608,14 +719,28 @@ TEST_F(RebuildingSupervisorIntegrationTest, BasicShard) {
       std::move(nodes_config),
       ReplicationProperty{{NodeLocationScope::NODE, 3}});
 
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .enableSelfInitiatedRebuilding()
-                     .setParam("--event-log-grace-period", "1ms")
-                     .setParam("--disable-event-log-trimming", "true")
-                     .setNodes(std::move(nodes_configuration))
-                     .setNumDBShards(3)
-                     .deferStart()
-                     .create(5);
+  auto internal_log_attrs = logsconfig::LogAttributes()
+                                .with_replicationFactor(3)
+                                .with_syncedCopies(0)
+                                .with_maxWritesInFlight(30);
+
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .enableSelfInitiatedRebuilding()
+          .setParam("--event-log-grace-period", "1ms")
+          .setParam("--disable-event-log-trimming", "true")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
+          .setParam("--gossip-enabled", "true")
+          .setMaintenanceLogAttributes(internal_log_attrs)
+          .setEventLogAttributes(internal_log_attrs)
+          .useStandaloneAdminServer(true)
+          .setNodes(std::move(nodes_configuration))
+          .setNumDBShards(3)
+          .deferStart()
+          .create(5);
 
   // Node 2: generation = 2, shard 1 has no RebuildingCompleteMetadata.
   // Expect rebuilding of N2:S1.
@@ -640,6 +765,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, BasicShard) {
   // Not starting all nodes, since otherwise rebuilding completing and ACKing
   // might race with the check below.
   cluster->start({0, 1, 2, 3});
+  cluster->getAdminServer()->waitUntilFullyLoaded();
 
   ld_info("Waiting for rebuilding of N2:S1 and N1:S2 to be triggered");
   expect_rebuildings({{2, 1}, {1, 2}}, cluster.get());
@@ -660,6 +786,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingHitThreshold) {
       node.addSequencerRole();
     }
     node.addStorageRole(/*num_shards*/ 1);
+    node.setName("Node-" + std::to_string(i));
     nodes_config[i] = std::move(node);
   }
   auto nodes_configuration =
@@ -680,8 +807,13 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingHitThreshold) {
           .setParam("--disable-rebuilding", "true")
           .setParam("--event-log-grace-period", "1ms")
           .setParam("--reader-stalled-grace-period", "1s")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
           .setParam("--disable-event-log-trimming", "true")
           .useHashBasedSequencerAssignment()
+          .useStandaloneAdminServer(true)
           .setNodes(std::move(nodes_configuration))
           .setEventLogAttributes(event_log_attrs)
           .deferStart()
@@ -717,7 +849,10 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingHitThreshold) {
   // Manually trigger rebuilding of N1
   // (the reason to doing this manually is to mimic as close as possible what
   // the other test does)
-  IntegrationTestUtils::requestShardRebuilding(*client, 1, 0);
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
+  cluster->applyInternalMaintenance(
+      *client, 1, 0, "Requesting rebuilding from the test case");
   // Kill N3
   cluster->getNode(3).kill();
   // Enable self-initiated rebuilding on N0
@@ -759,6 +894,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingExitThresholdOnAck) {
       node.addSequencerRole();
     }
     node.addStorageRole(/*num_shards*/ 1);
+    node.setName("Node-" + std::to_string(i));
     nodes_config[i] = std::move(node);
   }
   auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
@@ -771,25 +907,33 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingExitThresholdOnAck) {
                        .with_singleWriter(false)
                        .with_syncReplicationScope(NodeLocationScope::NODE);
 
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .setParam("--enable-self-initiated-rebuilding", "true")
-                     .setParam("--disable-rebuilding", "false")
-                     .setParam("--self-initiated-rebuilding-grace-period", "3s")
-                     // Set the threshold to allow 2 nodes rebuilding at a time
-                     .setParam("--max-node-rebuilding-percentage", "20")
-                     .setParam("--event-log-grace-period", "1ms")
-                     .setParam("--reader-stalled-grace-period", "1s")
-                     .setParam("--disable-event-log-trimming", "true")
-                     .useHashBasedSequencerAssignment()
-                     .setNodes(std::move(nodes_configuration))
-                     .setLogAttributes(log_attrs)
-                     .setEventLogAttributes(log_attrs)
-                     .deferStart()
-                     .setNumDBShards(1)
-                     .create(num_nodes);
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .setParam("--enable-self-initiated-rebuilding", "true")
+          .setParam("--disable-rebuilding", "false")
+          .setParam("--self-initiated-rebuilding-grace-period", "3s")
+          // Set the threshold to allow 2 nodes rebuilding at a time
+          .setParam("--max-node-rebuilding-percentage", "20")
+          .setParam("--event-log-grace-period", "1ms")
+          .setParam("--reader-stalled-grace-period", "1s")
+          .setParam("--disable-event-log-trimming", "true")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
+          .setParam("--gossip-enabled", "true")
+          .useStandaloneAdminServer(true)
+          .useHashBasedSequencerAssignment()
+          .setNodes(std::move(nodes_configuration))
+          .setLogAttributes(log_attrs)
+          .setEventLogAttributes(log_attrs)
+          .deferStart()
+          .setNumDBShards(1)
+          .create(num_nodes);
 
   cluster->start({});
   cluster->waitUntilAllStartedAndPropagatedInGossip();
+  cluster->getAdminServer()->waitUntilFullyLoaded();
 
   auto client = cluster->createClient();
 
@@ -897,6 +1041,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingHitThresholdAtOnce) {
       node.addSequencerRole();
     }
     node.addStorageRole(/*num_shards*/ 1);
+    node.setName("Node-" + std::to_string(i));
     nodes_config[i] = std::move(node);
   }
   auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
@@ -919,9 +1064,16 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingHitThresholdAtOnce) {
           .setParam("--event-log-grace-period", "1ms")
           .setParam("--reader-stalled-grace-period", "1s")
           .setParam("--disable-event-log-trimming", "true")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
+          .setParam("--gossip-enabled", "true")
+          .useStandaloneAdminServer(true)
           .useHashBasedSequencerAssignment()
           .setNodes(std::move(nodes_configuration))
           .setEventLogAttributes(event_log_attrs)
+          .setMaintenanceLogAttributes(event_log_attrs)
           .deferStart()
           .create(num_nodes);
 
@@ -935,6 +1087,7 @@ TEST_F(RebuildingSupervisorIntegrationTest, NodeRebuildingHitThresholdAtOnce) {
   cluster->start({});
 
   auto client = cluster->createClient();
+  cluster->getAdminServer()->waitUntilFullyLoaded();
 
   // Wait until all nodes are seen as alive
   for (const auto& n : cluster->getNodes()) {
@@ -1026,6 +1179,7 @@ TEST_F(RebuildingSupervisorIntegrationTest,
       node.addSequencerRole();
     }
     node.addStorageRole(/*num_shards*/ 1);
+    node.setName("Node-" + std::to_string(i));
     nodes_config[i] = std::move(node);
   }
   auto nodes_configuration = NodesConfigurationTestUtil::provisionNodes(
@@ -1045,12 +1199,21 @@ TEST_F(RebuildingSupervisorIntegrationTest,
           // or abort rebuildings, which would interfere with this test.
           .setParam("--enable-self-initiated-rebuilding", "false")
           .setParam("--disable-rebuilding", "true")
+          .setParam("--gossip-enabled", "true")
           .setParam("--event-log-grace-period", "1ms")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
           .setParam("--reader-stalled-grace-period", "1s")
           .setParam("--disable-event-log-trimming", "true")
           .useHashBasedSequencerAssignment()
           .setNodes(std::move(nodes_configuration))
+          // We are killing 2 nodes in this test (+1 drain) so we need to make
+          // sure that internal logs are replicated more than 2x.
           .setEventLogAttributes(event_log_attrs)
+          .setMaintenanceLogAttributes(event_log_attrs)
+          .useStandaloneAdminServer(true)
           .deferStart()
           .create(num_nodes);
 
@@ -1066,6 +1229,9 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   cluster->start({});
 
   auto client = cluster->createClient();
+
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
 
   // Wait until all nodes are seen as alive
   for (const auto& n : cluster->getNodes()) {
@@ -1084,14 +1250,17 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   auto prev_rebuilding_scheduled = stats["shard_rebuilding_scheduled"];
 
   // Start draining N1
-  auto flags =
-      SHARD_NEEDS_REBUILD_Header::RELOCATE | SHARD_NEEDS_REBUILD_Header::DRAIN;
-  lsn_t lsn =
-      IntegrationTestUtils::requestShardRebuilding(*client, 1, 0, flags);
-  ASSERT_NE(LSN_INVALID, lsn);
+  cluster->applyMaintenance(*admin_client, 1, 0, "testing", /* drain = */ true);
 
-  IntegrationTestUtils::waitUntilShardsHaveEventLogState(
-      client, {ShardID(1, 0)}, AuthoritativeStatus::FULLY_AUTHORITATIVE, false);
+  cluster->getNode(1).waitUntilShardState(
+      *admin_client,
+      0,
+      [](const thrift::ShardState& shard) {
+        return shard.get_storage_state() ==
+            membership::thrift::StorageState::DATA_MIGRATION ||
+            shard.get_storage_state() == membership::thrift::StorageState::NONE;
+      },
+      "Shard must be in DATA_MIGRATION/NONE");
 
   // Kill N2, N3
   cluster->getNode(2).kill();
@@ -1101,7 +1270,7 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   cluster->getNode(0).sendCommand(
       "set enable-self-initiated-rebuilding true --ttl max");
 
-  // No rebuildings should be throttles since we are under the threshold
+  // No rebuildings should be throttled since we are under the threshold
   // because draining nodes are not counted against the throttle threshold.
   wait_until("rebuilding scheduled", [&]() {
     // Check N0
@@ -1115,6 +1284,16 @@ TEST_F(RebuildingSupervisorIntegrationTest,
     auto tmp_stats = cluster->getNode(0).stats();
     return tmp_stats["shard_rebuilding_triggered"] == 2;
   });
+  // We should have 2 internal maintenances created by now.
+  cluster->getNode(2).waitUntilInternalMaintenances(
+      *admin_client,
+      [&](const auto& maintenances) { return maintenances.size() == 1; },
+      "Internal maintenance is created for N2");
+
+  cluster->getNode(3).waitUntilInternalMaintenances(
+      *admin_client,
+      [&](const auto& maintenances) { return maintenances.size() == 1; },
+      "Internal maintenance is created for N3");
 
   // Check that the rebuilding supervisor is not throttling.
   // while we are rebuilding 3 out of 10 nodes.
@@ -1145,6 +1324,7 @@ TEST_F(RebuildingSupervisorIntegrationTest,
       node.addSequencerRole();
     }
     node.addStorageRole(/*num_shards*/ 1);
+    node.setName("Node-" + std::to_string(i));
     nodes_config[i] = std::move(node);
   }
   auto nodes_configuration =
@@ -1166,9 +1346,15 @@ TEST_F(RebuildingSupervisorIntegrationTest,
           .setParam("--event-log-grace-period", "1ms")
           .setParam("--reader-stalled-grace-period", "1s")
           .setParam("--disable-event-log-trimming", "true")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
           .useHashBasedSequencerAssignment()
           .setNodes(std::move(nodes_configuration))
           .setEventLogAttributes(event_log_attrs)
+          .setMaintenanceLogAttributes(event_log_attrs)
+          .useStandaloneAdminServer(true)
           .deferStart()
           .create(num_nodes);
 
@@ -1183,6 +1369,9 @@ TEST_F(RebuildingSupervisorIntegrationTest,
 
   auto client = cluster->createClient();
 
+  cluster->getAdminServer()->waitUntilFullyLoaded();
+  auto admin_client = cluster->getAdminServer()->createAdminClient();
+
   // Manually trigger mini rebuilding for N1
   auto now = RecordTimestamp::now();
   auto dirtyStart = RecordTimestamp(now - std::chrono::minutes(10));
@@ -1191,7 +1380,9 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   rrm.modifyTimeIntervals(TimeIntervalOp::ADD,
                           DataClass::APPEND,
                           RecordTimeInterval(dirtyStart, dirtyEnd));
-  IntegrationTestUtils::requestShardRebuilding(*client, 1, 0, 0, &rrm);
+  SHARD_NEEDS_REBUILD_Header hdr(1, 0, "unittest", "IntegrationTestUtils");
+  SHARD_NEEDS_REBUILD_Event event(hdr, &rrm);
+  write_to_event_log(*client, event);
   // Now kill N3
   cluster->getNode(3).kill();
   // Enable self-initiated rebuilding on N0
@@ -1222,6 +1413,7 @@ TEST_F(RebuildingSupervisorIntegrationTest,
       node.addSequencerRole();
     }
     node.addStorageRole(/*num_shards*/ 1);
+    node.setName("Node-" + std::to_string(i));
     nodes_config[i] = std::move(node);
   }
   auto nodes_configuration =
@@ -1243,6 +1435,12 @@ TEST_F(RebuildingSupervisorIntegrationTest,
           .setParam("--event-log-grace-period", "1ms")
           .setParam("--reader-stalled-grace-period", "1s")
           .setParam("--disable-event-log-trimming", "true")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
+          .setParam("--gossip-enabled", "true")
+          .useStandaloneAdminServer(true)
           .useHashBasedSequencerAssignment()
           .setNodes(std::move(nodes_configuration))
           .setEventLogAttributes(event_log_attrs)
@@ -1257,6 +1455,7 @@ TEST_F(RebuildingSupervisorIntegrationTest,
       .setParam("--max-node-rebuilding-percentage", "10");
 
   cluster->start({});
+  cluster->getAdminServer()->waitUntilFullyLoaded();
 
   // Wait until all nodes are seen as alive
   for (const auto& n : cluster->getNodes()) {
@@ -1284,7 +1483,9 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   rrm.modifyTimeIntervals(TimeIntervalOp::ADD,
                           DataClass::APPEND,
                           RecordTimeInterval(dirtyStart, dirtyEnd));
-  IntegrationTestUtils::requestShardRebuilding(*client, 1, 0, 0, &rrm);
+  SHARD_NEEDS_REBUILD_Header hdr(1, 0, "unittest", "IntegrationTestUtils");
+  SHARD_NEEDS_REBUILD_Event event(hdr, &rrm);
+  write_to_event_log(*client, event);
   // Now kill N3
   cluster->getNode(3).kill();
 
@@ -1320,91 +1521,6 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   ASSERT_EQ(0, stats["shard_rebuilding_triggered"]);
 }
 
-// Makes sure that the threshold for number of currently running rebuildings
-// ignores nodes that are not in the config
-TEST_F(RebuildingSupervisorIntegrationTest,
-       NodeRebuildingThresholdIgnoresNotInConfig) {
-  int num_nodes = 6;
-
-  Configuration::Nodes nodes_config;
-  for (int i = 0; i < num_nodes; ++i) {
-    Configuration::Node node;
-    node.generation = 1;
-    if (i == 0) {
-      node.addSequencerRole();
-    }
-    node.addStorageRole(/*num_shards*/ 1);
-    nodes_config[i] = std::move(node);
-  }
-  auto nodes_configuration =
-      NodesConfigurationTestUtil::provisionNodes(std::move(nodes_config));
-
-  auto event_log_attrs =
-      logsconfig::LogAttributes()
-          .with_replicationFactor(3)
-          .with_syncedCopies(0)
-          .with_singleWriter(false)
-          .with_syncReplicationScope(NodeLocationScope::NODE);
-
-  auto cluster =
-      IntegrationTestUtils::ClusterFactory()
-          // disable rebuilding to make sure that nodes won't complete
-          // or abort rebuildings, which would interfere with this test.
-          .setParam("--enable-self-initiated-rebuilding", "false")
-          .setParam("--disable-rebuilding", "true")
-          .setParam("--event-log-grace-period", "1ms")
-          .setParam("--reader-stalled-grace-period", "1s")
-          .setParam("--disable-event-log-trimming", "true")
-          .useHashBasedSequencerAssignment()
-          .setNodes(std::move(nodes_configuration))
-          .setEventLogAttributes(event_log_attrs)
-          .deferStart()
-          .create(num_nodes);
-
-  cluster->getNode(0)
-      .setParam("--disable-rebuilding", "false")
-      .setParam("--enable-self-initiated-rebuilding", "false")
-      .setParam("--self-initiated-rebuilding-grace-period", "3s")
-      // Set the threshold to allow only one node rebuilding at a time
-      .setParam("--max-node-rebuilding-percentage",
-                folly::format("{}", (100 / num_nodes)).str());
-
-  cluster->start({});
-
-  auto client = cluster->createClient();
-
-  // Wait until all nodes are seen as alive
-  for (const auto& n : cluster->getNodes()) {
-    int rv = wait_until([&]() {
-      for (const auto& it : n.second->gossipCount()) {
-        if (it.second.first != "ALIVE" || it.second.second > 1000000) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }
-
-  auto stats = cluster->getNode(0).stats();
-  auto prev_rebuilding_scheduled = stats["shard_rebuilding_scheduled"];
-
-  // Manually trigger rebuilding of N39 (is not in the config)
-  IntegrationTestUtils::requestShardRebuilding(*client, 39, 0);
-  // Now kill N3
-  cluster->getNode(3).kill();
-  // Enable self-initiated rebuilding on N0
-  cluster->getNode(0).sendCommand(
-      "set enable-self-initiated-rebuilding true --ttl max");
-
-  // Rebuilding supervisor should ignore the rebuilding of non-existent node to
-  // compute threshold and trigger rebuilding for N3
-  wait_until("rebuilding triggered", [&]() {
-    // check N0
-    auto tmp_stats = cluster->getNode(0).stats();
-    return tmp_stats["shard_rebuilding_triggered"] == 1;
-  });
-}
-
 // Simulates an I/O error on the read path and verifies that the node initiates
 // rebuilding for its broken shard.
 TEST_F(RebuildingSupervisorIntegrationTest, ReadIOError) {
@@ -1416,26 +1532,36 @@ TEST_F(RebuildingSupervisorIntegrationTest, ReadIOError) {
       node.addSequencerRole();
     }
     node.addStorageRole(/*num_shards*/ 1);
+    node.setName("Node-" + std::to_string(i));
     nodes_config[i] = std::move(node);
   }
 
   auto nodes_configuration =
       NodesConfigurationTestUtil::provisionNodes(std::move(nodes_config));
 
-  auto cluster = IntegrationTestUtils::ClusterFactory()
-                     .enableSelfInitiatedRebuilding()
-                     .setParam("--event-log-grace-period", "1ms")
-                     .setParam("--disable-event-log-trimming", "true")
-                     .setParam("--sticky-copysets-block-size", "1")
-                     .useHashBasedSequencerAssignment()
-                     .setNodes(std::move(nodes_configuration))
-                     .deferStart()
-                     .create(5);
+  auto cluster =
+      IntegrationTestUtils::ClusterFactory()
+          .enableSelfInitiatedRebuilding()
+          .setParam("--event-log-grace-period", "1ms")
+          .setParam("--disable-event-log-trimming", "true")
+          .setParam("--sticky-copysets-block-size", "1")
+          .setParam("--disable-event-log-trimming", "true")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
+          .setParam("--gossip-enabled", "true")
+          .useStandaloneAdminServer(true)
+          .useHashBasedSequencerAssignment()
+          .setNodes(std::move(nodes_configuration))
+          .deferStart()
+          .create(5);
 
   cluster->start({0, 1, 2, 3, 4});
   cluster->waitUntilAllStartedAndPropagatedInGossip();
 
   auto client = cluster->createClient();
+  cluster->getAdminServer()->waitUntilFullyLoaded();
 
   // Append some records
   int num_records = 10;
@@ -1493,6 +1619,7 @@ TEST_F(RebuildingSupervisorIntegrationTest,
     Configuration::Node node;
     node.generation = 1;
     node.addStorageRole(/*num_shards*/ 1);
+    node.setName("Node-" + std::to_string(i));
     if (i == 0) {
       node.addSequencerRole();
     }
@@ -1517,6 +1644,12 @@ TEST_F(RebuildingSupervisorIntegrationTest,
           .setParam("--event-log-grace-period", "1ms")
           .setParam("--reader-stalled-grace-period", "1s")
           .setParam("--disable-event-log-trimming", "true")
+          .setParam("--enable-cluster-maintenance-state-machine", "true")
+          .setParam("--nodes-configuration-manager-intermediary-shard-state-"
+                    "timeout",
+                    "1s")
+          .setParam("--gossip-enabled", "true")
+          .useStandaloneAdminServer(true)
           .useHashBasedSequencerAssignment()
           .setNodes(std::move(nodes_configuration))
           .setEventLogAttributes(event_log_attrs)
@@ -1534,6 +1667,7 @@ TEST_F(RebuildingSupervisorIntegrationTest,
   cluster->start({});
 
   auto client = cluster->createClient();
+  cluster->getAdminServer()->waitUntilFullyLoaded();
 
   // Wait until all nodes are seen as alive
   for (const auto& n : cluster->getNodes()) {
