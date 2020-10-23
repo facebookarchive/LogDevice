@@ -62,11 +62,10 @@ ServerMessageDispatch::onReceivedImpl(Message* msg,
   auto params = msg->getPermissionParams();
 
   std::shared_ptr<PermissionChecker> permission_checker =
-      processor_->security_info_->get()->permission_checker;
+      security_info_->get()->permission_checker;
 
   if (permission_checker && params.requiresPermission &&
-      processor_->settings()->require_permission_message_types.count(
-          msg->type_) == 0) {
+      settings_->require_permission_message_types.count(msg->type_) == 0) {
     // override permission requirement per configured settings
     RATELIMIT_INFO(std::chrono::seconds(10),
                    1,
@@ -76,13 +75,12 @@ ServerMessageDispatch::onReceivedImpl(Message* msg,
                    messageTypeNames()[msg->type_].c_str(),
                    Sender::describeConnection(from).c_str());
     params.requiresPermission = false;
-    STAT_INCR(processor_->stats_, server_message_dispatch_bypass_permission);
+    STAT_INCR(stats_, server_message_dispatch_bypass_permission);
   }
 
   if (isInternalServerMessageFromNonServerNode(params, principal) &&
-      processor_->settings()->require_permission_message_types.count(
-          msg->type_) > 0) {
-    STAT_INCR(processor_->stats_, unauthorized_server_message_by_client);
+      settings_->require_permission_message_types.count(msg->type_) > 0) {
+    STAT_INCR(stats_, unauthorized_server_message_by_client);
     RATELIMIT_WARNING(std::chrono::seconds(10),
                       1,
                       "Server only message type %s "
@@ -94,7 +92,7 @@ ServerMessageDispatch::onReceivedImpl(Message* msg,
   }
 
   if (permission_checker && params.requiresPermission) {
-    STAT_INCR(processor_->stats_, server_message_dispatch_check_permission);
+    STAT_INCR(stats_, server_message_dispatch_check_permission);
     permission_checker->isAllowed(params.action,
                                   principal,
                                   params.log_id,
@@ -114,7 +112,7 @@ ServerMessageDispatch::onReceivedImpl(Message* msg,
                                   });
     return Message::Disposition::KEEP;
   } else {
-    STAT_INCR(processor_->stats_, server_message_dispatch_skip_permission);
+    STAT_INCR(stats_, server_message_dispatch_skip_permission);
     return onReceivedHandler(msg, from, PermissionCheckStatus::NONE);
   }
 }

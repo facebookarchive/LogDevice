@@ -2,13 +2,17 @@
 
 #include "logdevice/server/ServerMessageDispatch.h"
 
+#include <memory>
+
 #include <gtest/gtest.h>
 
 #include "logdevice/common/PrincipalIdentity.h"
 #include "logdevice/common/Processor.h"
+#include "logdevice/common/configuration/SecurityConfig.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/protocol/MessageDispatch.h"
 #include "logdevice/common/protocol/TEST_Message.h"
+// #include "logdevice/common/settings/UpdateableSettings.h"
 #include "logdevice/common/test/TestUtil.h"
 
 using namespace facebook::logdevice;
@@ -17,9 +21,16 @@ TEST(ServerMessageDispatchTest, ServerMessageFromClientTest) {
   Settings settings = create_default_settings<Settings>();
   settings.num_workers = 1;
   settings.require_permission_message_types.insert(MessageType::TEST);
-  auto processor = make_test_processor(settings);
+  auto updateable_settings = UpdateableSettings<Settings>(settings);
 
-  ServerMessageDispatch messageDispatcher{processor.get()};
+  auto security_info = std::make_unique<UpdateableSecurityInfo>(
+      UpdateableConfig::createEmpty()->updateableServerConfig(),
+      make_test_plugin_registry());
+
+  auto stats = nullptr;
+
+  ServerMessageDispatch messageDispatcher{
+      security_info.get(), updateable_settings, stats};
 
   auto msg = std::make_unique<TEST_Message>();
   PermissionParams params;
@@ -40,9 +51,16 @@ TEST(ServerMessageDispatchTest, WhitelistedServerMessageFromClientTest) {
   Settings settings = create_default_settings<Settings>();
   settings.num_workers = 1;
   settings.require_permission_message_types = {};
-  auto processor = make_test_processor(settings);
+  auto updateable_settings = UpdateableSettings<Settings>(settings);
 
-  ServerMessageDispatch messageDispatcher{processor.get()};
+  auto security_info = std::make_unique<UpdateableSecurityInfo>(
+      UpdateableConfig::createEmpty()->updateableServerConfig(),
+      make_test_plugin_registry());
+
+  auto stats = nullptr;
+
+  ServerMessageDispatch messageDispatcher{
+      security_info.get(), updateable_settings, stats};
 
   auto msg = std::make_unique<TEST_Message>();
   PermissionParams params;
@@ -63,9 +81,16 @@ TEST(ServerMessageDispatchTest, UncheckedServerMessageFromClientTest) {
   Settings settings = create_default_settings<Settings>();
   settings.num_workers = 1;
   settings.require_permission_message_types.insert(MessageType::TEST);
-  auto processor = make_test_processor(settings);
+  auto updateable_settings = UpdateableSettings<Settings>(settings);
 
-  ServerMessageDispatch messageDispatcher{processor.get()};
+  auto security_info = std::make_unique<UpdateableSecurityInfo>(
+      UpdateableConfig::createEmpty()->updateableServerConfig(),
+      make_test_plugin_registry());
+
+  auto stats = nullptr;
+
+  ServerMessageDispatch messageDispatcher{
+      security_info.get(), updateable_settings, stats};
 
   auto msg = std::make_unique<TEST_Message>();
   PermissionParams params;
@@ -85,9 +110,16 @@ TEST(ServerMessageDispatchTest, UncheckedServerMessageFromClientTest) {
 TEST(ServerMessageDispatchTest, ClientMessageFromClientTest) {
   Settings settings = create_default_settings<Settings>();
   settings.num_workers = 1;
-  auto processor = make_test_processor(settings);
+  auto updateable_settings = UpdateableSettings<Settings>(settings);
 
-  ServerMessageDispatch messageDispatcher{processor.get()};
+  auto security_info = std::make_unique<UpdateableSecurityInfo>(
+      UpdateableConfig::createEmpty()->updateableServerConfig(),
+      make_test_plugin_registry());
+
+  auto stats = nullptr;
+
+  ServerMessageDispatch messageDispatcher{
+      security_info.get(), updateable_settings, stats};
 
   auto msg = std::make_unique<TEST_Message>();
   PermissionParams params;
@@ -107,9 +139,16 @@ TEST(ServerMessageDispatchTest, ClientMessageFromClientTest) {
 TEST(ServerMessageDispatchTest, ServerMessageFromServerTest) {
   Settings settings = create_default_settings<Settings>();
   settings.num_workers = 1;
-  auto processor = make_test_processor(settings);
+  auto updateable_settings = UpdateableSettings<Settings>(settings);
 
-  ServerMessageDispatch messageDispatcher{processor.get()};
+  auto security_info = std::make_unique<UpdateableSecurityInfo>(
+      UpdateableConfig::createEmpty()->updateableServerConfig(),
+      make_test_plugin_registry());
+
+  auto stats = nullptr;
+
+  ServerMessageDispatch messageDispatcher{
+      security_info.get(), updateable_settings, stats};
 
   auto msg = std::make_unique<TEST_Message>();
   PermissionParams params;
@@ -129,9 +168,16 @@ TEST(ServerMessageDispatchTest, ServerMessageFromServerTest) {
 TEST(ServerMessageDispatchTest, ClientMessageFromServerTest) {
   Settings settings = create_default_settings<Settings>();
   settings.num_workers = 1;
-  auto processor = make_test_processor(settings);
+  auto updateable_settings = UpdateableSettings<Settings>(settings);
 
-  ServerMessageDispatch messageDispatcher{processor.get()};
+  auto security_info = std::make_unique<UpdateableSecurityInfo>(
+      UpdateableConfig::createEmpty()->updateableServerConfig(),
+      make_test_plugin_registry());
+
+  auto stats = nullptr;
+
+  ServerMessageDispatch messageDispatcher{
+      security_info.get(), updateable_settings, stats};
 
   auto msg = std::make_unique<TEST_Message>();
   PermissionParams params;

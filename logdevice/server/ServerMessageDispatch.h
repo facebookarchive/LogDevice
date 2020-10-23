@@ -8,8 +8,12 @@
 #pragma once
 
 #include "logdevice/common/PermissionChecker.h"
+#include "logdevice/common/Request.h"
+#include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/protocol/Message.h"
 #include "logdevice/common/protocol/MessageDispatch.h"
+#include "logdevice/common/settings/Settings.h"
+#include "logdevice/common/settings/UpdateableSettings.h"
 
 /**
  * @file Server-specific dispatcher for message events.  Because it lives in
@@ -22,8 +26,13 @@ class Processor;
 
 class ServerMessageDispatch : public MessageDispatch {
  public:
-  explicit ServerMessageDispatch(Processor* processor)
-      : MessageDispatch(), processor_(processor) {}
+  explicit ServerMessageDispatch(UpdateableSecurityInfo* security_info,
+                                 UpdateableSettings<Settings> settings,
+                                 StatsHolder* stats)
+      : MessageDispatch(),
+        security_info_(security_info),
+        settings_(std::move(settings)),
+        stats_(stats) {}
   Message::Disposition
   onReceivedImpl(Message* msg,
                  const Address& from,
@@ -48,6 +57,8 @@ class ServerMessageDispatch : public MessageDispatch {
       const PrincipalIdentity& principal) const;
 
  private:
-  Processor* processor_;
+  UpdateableSecurityInfo* security_info_;
+  UpdateableSettings<Settings> settings_;
+  StatsHolder* stats_;
 };
 }} // namespace facebook::logdevice

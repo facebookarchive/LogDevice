@@ -110,7 +110,10 @@ ServerWorker::~ServerWorker() {
 }
 
 std::unique_ptr<MessageDispatch> ServerWorker::createMessageDispatch() {
-  return std::make_unique<ServerMessageDispatch>(processor_);
+  return std::make_unique<ServerMessageDispatch>(
+      processor_->security_info_.get(),
+      processor_->updateableSettings(),
+      processor_->stats_);
 }
 
 void ServerWorker::subclassFinishWork() {
