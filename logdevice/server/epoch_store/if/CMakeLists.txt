@@ -16,13 +16,15 @@ file(
   MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/${_epochstore_if_include_prefix}
  )
 
-ld_thrift_py3_library(
+thrift_library(
   "EpochStore"
   ""
+  "cpp2"
   "json"
   "${CMAKE_CURRENT_SOURCE_DIR}"
   "${CMAKE_BINARY_DIR}/${_epochstore_if_include_prefix}"
   "${_epochstore_if_include_prefix}"
+  THRIFT_INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/.."
  )
 
 add_dependencies(EpochStore-cpp2-target fbthrift common-cpp2)
