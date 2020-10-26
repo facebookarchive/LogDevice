@@ -14,6 +14,7 @@
 #include "logdevice/common/NetworkDependencies.h"
 #include "logdevice/common/Sockaddr.h"
 #include "logdevice/common/SocketCallback.h"
+#include "logdevice/common/TimerInterface.h"
 #include "logdevice/common/configuration/nodes/utils.h"
 #include "logdevice/common/if/gen-cpp2/LogDeviceAPIAsyncClient.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
@@ -255,11 +256,10 @@ ThriftSender::getOrCreateSession(node_index_t node) {
   bool ssl_mismatch = false;
   if (exists) {
     bool is_ssl = session->getInfo().isSSL();
-    ssl_mismatch = is_ssl != requiresSSL(node);
-    if (socket_type_ != SocketType::GOSSIP && is_ssl) {
-      // for DATA connections, it's fine if we're using SSL even if we have not
-      // been asked for this.
-      ssl_mismatch = false;
+    if (socket_type_ != SocketType::GOSSIP) {
+      ssl_mismatch = !is_ssl && requiresSSL(node);
+    } else {
+      ssl_mismatch = is_ssl != requiresSSL(node);
     }
   }
 

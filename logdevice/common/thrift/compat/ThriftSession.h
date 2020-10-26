@@ -16,6 +16,7 @@
 #include "logdevice/common/AdminCommandTable-fwd.h"
 #include "logdevice/common/ConnectionInfo.h"
 #include "logdevice/common/SocketCallback.h"
+#include "logdevice/common/TimerInterface.h"
 #include "logdevice/common/debug.h"
 #include "logdevice/common/if/gen-cpp2/ApiModel_types.h"
 #include "logdevice/common/protocol/Message.h"
@@ -169,6 +170,7 @@ class ServerSession : public ThriftSession {
 
  private:
   std::unique_ptr<thrift::LogDeviceAPIAsyncClient> client_;
+  std::unique_ptr<TimerInterface> handshake_timer_;
   // Subscription on incoming messages from peer
   using Subscription =
       apache::thrift::ClientBufferedStream<thrift::Message>::Subscription;
@@ -177,6 +179,8 @@ class ServerSession : public ThriftSession {
   void onHandshakeError(folly::exception_wrapper&&);
   // Called when RPC request for new session completes successfully
   void onHandshakeReply(apache::thrift::ClientReceiveState&&);
+  // Called if handshake fails to complete before timeout expires
+  void onHandshakeTimeout();
   // Creates a subscription for messages coming through Thrift stream
   void registerStream(apache::thrift::ClientBufferedStream<thrift::Message>&&);
 

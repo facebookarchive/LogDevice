@@ -22,6 +22,7 @@
 #include "logdevice/common/protocol/MessageType.h"
 #include "logdevice/common/protocol/MessageTypeNames.h"
 #include "logdevice/common/settings/Settings.h"
+#include "logdevice/common/stats/Stats.h"
 
 using apache::thrift::ClientBufferedStream;
 using apache::thrift::ClientReceiveState;
@@ -228,12 +229,26 @@ int ServerSession::connect() {
   }
   request.set_helloMessage(serialized->move_legacyMessage());
   // Establish Thrift session
-  // TODO(mmhg): Set timeout for handshake
   client_->createSession(std::move(cb), request);
+  // Setup handshake timeout
+  std::chrono::milliseconds timeout = settings().handshake_timeout;
+  if (timeout.count() > 0) {
+    handshake_timer_ =
+        deps_.createTimer([this]() { onHandshakeTimeout(); }, timeout);
+  }
   // Update session's state
   info_.is_active->store(true);
   state_ = State::HANDSHAKING;
   return 0;
+}
+
+void ServerSession::onHandshakeTimeout() {
+  RATELIMIT_WARNING(std::chrono::seconds(10),
+                    10,
+                    "Handshake timeout occurred (session: %s).",
+                    description_.c_str());
+  close(E::TIMEDOUT);
+  STAT_INCR(deps_.getStats(), handshake_timeouts);
 }
 
 void ServerSession::onHandshakeError(folly::exception_wrapper&& ew) {
@@ -277,6 +292,7 @@ bool ServerSession::handleHandshakeMessage(Message&& msg) {
     return false;
   }
   deps_.processACKMessage(msg, info_);
+  handshake_timer_.reset();
   return true;
 }
 
@@ -320,7 +336,7 @@ void ServerSession::close(Status reason) {
                   description_.c_str(),
                   error_description(reason));
 
-  // TODO(mmhg): Cancel handshake timeout
+  handshake_timer_.reset();
   // TODO(mmhg): Decrement active session counters
 }
 

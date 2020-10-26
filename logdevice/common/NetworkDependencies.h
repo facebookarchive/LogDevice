@@ -25,6 +25,7 @@ class StatsHolder;
 struct Settings;
 class Sockaddr;
 class SSLSessionCache;
+class TimerInterface;
 class Worker;
 
 /**
@@ -93,6 +94,8 @@ class NetworkDependencies {
    */
   virtual folly::Func setupContextGuard();
   virtual folly::Executor* getExecutor() const;
+  virtual std::unique_ptr<TimerInterface>
+  createTimer(std::function<void()>&&, std::chrono::microseconds delay);
 
   virtual ~NetworkDependencies() = default;
 

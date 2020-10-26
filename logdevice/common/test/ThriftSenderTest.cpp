@@ -37,7 +37,7 @@ namespace facebook { namespace logdevice {
 
 class ThriftSenderTest : public ::testing::Test {
  public:
-  std::unique_ptr<NetworkDependencies> makeDeps() {
+  std::unique_ptr<MockNetworkDependencies> makeDeps() {
     auto deps = std::make_unique<NiceMock<MockNetworkDependencies>>();
     ON_CALL(*deps, getSettings()).WillByDefault(ReturnRef(*settings));
     ON_CALL(*deps, getServerConfig()).WillByDefault(Return(server_config));
@@ -68,6 +68,14 @@ class ThriftSenderTest : public ::testing::Test {
     EXPECT_CALL(router, createApiClient())
         .WillOnce(Return(ByMove(std::move(client))));
     return client_ref;
+  }
+
+  MockTimer* setupTimer(MockNetworkDependencies& deps) {
+    auto timer = std::make_unique<MockTimer>();
+    MockTimer* timer_ref = timer.get();
+    EXPECT_CALL(deps, createMockTimer())
+        .WillOnce(Return(ByMove(std::move(timer))));
+    return timer_ref;
   }
 
   thrift::Message serialize(const Message& msg) {
@@ -144,6 +152,32 @@ TEST_F(ThriftSenderTest, ServerSessionLifecycle) {
   info = sender.getConnectionInfo(node_address);
   EXPECT_EQ(info, nullptr);
   std::move(publisher).complete();
+}
+
+// Checks server session handles handshake timeout
+TEST_F(ThriftSenderTest, ServerSessionHandshakeTimeout) {
+  Sockaddr address("some/path");
+  auto client = setupClient(address);
+  auto deps = makeDeps();
+  MockTimer* timer = setupTimer(*deps);
+  ThriftSender sender(SocketType::DATA, folly::none, router, std::move(deps));
+  node_index_t node = 1;
+  Address node_address = Address(node);
+
+  // 1. Start handshake
+  EXPECT_CALL(*client, createSession(_, _));
+  int rv = sender.connect(node);
+  EXPECT_EQ(rv, 0);
+  auto* session = findServerSession(sender, node);
+  ASSERT_NE(session, nullptr);
+  EXPECT_EQ(session->getState(), ThriftSession::State::HANDSHAKING);
+
+  // 2. Trigger timeout
+  timer->trigger();
+
+  // 3. Check session terminated
+  EXPECT_TRUE(sender.isClosed(node_address));
+  EXPECT_EQ(session->getState(), ThriftSession::State::CLOSED);
 }
 
 }} // namespace facebook::logdevice

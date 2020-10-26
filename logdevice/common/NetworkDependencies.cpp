@@ -2,6 +2,8 @@
 
 #include "logdevice/common/NetworkDependencies.h"
 
+#include <memory>
+
 #include <folly/io/async/SSLContext.h>
 
 #include "logdevice/common/BuildInfo.h"
@@ -10,6 +12,7 @@
 #include "logdevice/common/SSLPrincipalParser.h"
 #include "logdevice/common/Sender.h"
 #include "logdevice/common/Sockaddr.h"
+#include "logdevice/common/Timer.h"
 #include "logdevice/common/Timestamp.h"
 #include "logdevice/common/UpdateableSecurityInfo.h"
 #include "logdevice/common/Worker.h"
@@ -400,6 +403,15 @@ folly::Func NetworkDependencies::setupContextGuard() {
 
 folly::Executor* NetworkDependencies::getExecutor() const {
   return worker_->getExecutor();
+}
+
+std::unique_ptr<TimerInterface>
+NetworkDependencies::createTimer(std::function<void()>&& cb,
+                                 std::chrono::microseconds delay) {
+  ld_check(Worker::onThisThread() == worker_);
+  auto timer = std::make_unique<Timer>(std::move(cb));
+  timer->activate(delay);
+  return timer;
 }
 
 }} // namespace facebook::logdevice

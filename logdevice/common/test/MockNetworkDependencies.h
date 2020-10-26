@@ -16,6 +16,7 @@
 #include "logdevice/common/configuration/Configuration.h"
 #include "logdevice/common/settings/Settings.h"
 #include "logdevice/common/stats/Stats.h"
+#include "logdevice/common/test/MockTimer.h"
 
 namespace facebook { namespace logdevice {
 
@@ -49,5 +50,17 @@ class MockNetworkDependencies : public NetworkDependencies {
   MOCK_METHOD1(getResourceToken, ResourceBudget::Token(size_t));
 
   MOCK_CONST_METHOD0(getExecutor, folly::Executor*());
+
+  MOCK_METHOD0(createMockTimer, std::unique_ptr<MockTimer>());
+  std::unique_ptr<TimerInterface>
+  createTimer(std::function<void()>&& cb,
+              std::chrono::microseconds delay) override {
+    auto mock = createMockTimer();
+    if (mock) {
+      mock->assign(std::move(cb));
+      mock->activate(delay);
+    }
+    return mock;
+  }
 };
 }} // namespace facebook::logdevice
