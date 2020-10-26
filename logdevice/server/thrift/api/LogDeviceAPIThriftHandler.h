@@ -7,7 +7,6 @@
  */
 #pragma once
 
-#include "logdevice/server/digest/thrift/DigestThriftHandler.h"
 #include "logdevice/server/thrift/LogDeviceThriftHandler.h"
 #include "logdevice/server/thrift/api/CompatThriftHandler.h"
 
@@ -35,8 +34,7 @@ namespace facebook { namespace logdevice {
  *            (top level class injected into Thrift server)
  */
 class LogDeviceAPIThriftHandler : public LogDeviceThriftHandler,
-                                  public CompatThriftHandler,
-                                  public server::digest::DigestThriftHandler {
+                                  public CompatThriftHandler {
  public:
   LogDeviceAPIThriftHandler(
       const std::string& name,

@@ -8,6 +8,9 @@
  * This file contains the service definition of the Log Digest Service and
  * its related supporting types.
  */
+
+include "common/fb303/if/fb303.thrift"
+
 namespace cpp2 facebook.logdevice.thrift.digest
 
 // *** Represents a point in time within a log.
@@ -71,4 +74,23 @@ struct SubscribeResponse {
 // *** Stream response type for digest subscriptions.
 struct SubscribeStreamResponse {
    1: DigestFragment fragment;
+}
+
+// *** Log Digest Service.
+service DigestService extends fb303.FacebookService {
+   /**
+    * Query a snapshot of the log digest within a given window. This is a
+    * short-lived RPC and the server will terminate it when the response stream
+    * is finished.
+    */
+   QueryResponse, stream<QueryStreamResponse>
+      query(1: QueryRequest request);
+
+   /**
+    * Subscribe to the log digest with an optional initial backfill. This is a
+    * long-lived RPC and the server will push the latest updates of the digest
+    * to the stream as they come.
+    */
+   SubscribeResponse, stream<SubscribeStreamResponse>
+      subscribe(1: SubscribeRequest request);
 }
