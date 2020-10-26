@@ -51,8 +51,5 @@ struct SessionRequest {
  * Response to establish session.
  */
 struct SessionResponse {
-  /**
-   * Serialized ACK_Message
-   */
-  1: LegacyMessageWrapper ackMessage;
+  // Not used at the moment, reserved for the future use
 }

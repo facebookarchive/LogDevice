@@ -103,9 +103,9 @@ class ThriftSender : public Sender {
   // Returns new globally unique session id for Thrift session.
   // The following methods try to find existing session by address, returns
   // session pointer if found or nullptr otherwise.
-  ThriftSession* findSession(const Address&) const;
-  ClientSession* findClientSession(const ClientID&) const;
-  ServerSession* findServerSession(node_index_t) const;
+  ThriftSession* FOLLY_NULLABLE findSession(const Address&) const;
+  ClientSession* FOLLY_NULLABLE findClientSession(const ClientID&) const;
+  ServerSession* FOLLY_NULLABLE findServerSession(node_index_t) const;
 
   /**
    * Tries to get existing session by address and create it
@@ -118,15 +118,23 @@ class ThriftSender : public Sender {
    *    INTERNAL        Something bad and unexpected happened, check logs for
    *                    details
    */
-  ThriftSession* getOrCreateSession(node_index_t);
+  ThriftSession* FOLLY_NULLABLE getOrCreateSession(node_index_t);
 
   // Returns client session if exists or sets global error and returns nullptr
-  ClientSession* getClientSession(const ClientID&) const;
+  ClientSession* FOLLY_NULLABLE getClientSession(const ClientID&) const;
+
+  // Creates a new server session to node with given idx. Returns either session
+  // if succeeds or nullptr with global error set if fails.
+  std::unique_ptr<ServerSession> createServerSession(node_index_t);
 
   // Funcntions for iteration over all active sessions
   void forAllSessions(const std::function<void(ThriftSession&)>& cb) const;
   void forClientSessions(const std::function<void(ClientSession&)>& cb) const;
   void forServerSessions(const std::function<void(ServerSession&)>& cb) const;
+
+  // Checks whether SSL connection is required for connection to this node
+  // TODO(mmhg): Deprecate this and move SSL enforcement to Thrift
+  bool requiresSSL(node_index_t) const;
 
   // if true, disallow sending messages and initiating connections
   bool shutting_down_ = false;
@@ -136,6 +144,8 @@ class ThriftSender : public Sender {
 
   folly::F14NodeMap<ClientID, std::unique_ptr<ClientSession>, ClientID::Hash>
       client_sessions_;
+
+  friend class ThriftSenderTest;
 };
 
 }} // namespace facebook::logdevice
