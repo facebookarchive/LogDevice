@@ -62,7 +62,7 @@ class ThriftSession {
   ThriftSession& operator=(const ThriftSession&) = delete;
   ThriftSession& operator=(ThriftSession&&) = delete;
 
-  virtual ~ThriftSession() = default;
+  virtual ~ThriftSession();
 
   const Address& peer() const {
     return info_.peer_name;
@@ -76,11 +76,11 @@ class ThriftSession {
   }
 
   State getState() const {
-    return state_;
+    return *state_;
   }
 
   bool isClosed() const {
-    return state_ == State::CLOSED;
+    return *state_ == State::CLOSED;
   }
 
   /**
@@ -115,7 +115,10 @@ class ThriftSession {
   // "C22566784 ([abcd:1234:5678:90ef:1111:2222:3333:4444]:41406)"
   const std::string description_;
   std::unique_ptr<ThriftMessageSerializer> serializer_;
-  State state_ = State::NEW;
+  // Current state of the session (see comments on enum definitions). Stored in
+  // shared_ptr to allow checking for session being alive safely even after
+  // object destruction.
+  std::shared_ptr<State> state_ = std::make_shared<State>(State::NEW);
 
   // Shortcut for accessing settings
   const Settings& settings() const;
@@ -133,6 +136,14 @@ class ThriftSession {
   // agreed on the session. Returns nullptr and sets err if deserialization
   // fails.
   std::unique_ptr<Message> deserialize(thrift::Message&&);
+  // Adavances session's state
+  void advance(State new_state) {
+    *state_ = new_state;
+  }
+  // Checks whether handshake has even been attempted on this session
+  bool isHandshakeAttempted() const {
+    return *state_ == State::HANDSHAKING || *state_ == State::ESTABLISHED;
+  }
 };
 
 /**

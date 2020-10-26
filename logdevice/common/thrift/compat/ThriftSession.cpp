@@ -39,6 +39,14 @@ ThriftSession::ThriftSession(ConnectionInfo&& info, NetworkDependencies& deps)
   serializer_ = std::make_unique<ThriftMessageSerializer>(description_);
 }
 
+ThriftSession::~ThriftSession() {
+  if (isHandshakeAttempted() && !isClosed()) {
+    ld_error("Session %s has not been closed before destruction",
+             description_.c_str());
+    ld_check(false);
+  }
+};
+
 void ThriftSession::setInfo(ConnectionInfo&& new_info) {
   // Peer name is not allowed to change
   ld_check(info_.peer_name == new_info.peer_name);
@@ -87,7 +95,7 @@ std::unique_ptr<Message> ThriftSession::deserialize(thrift::Message&& msg) {
 }
 
 void ThriftSession::onMessage(thrift::Message&& serialized_msg) {
-  ld_check(state_ == State::HANDSHAKING || state_ == State::ESTABLISHED);
+  ld_check(isHandshakeAttempted());
   // TODO(mmhg): Aquire resource token to avoid overload
   auto msg = deserialize(std::move(serialized_msg));
   if (msg == nullptr) {
@@ -104,7 +112,7 @@ void ThriftSession::onMessage(thrift::Message&& serialized_msg) {
   };
 
   // TODO(mmhg): Dispatch message
-  if (state_ == State::HANDSHAKING) {
+  if (getState() == State::HANDSHAKING) {
     if (!handleHandshakeMessage(std::move(*msg))) {
       return;
     }
@@ -113,7 +121,7 @@ void ThriftSession::onMessage(thrift::Message&& serialized_msg) {
       return;
     }
     ld_spew("%s negotiated protocol %d", description_.c_str(), *info_.protocol);
-    state_ = State::ESTABLISHED;
+    advance(State::ESTABLISHED);
   }
 }
 
@@ -132,7 +140,6 @@ namespace {
  * peer during processing: these errors are not supported by our current network
  * stack anyway.
  */
-// TODO(mmhg): Handle callback outliving session
 class SendMessageCb : public RequestCallback {
  public:
   using OnSentCb = std::function<void()>;
@@ -140,14 +147,19 @@ class SendMessageCb : public RequestCallback {
   using OnReplyCb = std::function<void(ClientReceiveState&&)>;
 
   SendMessageCb(const std::string& session_description,
+                std::shared_ptr<ThriftSession::State> session_state,
                 OnErrorCb&& on_error_cb,
                 OnSentCb&& on_sent_cb = []() {},
                 OnReplyCb&& on_reply_cb = [](auto&&) {})
       : session_description_(session_description),
+        session_state_(std::move(session_state)),
         on_sent_cb_(std::move(on_sent_cb)),
         on_error_cb_(std::move(on_error_cb)) {}
 
   void requestSent() override {
+    if (isSessionClosed()) {
+      return;
+    }
     on_sent_cb_();
     sent_ = true;
   }
@@ -157,6 +169,9 @@ class SendMessageCb : public RequestCallback {
   }
 
   void requestError(ClientReceiveState&& state) override {
+    if (isSessionClosed()) {
+      return;
+    }
     ld_check(state.isException());
     if (!sent_) {
       on_error_cb_(std::move(state.exception()));
@@ -171,17 +186,26 @@ class SendMessageCb : public RequestCallback {
 
  private:
   const std::string& session_description_;
+  const std::shared_ptr<ThriftSession::State> session_state_;
   OnSentCb on_sent_cb_;
   OnErrorCb on_error_cb_;
   bool sent_ = false;
+
+  bool isSessionClosed() const {
+    return *session_state_ == ThriftSession::State::CLOSED;
+  }
 };
 
-// TODO(mmhg): Handle callback outliving session
 class ServerMessageCb {
  public:
-  explicit ServerMessageCb(ServerSession& session) : session_(session) {}
+  explicit ServerMessageCb(std::shared_ptr<ThriftSession::State> session_state,
+                           ServerSession& session)
+      : session_state_(std::move(session_state)), session_(session) {}
 
   void operator()(folly::Try<thrift::Message>&& t) {
+    if (*session_state_ == ThriftSession::State::CLOSED) {
+      return;
+    }
     if (t.hasValue()) {
       session_.onMessage(std::move(t.value()));
     } else if (t.hasException()) {
@@ -192,6 +216,7 @@ class ServerMessageCb {
   }
 
  private:
+  const std::shared_ptr<ThriftSession::State> session_state_;
   ServerSession& session_;
 };
 } // namespace
@@ -205,11 +230,11 @@ ServerSession::ServerSession(ConnectionInfo&& info,
 }
 
 int ServerSession::connect() {
-  if (state_ == State::HANDSHAKING || state_ == State::ESTABLISHED) {
-    err = state_ == State::ESTABLISHED ? E::ISCONN : E::ALREADY;
+  if (isHandshakeAttempted()) {
+    err = getState() == State::ESTABLISHED ? E::ISCONN : E::ALREADY;
     return -1;
   }
-  ld_check(state_ == State::NEW);
+  ld_check(getState() == State::NEW);
   // Setup callbacks
   SendMessageCb::OnErrorCb on_error = [this](folly::exception_wrapper&& ew) {
     onHandshakeError(std::move(ew));
@@ -218,7 +243,7 @@ int ServerSession::connect() {
     onHandshakeReply(std::move(state));
   };
   auto cb = std::make_unique<SendMessageCb>(
-      description_, std::move(on_error), []() {}, std::move(on_reply));
+      description_, state_, std::move(on_error), []() {}, std::move(on_reply));
   // Create and serialize HELLO_Message
   auto hello = deps_.createHelloMessage(info_.peer_name.asNodeID());
   thrift::SessionRequest request;
@@ -238,7 +263,7 @@ int ServerSession::connect() {
   }
   // Update session's state
   info_.is_active->store(true);
-  state_ = State::HANDSHAKING;
+  advance(State::HANDSHAKING);
   return 0;
 }
 
@@ -273,14 +298,14 @@ void ServerSession::onHandshakeReply(ClientReceiveState&& state) {
 
 void ServerSession::registerStream(
     ClientBufferedStream<thrift::Message>&& stream) {
-  ld_check(state_ == State::HANDSHAKING);
-  ServerMessageCb cb(*this);
+  ld_check(getState() == State::HANDSHAKING);
+  ServerMessageCb cb(state_, *this);
   auto sub = std::move(stream).subscribeExTry(deps_.getExecutor(), cb);
   subscription_ = std::make_unique<Subscription>(std::move(sub));
 }
 
 bool ServerSession::handleHandshakeMessage(Message&& msg) {
-  ld_check(state_ == State::HANDSHAKING);
+  ld_check(getState() == State::HANDSHAKING);
   if (!isACKMessage(msg.type_)) {
     RATELIMIT_ERROR(
         std::chrono::seconds(10),
@@ -314,11 +339,11 @@ void ServerSession::onSessionComplete() {
 }
 
 void ServerSession::close(Status reason) {
-  if (state_ == State::CLOSED) {
+  if (getState() == State::CLOSED) {
     return;
   }
 
-  state_ = State::CLOSED;
+  advance(State::CLOSED);
   info_.is_active->store(false);
   if (subscription_) {
     subscription_->cancel();
