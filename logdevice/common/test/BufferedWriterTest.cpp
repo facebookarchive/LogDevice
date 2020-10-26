@@ -88,9 +88,14 @@ std::string convertPayload(const PayloadGroup& payload_group) {
     return payload_group.at(0).cloneAsValue().moveToFbString().toStdString();
   }
 
+  std::map<PayloadKey, folly::IOBuf> sorted_payload_group;
+  std::copy(payload_group.begin(),
+            payload_group.end(),
+            std::inserter(sorted_payload_group, sorted_payload_group.end()));
+
   std::stringstream result;
   result << "{";
-  for (const auto& [key, payload] : payload_group) {
+  for (const auto& [key, payload] : sorted_payload_group) {
     result << "{" << key << ": "
            << payload.cloneAsValue().moveToFbString().toStdString();
     result << "}, ";
