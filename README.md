@@ -1,6 +1,8 @@
 # LogDevice
 [![Build Status](https://circleci.com/gh/facebookincubator/LogDevice.svg?style=shield&circle-token=1a68ba9a5f81ea693f341726bc4039980490f16e)](https://circleci.com/gh/facebookincubator/LogDevice) [![Gitter](https://badges.gitter.im/facebookincubator/LogDevice.svg)](https://gitter.im/facebookincubator/LogDevice?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
+> Note: This is an archived project and is no longer supported or updated by Facebook.
+
 LogDevice is a scalable and fault tolerant distributed log system. While a
 file-system stores and serves data organized as files, a log system stores and
 delivers data organized as logs. The log can be viewed as a record-oriented,
