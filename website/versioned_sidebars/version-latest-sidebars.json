@@ -1,0 +1,47 @@
+{
+  "version-latest-docs": {
+    "Getting started": [
+      "version-latest-Overview",
+      "version-latest-LocalCluster",
+      "version-latest-Concepts",
+      "version-latest-Installation"
+    ],
+    "Configuration": [
+      "version-latest-FirstCluster",
+      "version-latest-Kubernetes",
+      "version-latest-Config",
+      "version-latest-Settings",
+      "version-latest-Logs"
+    ],
+    "Administration": [
+      "version-latest-administration/AdminServer",
+      "version-latest-administration/LDShell",
+      "version-latest-administration/LDQuery",
+      "version-latest-administration/ClusterMaintenance",
+      "version-latest-administration/SafetyChecker"
+    ],
+    "Concepts": [
+      "version-latest-Writepath",
+      "version-latest-ReadPath",
+      "version-latest-Terminology",
+      "version-latest-Consensus",
+      "version-latest-AdminServer",
+      "version-latest-SafetyChecker"
+    ],
+    "Designs": [
+      "version-latest-FailureDetection",
+      "version-latest-Replication",
+      "version-latest-Recovery",
+      "version-latest-TrafficShaping",
+      "version-latest-Rebuilding",
+      "version-latest-LogsDB"
+    ],
+    "API": [
+      "version-latest-API_Introduction",
+      "version-latest-API_Doxygen"
+    ],
+    "Extending LogDevice": [
+      "version-latest-WritingPlugins"
+    ]
+  }
+}
