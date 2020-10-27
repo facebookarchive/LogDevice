@@ -6,7 +6,63 @@
 
               ga('create', 'UA-137238014-1', 'auto');
               ga('send', 'pageview');
-            </script><link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,400i,700"/><script type="text/javascript" src="https://buttons.github.io/buttons.js"></script><script src="/js/scrollSpy.js"></script><link rel="stylesheet" href="/css/main.css"/><script src="/js/codetabs.js"></script></head><body class="sideNavVisible separateOnPageNav"><div class="fixedHeaderContainer"><div class="headerWrapper wrapper"><header><a href="/"><img class="logo" src="/img/facebook_logdevice_whitewordmark.png" alt="LogDevice"/></a><a href="/versions.html"><h3>latest</h3></a><div class="navigationWrapper navigationSlider"><nav class="slidingNav"><ul class="nav-site nav-site-internal"><li class=""><a href="/docs/Overview.html" target="_self">Docs</a></li><li class=""><a href="/api/annotated.html" target="_self">API</a></li><li class=""><a href="/help.html" target="_self">Support</a></li><li class=""><a href="https://github.com/facebookincubator/LogDevice" target="_self">GitHub</a></li><li class=""><a href="/blog/" target="_self">Blog</a></li><li class="navSearchWrapper reactNavSearchWrapper"><input type="text" id="search_input_react" placeholder="Search" title="Search"/></li></ul></nav></div></header></div></div><div class="navPusher"><div class="docMainWrapper wrapper"><div class="container mainContainer docsContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 id="__docusaurus" class="postHeaderTitle">LDQuery</h1></header><article><div><span><h2><a class="anchor" aria-hidden="true" id="append_outliers"></a><a href="#append_outliers" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>append_outliers</h2>
+            </script><link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,400i,700"/><script type="text/javascript" src="https://buttons.github.io/buttons.js"></script><script src="/js/scrollSpy.js"></script><link rel="stylesheet" href="/css/main.css"/><script src="/js/codetabs.js"></script></head><body class="sideNavVisible separateOnPageNav"><div class="fixedHeaderContainer"><div class="headerWrapper wrapper"><header><a href="/"><img class="logo" src="/img/facebook_logdevice_whitewordmark.png" alt="LogDevice"/></a><a href="/versions.html"><h3>latest</h3></a><div class="navigationWrapper navigationSlider"><nav class="slidingNav"><ul class="nav-site nav-site-internal"><li class="siteNavGroupActive"><a href="/docs/Overview.html" target="_self">Docs</a></li><li class=""><a href="/api/annotated.html" target="_self">API</a></li><li class=""><a href="/help.html" target="_self">Support</a></li><li class=""><a href="https://github.com/facebookincubator/LogDevice" target="_self">GitHub</a></li><li class=""><a href="/blog/" target="_self">Blog</a></li><li class="navSearchWrapper reactNavSearchWrapper"><input type="text" id="search_input_react" placeholder="Search" title="Search"/></li></ul></nav></div></header></div></div><div class="navPusher"><div class="docMainWrapper wrapper"><div class="docsNavContainer" id="docsNav"><nav class="toc"><div class="toggleNav"><section class="navWrapper wrapper"><div class="navBreadcrumb wrapper"><div class="navToggle" id="navToggler"><div class="hamburger-menu"><div class="line1"></div><div class="line2"></div><div class="line3"></div></div></div><h2><i>›</i><span>Administration</span></h2><div class="tocToggler" id="tocToggler"><i class="icon-toc"></i></div></div><div class="navGroups"><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Getting started<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/Overview.html">Overview</a></li><li class="navListItem"><a class="navItem" href="/docs/LocalCluster.html">Quickstart</a></li><li class="navListItem"><a class="navItem" href="/docs/Concepts.html">Architecture</a></li><li class="navListItem"><a class="navItem" href="/docs/Installation.html">Build LogDevice</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Configuration<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/FirstCluster.html">Creating your first cluster</a></li><li class="navListItem"><a class="navItem" href="/docs/Kubernetes.html">Running on Kubernetes</a></li><li class="navListItem"><a class="navItem" href="/docs/Config.html">Cluster configuration</a></li><li class="navListItem"><a class="navItem" href="/docs/Settings.html">Settings</a></li><li class="navListItem"><a class="navItem" href="/docs/Logs.html">Log configuration</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Administration<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/administration/AdminServer.html">Admin Server (Control Plane)</a></li><li class="navListItem"><a class="navItem" href="/docs/administration/LDShell.html">LogDevice Shell</a></li><li class="navListItem navListItemActive"><a class="navItem" href="/docs/administration/LDQuery.html">LDQuery</a></li><li class="navListItem"><a class="navItem" href="/docs/administration/ClusterMaintenance.html">Cluster Maintenance</a></li><li class="navListItem"><a class="navItem" href="/docs/administration/SafetyChecker.html">Operations Safety Checker</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Concepts<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/Writepath.html">Write path</a></li><li class="navListItem"><a class="navItem" href="/docs/ReadPath.html">Read path</a></li><li class="navListItem"><a class="navItem" href="/docs/Consensus.html">Distributed consensus</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Designs<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/FailureDetection.html">Failure detection</a></li><li class="navListItem"><a class="navItem" href="/docs/Replication.html">Log replication configuration</a></li><li class="navListItem"><a class="navItem" href="/docs/Recovery.html">Recovery after the failure of a sequencer</a></li><li class="navListItem"><a class="navItem" href="/docs/TrafficShaping.html">Traffic shaping</a></li><li class="navListItem"><a class="navItem" href="/docs/Rebuilding.html">Rebuilding</a></li><li class="navListItem"><a class="navItem" href="/docs/LogsDB.html">LogsDB</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">API<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/API_Introduction.html">Client library API</a></li><li class="navListItem"><a class="navItem" href="/docs/API_Doxygen.html">Reference</a></li></ul></div><div class="navGroup"><h3 class="navGroupCategoryTitle collapsible">Extending LogDevice<span class="arrow"><svg width="24" height="24" viewBox="0 0 24 24"><path fill="#565656" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"></path><path d="M0 0h24v24H0z" fill="none"></path></svg></span></h3><ul class="hide"><li class="navListItem"><a class="navItem" href="/docs/WritingPlugins.html">Writing plugins</a></li></ul></div></div></section></div><script>
+            var coll = document.getElementsByClassName('collapsible');
+            var checkActiveCategory = true;
+            for (var i = 0; i < coll.length; i++) {
+              var links = coll[i].nextElementSibling.getElementsByTagName('*');
+              if (checkActiveCategory){
+                for (var j = 0; j < links.length; j++) {
+                  if (links[j].classList.contains('navListItemActive')){
+                    coll[i].nextElementSibling.classList.toggle('hide');
+                    coll[i].childNodes[1].classList.toggle('rotate');
+                    checkActiveCategory = false;
+                    break;
+                  }
+                }
+              }
+
+              coll[i].addEventListener('click', function() {
+                var arrow = this.childNodes[1];
+                arrow.classList.toggle('rotate');
+                var content = this.nextElementSibling;
+                content.classList.toggle('hide');
+              });
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+              createToggler('#navToggler', '#docsNav', 'docsSliderActive');
+              createToggler('#tocToggler', 'body', 'tocActive');
+
+              var headings = document.querySelector('.toc-headings');
+              headings && headings.addEventListener('click', function(event) {
+                var el = event.target;
+                while(el !== headings){
+                  if (el.tagName === 'A') {
+                    document.body.classList.remove('tocActive');
+                    break;
+                  } else{
+                    el = el.parentNode;
+                  }
+                }
+              }, false);
+
+              function createToggler(togglerSelector, targetSelector, className) {
+                var toggler = document.querySelector(togglerSelector);
+                var target = document.querySelector(targetSelector);
+
+                if (!toggler) {
+                  return;
+                }
+
+                toggler.onclick = function(event) {
+                  event.preventDefault();
+
+                  target.classList.toggle(className);
+                };
+              }
+            });
+        </script></nav></div><div class="container mainContainer docsContainer"><div class="wrapper"><div class="post"><header class="postHeader"><h1 id="__docusaurus" class="postHeaderTitle">LDQuery</h1></header><article><div><span><h2><a class="anchor" aria-hidden="true" id="append_outliers"></a><a href="#append_outliers" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>append_outliers</h2>
 <p>Provides debugging information for the Sequencer Boycotting feature, which consists in boycotting sequencer nodes that are outliers when we compare their append success rate with the rest of the clusters.  This table contains the state of a few nodes in the cluster that are responsible for gathering stats from all other nodes, aggregate them and decide the list of outliers.</p>
 <table>
 <thead>
@@ -104,7 +160,7 @@
 <tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td>node_id</td><td style="text-align:center">long</td><td>Id of the node.</td></tr>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Id of the node.</td></tr>
 <tr><td>status</td><td style="text-align:center">string</td><td>Status of the node.</td></tr>
 <tr><td>dead_nodes</td><td style="text-align:center">string</td><td>List of node IDs that this node believes to be dead.</td></tr>
 <tr><td>boycotted_nodes</td><td style="text-align:center">string</td><td>List of boycotted nodes.</td></tr>
@@ -236,7 +292,7 @@
 </tbody>
 </table>
 <h2><a class="anchor" aria-hidden="true" id="info_config"></a><a href="#info_config" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>info_config</h2>
-<p>A table that dumps information about all the configurations loaded by each node in the cluster.   For each node, there will be one row for the node's configuration which is in the main config.  A second row will be present for each node if they load the log configuration from a separate config file (see &quot;include_log_config&quot; section in the main config).</p>
+<p>A table that dumps information about all the configurations loaded by each node in the cluster.   For each node, there will be one row for the node's configuration which is in the main config.</p>
 <table>
 <thead>
 <tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
@@ -250,16 +306,20 @@
 <tr><td>last_loaded</td><td style="text-align:center">time</td><td>Date and Time when the config was last loaded.</td></tr>
 </tbody>
 </table>
-<h2><a class="anchor" aria-hidden="true" id="is_log_empty"></a><a href="#is_log_empty" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>is_log_empty</h2>
-<p>This table provides a way to check which logs are empty or not. It is implemented on top of the islogEmpty API (see &quot;logdevice/include/Client.h&quot;).</p>
+<h2><a class="anchor" aria-hidden="true" id="info_rsm"></a><a href="#info_rsm" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>info_rsm</h2>
+<p>Show RSM in-memory and durable version information in the cluster</p>
 <table>
 <thead>
 <tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td>log_id</td><td style="text-align:center">log_id</td><td>ID of the log.</td></tr>
-<tr><td>status</td><td style="text-align:center">string</td><td>Response status of running isLogEmpty() on this log. Check the documentation of isLogEmpty() for the list of error codes.</td></tr>
-<tr><td>empty</td><td style="text-align:center">bool</td><td>Wether the log is empty, null if &quot;status&quot; != OK.</td></tr>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
+<tr><td>peer_id</td><td style="text-align:center">int</td><td>Peer ID</td></tr>
+<tr><td>state</td><td style="text-align:center">string</td><td>State of Peer Node In FailureDetector</td></tr>
+<tr><td>logsconfig_in_memory_version</td><td style="text-align:center">lsn</td><td>logsconfig in-memory version</td></tr>
+<tr><td>logsconfig_durable_version</td><td style="text-align:center">lsn</td><td>logsconfig durable version</td></tr>
+<tr><td>eventlog_in_memory_version</td><td style="text-align:center">lsn</td><td>eventlog in-memory version</td></tr>
+<tr><td>eventlog_durable_version</td><td style="text-align:center">lsn</td><td>eventlog durable version</td></tr>
 </tbody>
 </table>
 <h2><a class="anchor" aria-hidden="true" id="iterators"></a><a href="#iterators" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>iterators</h2>
@@ -305,7 +365,7 @@
 </tbody>
 </table>
 <h2><a class="anchor" aria-hidden="true" id="log_rebuildings"></a><a href="#log_rebuildings" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>log_rebuildings</h2>
-<p>This table dumps debugging information about the state of LogRebuilding state machines (see &quot;logdevice/server/rebuilding/LogRebuilding.h&quot;) which are state machines running on donor storage nodes and responsible for rebuilding records of that log.</p>
+<p>This table dumps some per-log state of rebuilding on this donor node, mostly related to reading. See also shard_rebuildings.</p>
 <table>
 <thead>
 <tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
@@ -313,21 +373,11 @@
 <tbody>
 <tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
 <tr><td>log_id</td><td style="text-align:center">log_id</td><td>ID of the log.</td></tr>
-<tr><td>shard</td><td style="text-align:center">int</td><td>Index of the shard from which the LogRebuilding state machine is reading.</td></tr>
-<tr><td>started</td><td style="text-align:center">time</td><td>Date and Time of when that state machine was started.</td></tr>
-<tr><td>rebuilding_set</td><td style="text-align:center">string</td><td>Information provided to the LogRebuilding state machine which defines the list of shards that lost record copies which need to be re-replicated elsewhere. Expressed in the form &quot;&lt;shard-id&gt;<em>?[&lt;dirty-ranges&gt;],...&quot;. &quot;</em>&quot; indicates that the shard may be up but we want to drain its data by replicating it elsewhere.  If &lt;dirty-ranges&gt; is not empty, this means that the storage shard only lost data within the specified ranges.</td></tr>
-<tr><td>version</td><td style="text-align:center">lsn</td><td>Rebuilding version.  This version comes from the event log RSM that coordinates rebuilding.  See the &quot;event_log&quot; table.</td></tr>
+<tr><td>shard</td><td style="text-align:center">int</td><td>Index of the shard from which the ShardRebuilding state machine is reading.</td></tr>
 <tr><td>until_lsn</td><td style="text-align:center">lsn</td><td>LSN up to which the log must be rebuilt.  See &quot;logdevice/server/rebuilding/RebuildingPlanner.h&quot; for how this LSN is computed.</td></tr>
-<tr><td>max_timestamp</td><td style="text-align:center">time</td><td>Maximum timestamp that this LogRebuilding state machine is instructed to read through.</td></tr>
 <tr><td>rebuilt_up_to</td><td style="text-align:center">lsn</td><td>Next LSN to be considered by this state machine for rebuilding.</td></tr>
 <tr><td>num_replicated</td><td style="text-align:center">long</td><td>Number of records replicated by this state machine so far.</td></tr>
 <tr><td>bytes_replicated</td><td style="text-align:center">long</td><td>Number of bytes replicated by this state machine so far.</td></tr>
-<tr><td>rr_in_flight</td><td style="text-align:center">long</td><td>Number of stores currently in flight, ie pending acknowledgment from the recipient storage shard.</td></tr>
-<tr><td>nondurable_stores</td><td style="text-align:center">long</td><td>Number of stores for which we are pending acknowledgment that they are durable on disk.</td></tr>
-<tr><td>durable_stores</td><td style="text-align:center">long</td><td>Number of records that were durably replicated and now are pending an amend.</td></tr>
-<tr><td>rra_in_flight</td><td style="text-align:center">long</td><td>Number of amends that are in flight, ie pending acknowledgment from the recipient storage shard.</td></tr>
-<tr><td>nondurable_amends</td><td style="text-align:center">long</td><td>Number of amends for which we are pending acknowledgment that they are durable on disk.</td></tr>
-<tr><td>last_storage_task_status</td><td style="text-align:center">string</td><td>Status of the last batch of records we read from disk.</td></tr>
 </tbody>
 </table>
 <h2><a class="anchor" aria-hidden="true" id="log_storage_state"></a><a href="#log_storage_state" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>log_storage_state</h2>
@@ -425,16 +475,16 @@
 <tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td>node_id</td><td style="text-align:center">long</td><td>Id of the node</td></tr>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Id of the node</td></tr>
+<tr><td>name</td><td style="text-align:center">string</td><td>Human readable name of the node</td></tr>
 <tr><td>address</td><td style="text-align:center">string</td><td>Ip and port that should be used for communication with the node</td></tr>
 <tr><td>ssl_address</td><td style="text-align:center">string</td><td>Same as &quot;address&quot; but with SSL</td></tr>
+<tr><td>admin_address</td><td style="text-align:center">string</td><td>The IP address, including port number, for admin server</td></tr>
 <tr><td>generation</td><td style="text-align:center">long</td><td>Generation of the node.  This value is bumped each time the node is swapped, sent to repair, or has one of its drives sent to repair.</td></tr>
 <tr><td>location</td><td style="text-align:center">string</td><td>Location of the node: <region>.<cluster>.<row>.<rack></td></tr>
-<tr><td>sequencer</td><td style="text-align:center">int</td><td>1 if this node is provisioned for the sequencing role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. See 'sequencer_enabled'.</td></tr>
+<tr><td>sequencer</td><td style="text-align:center">int</td><td>1 if this node is provisioned for the sequencing role. Otherwise 0. Provisioned roles must be enabled in order to be considered active.</td></tr>
 <tr><td>storage</td><td style="text-align:center">int</td><td>1 if this node is provisioned for the storage role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. See 'storage_state'.</td></tr>
-<tr><td>sequencer_enabled</td><td style="text-align:center">int</td><td>1 if sequencing on this node is enabled. Othewise 0.</td></tr>
 <tr><td>sequencer_weight</td><td style="text-align:center">real</td><td>A non-negative value indicating how many logs this node should be a sequencer for relative to other nodes in the cluster.  A value of 0 means this node cannot run sequencers.</td></tr>
-<tr><td>is_storage</td><td style="text-align:center">int</td><td>1 if this node is provisioned for the storage role. Otherwise 0. Provisioned roles must be enabled in order to be considered active. See 'storage_state'.</td></tr>
 <tr><td>storage_state</td><td style="text-align:center">string</td><td>Determines the current state of the storage node. One of &quot;read-write&quot;, &quot;read-only&quot; or &quot;none&quot;.</td></tr>
 <tr><td>storage_weight</td><td style="text-align:center">real</td><td>A positive value indicating how much STORE traffic this storage node should receive relative to other storage nodes in the cluster.</td></tr>
 <tr><td>num_shards</td><td style="text-align:center">long</td><td>Number of storage shards on this node.  0 if this node is not a storage node.</td></tr>
@@ -470,6 +520,7 @@
 <tr><td>current_version</td><td style="text-align:center">long</td><td>The current live version</td></tr>
 <tr><td>append_dirtied_by</td><td style="text-align:center">string</td><td>Nodes that have uncommitted append data in this partition.</td></tr>
 <tr><td>rebuild_dirtied_by</td><td style="text-align:center">string</td><td>Nodes that have uncommitted rebuild data in this partition.</td></tr>
+<tr><td>copyset_index_enabled</td><td style="text-align:center">bool</td><td>Whether or not copyset_index is enabled for this partition. This is controlled by --rocksdb-write-copyset-index setting.</td></tr>
 </tbody>
 </table>
 <h2><a class="anchor" aria-hidden="true" id="purges"></a><a href="#purges" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>purges</h2>
@@ -518,6 +569,7 @@
 <tr><td>storage_task_in_flight</td><td style="text-align:center">int</td><td>True if there is currently a storage task running on a slow storage thread for reading a batch of records.</td></tr>
 <tr><td>csid</td><td style="text-align:center">string</td><td>Client Session ID</td></tr>
 <tr><td>rsid</td><td style="text-align:center">string</td><td>Read stream ID</td></tr>
+<tr><td>tcp_sndbuf</td><td style="text-align:center">int</td><td>Number of bytes in TCP sndbuf waiting to be sent</td></tr>
 </tbody>
 </table>
 <h2><a class="anchor" aria-hidden="true" id="record"></a><a href="#record" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>record</h2>
@@ -671,17 +723,17 @@
 <tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td>node_id</td><td style="text-align:center">long</td><td>Id of the node.</td></tr>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Id of the node.</td></tr>
 <tr><td>shard</td><td style="text-align:center">long</td><td>Id of the shard.</td></tr>
 <tr><td>rebuilding_version</td><td style="text-align:center">string</td><td>Rebuilding version: the LSN of the last SHARD_NEEDS_REBUILD delta from the event log.</td></tr>
 <tr><td>authoritative_status</td><td style="text-align:center">string</td><td>Authoritative status of the shard.</td></tr>
 <tr><td>donors_remaining</td><td style="text-align:center">string</td><td>If authoritative status is UNDERREPLICATION, list of donors that have not finished rebuilding the under-replicated data.</td></tr>
 <tr><td>drain</td><td style="text-align:center">int</td><td>Whether the shard is being drained or has been drained.</td></tr>
+<tr><td>mode</td><td style="text-align:center">string</td><td>Whether rebuilding is in RESTORE or RELOCATE mode</td></tr>
 <tr><td>dirty_ranges</td><td style="text-align:center">string</td><td>Time ranges where this shard may be missing data.  This happens if the LogDevice process on this storage node crashed before committing data to disk.</td></tr>
 <tr><td>rebuilding_is_authoritative</td><td style="text-align:center">int</td><td>Whether rebuilding is authoritative.  A non authoritative rebuilding means that too many shards lost data such that all copies of some records may be unavailable.  Some readers may stall when this happens and there are some shards that are still marked as recoverable.</td></tr>
 <tr><td>data_is_recoverable</td><td style="text-align:center">int</td><td>Indicates whether the shard's data has been marked as unrecoverable using <code>ldshell mark-unrecoverable</code>. If all shards in the rebuilding set are marked unrecoverable, shards for which rebuilding completed will transition to AUTHORITATIVE_EMPTY status even if that rebuilding is non authoritative. Note that if logdeviced is started on a shard whose corresponding disk has been wiped by a remediation, the shard's data will automatically be considered unrecoverable.</td></tr>
 <tr><td>source</td><td style="text-align:center">string</td><td>Entity that triggered rebuilding for this shard.</td></tr>
-<tr><td>details</td><td style="text-align:center">string</td><td>Reason for rebuilding this shard.</td></tr>
 <tr><td>rebuilding_started_ts</td><td style="text-align:center">string</td><td>When rebuilding was started.</td></tr>
 <tr><td>rebuilding_completed_ts</td><td style="text-align:center">string</td><td>When the shard transitioned to AUTHORITATIVE_EMPTY.</td></tr>
 </tbody>
@@ -693,20 +745,19 @@
 <tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td>node_id</td><td style="text-align:center">long</td><td>Id of the node.</td></tr>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Id of the node.</td></tr>
 <tr><td>shard</td><td style="text-align:center">long</td><td>Id of the shard.</td></tr>
 <tr><td>rebuilding_version</td><td style="text-align:center">string</td><td>Rebuilding version: the LSN of the last SHARD_NEEDS_REBUILD delta from the event log.</td></tr>
 <tr><td>authoritative_status</td><td style="text-align:center">string</td><td>Authoritative status of the shard.</td></tr>
 <tr><td>donors_remaining</td><td style="text-align:center">string</td><td>If authoritative status is UNDERREPLICATION, list of donors that have not finished rebuilding the under-replicated data.</td></tr>
 <tr><td>drain</td><td style="text-align:center">int</td><td>Whether the shard is being drained or has been drained.</td></tr>
+<tr><td>mode</td><td style="text-align:center">string</td><td>Whether rebuilding is in RESTORE or RELOCATE mode</td></tr>
 <tr><td>dirty_ranges</td><td style="text-align:center">string</td><td>Time ranges where this shard may be missing data.  This happens if the LogDevice process on this storage node crashed before committing data to disk.</td></tr>
 <tr><td>rebuilding_is_authoritative</td><td style="text-align:center">int</td><td>Whether rebuilding is authoritative.  A non authoritative rebuilding means that too many shards lost data such that all copies of some records may be unavailable.  Some readers may stall when this happens and there are some shards that are still marked as recoverable.</td></tr>
 <tr><td>data_is_recoverable</td><td style="text-align:center">int</td><td>Indicates whether the shard's data has been marked as unrecoverable using <code>ldshell mark-unrecoverable</code>. If all shards in the rebuilding set are marked unrecoverable, shards for which rebuilding completed will transition to AUTHORITATIVE_EMPTY status even if that rebuilding is non authoritative. Note that if logdeviced is started on a shard whose corresponding disk has been wiped by a remediation, the shard's data will automatically be considered unrecoverable.</td></tr>
 <tr><td>source</td><td style="text-align:center">string</td><td>Entity that triggered rebuilding for this shard.</td></tr>
-<tr><td>details</td><td style="text-align:center">string</td><td>Reason for rebuilding this shard.</td></tr>
 <tr><td>rebuilding_started_ts</td><td style="text-align:center">string</td><td>When rebuilding was started.</td></tr>
 <tr><td>rebuilding_completed_ts</td><td style="text-align:center">string</td><td>When the shard transitioned to AUTHORITATIVE_EMPTY.</td></tr>
-<tr><td>mode</td><td style="text-align:center">string</td><td>Whether the shard participates in its own rebuilding</td></tr>
 <tr><td>acked</td><td style="text-align:center">int</td><td>Whether the node acked the rebuilding. (Why would such nodes remain in the rebuilding set at all? No one remembers now.)</td></tr>
 <tr><td>ack_lsn</td><td style="text-align:center">string</td><td>LSN of the SHARD_ACK_REBUILT written by this shard.</td></tr>
 <tr><td>ack_version</td><td style="text-align:center">string</td><td>Version of the rebuilding that was acked.</td></tr>
@@ -721,27 +772,26 @@
 <tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td>node_id</td><td style="text-align:center">long</td><td>Id of the node.</td></tr>
+<tr><td>node_id</td><td style="text-align:center">int</td><td>Id of the node.</td></tr>
 <tr><td>shard</td><td style="text-align:center">long</td><td>Id of the shard.</td></tr>
 <tr><td>rebuilding_version</td><td style="text-align:center">string</td><td>Rebuilding version: the LSN of the last SHARD_NEEDS_REBUILD delta from the event log.</td></tr>
 <tr><td>authoritative_status</td><td style="text-align:center">string</td><td>Authoritative status of the shard.</td></tr>
 <tr><td>donors_remaining</td><td style="text-align:center">string</td><td>If authoritative status is UNDERREPLICATION, list of donors that have not finished rebuilding the under-replicated data.</td></tr>
 <tr><td>drain</td><td style="text-align:center">int</td><td>Whether the shard is being drained or has been drained.</td></tr>
+<tr><td>mode</td><td style="text-align:center">string</td><td>Whether rebuilding is in RESTORE or RELOCATE mode</td></tr>
 <tr><td>dirty_ranges</td><td style="text-align:center">string</td><td>Time ranges where this shard may be missing data.  This happens if the LogDevice process on this storage node crashed before committing data to disk.</td></tr>
 <tr><td>rebuilding_is_authoritative</td><td style="text-align:center">int</td><td>Whether rebuilding is authoritative.  A non authoritative rebuilding means that too many shards lost data such that all copies of some records may be unavailable.  Some readers may stall when this happens and there are some shards that are still marked as recoverable.</td></tr>
 <tr><td>data_is_recoverable</td><td style="text-align:center">int</td><td>Indicates whether the shard's data has been marked as unrecoverable using <code>ldshell mark-unrecoverable</code>. If all shards in the rebuilding set are marked unrecoverable, shards for which rebuilding completed will transition to AUTHORITATIVE_EMPTY status even if that rebuilding is non authoritative. Note that if logdeviced is started on a shard whose corresponding disk has been wiped by a remediation, the shard's data will automatically be considered unrecoverable.</td></tr>
 <tr><td>source</td><td style="text-align:center">string</td><td>Entity that triggered rebuilding for this shard.</td></tr>
-<tr><td>details</td><td style="text-align:center">string</td><td>Reason for rebuilding this shard.</td></tr>
 <tr><td>rebuilding_started_ts</td><td style="text-align:center">string</td><td>When rebuilding was started.</td></tr>
 <tr><td>rebuilding_completed_ts</td><td style="text-align:center">string</td><td>When the shard transitioned to AUTHORITATIVE_EMPTY.</td></tr>
-<tr><td>mode</td><td style="text-align:center">string</td><td>Whether the shard participates in its own rebuilding</td></tr>
 <tr><td>acked</td><td style="text-align:center">int</td><td>Whether the node acked the rebuilding. (Why would such nodes remain in the rebuilding set at all? No one remembers now.)</td></tr>
 <tr><td>ack_lsn</td><td style="text-align:center">string</td><td>LSN of the SHARD_ACK_REBUILT written by this shard.</td></tr>
 <tr><td>ack_version</td><td style="text-align:center">string</td><td>Version of the rebuilding that was acked.</td></tr>
 </tbody>
 </table>
 <h2><a class="anchor" aria-hidden="true" id="shard_rebuildings"></a><a href="#shard_rebuildings" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>shard_rebuildings</h2>
-<p>Show debugging information about the ShardRebuilding state machines (see &quot;logdevice/server/rebuilding/ShardRebuildingV1.h&quot;).  This state machine is responsible for running all LogRebuilding state machines (see &quot;logs_rebuilding&quot; table) for all logs in a donor shard.</p>
+<p>Show debugging information about the ShardRebuilding state machines (see &quot;logdevice/server/rebuilding/ShardRebuilding.h&quot;). This state machine is responsible for coordinating reads and re-replication on a donor shard.</p>
 <table>
 <thead>
 <tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
@@ -749,25 +799,20 @@
 <tbody>
 <tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
 <tr><td>shard_id</td><td style="text-align:center">long</td><td>Donor shard.</td></tr>
-<tr><td>rebuilding_set</td><td style="text-align:center">string</td><td>Rebuilding set considered.  See &quot;rebuilding_set&quot; column of the &quot;log_rebuilding&quot; table.</td></tr>
+<tr><td>rebuilding_set</td><td style="text-align:center">string</td><td>The list of shards that lost record copies which need to be re-replicated elsewhere. Expressed in the form &quot;&lt;shard-id&gt;<em>?[&lt;dirty-ranges&gt;],...&quot;. &quot;</em>&quot; indicates that the shard may be up but we want to drain its data by replicating it elsewhere.  If &lt;dirty-ranges&gt; is not empty, this means that the storage shard only lost data within the specified ranges.</td></tr>
 <tr><td>version</td><td style="text-align:center">lsn</td><td>Rebuilding version.  This version comes from the event log RSM that coordinates rebuilding.  See the &quot;event_log&quot; table.</td></tr>
 <tr><td>global_window_end</td><td style="text-align:center">time</td><td>End of the global window (if enabled with --rebuilding-global-window).  This is a time window used to synchronize all ShardRebuilding state machines across all donor shards.</td></tr>
-<tr><td>local_window_end</td><td style="text-align:center">time</td><td>ShardRebuilding schedules reads for all logs within a time window called the local window.  This shows the end of the current window.</td></tr>
+<tr><td>progress_timestamp</td><td style="text-align:center">time</td><td>Approximately how far rebuilding has progressed on this donor, timestamp-wise. This may be the min timestamp of records of in-flight RecordRebuilding-s, or partition timestamp that ReadStorageTask has reached, or something else.</td></tr>
 <tr><td>num_logs_waiting_for_plan</td><td style="text-align:center">long</td><td>Number of logs that are waiting for a plan.  See &quot;logdevice/include/RebuildingPlanner.h&quot;.</td></tr>
-<tr><td>num_logs_catching_up</td><td style="text-align:center">long</td><td>Number of LogRebuilding state machines currently active.</td></tr>
-<tr><td>num_logs_queued_for_catch_up</td><td style="text-align:center">long</td><td>Number of LogRebuilding state machines that are inside the local window and queued for catch up.</td></tr>
-<tr><td>num_logs_in_restart_queue</td><td style="text-align:center">long</td><td>Number of LogRebuilding state machines that are ready to be restarted as soon as a slot is available.  Logs are scheduled for a restart if we waited too long for writes done by the state machine to be acknowledged as durable.</td></tr>
-<tr><td>total_memory_used</td><td style="text-align:center">long</td><td>Total amount of memory used by all LogRebuilding state machines.</td></tr>
-<tr><td>stall_timer_active</td><td style="text-align:center">int</td><td>If true, all LogRebuilding state machines are stalled until memory usage decreased.</td></tr>
-<tr><td>num_restart_timers_active</td><td style="text-align:center">long</td><td>Number of logs that have completed but for which we are still waiting for acknowlegments that writes were durable.</td></tr>
+<tr><td>total_memory_used</td><td style="text-align:center">long</td><td>Approximate total amount of memory used by ShardRebuilding state machine.</td></tr>
 <tr><td>num_active_logs</td><td style="text-align:center">long</td><td>Set of logs being rebuilt for this shard.  The shard completes rebuilding when this number reaches zero.</td></tr>
 <tr><td>participating</td><td style="text-align:center">int</td><td>true if this shard is a donor for this rebuilding and hasn't finished rebuilding yet.</td></tr>
-<tr><td>time_by_state</td><td style="text-align:center">string</td><td>Time spent in each state. 'stalled' means either waiting for global window or aborted because of a persistent error. V2 only</td></tr>
-<tr><td>task_in_flight</td><td style="text-align:center">int</td><td>True if a storage task for reading records is in queue or in flight right now. V2 only.</td></tr>
-<tr><td>persistent_error</td><td style="text-align:center">int</td><td>True if we encountered an unrecoverable error when reading. Shard shouldn't stay in this state for more than a few seconds: it's expected that RebuildingCoordinator will request a rebuilding for this shard, and rebuilding will rewind without this node's participation. V2 only.</td></tr>
-<tr><td>read_buffer_bytes</td><td style="text-align:center">long</td><td>Bytes of records that we've read but haven't started re-replicating yet. V2 only.</td></tr>
-<tr><td>records_in_flight</td><td style="text-align:center">long</td><td>Number of records that are being re-replicated right now. V2 only.</td></tr>
-<tr><td>read_pointer</td><td style="text-align:center">string</td><td>How far we have read: partition, log ID, LSN. V2 only.</td></tr>
+<tr><td>time_by_state</td><td style="text-align:center">string</td><td>Time spent in each state. 'stalled' means either waiting for global window or aborted because of a persistent error.</td></tr>
+<tr><td>task_in_flight</td><td style="text-align:center">int</td><td>True if a storage task for reading records is in queue or in flight right now.</td></tr>
+<tr><td>persistent_error</td><td style="text-align:center">int</td><td>True if we encountered an unrecoverable error when reading. Shard shouldn't stay in this state for more than a few seconds: it's expected that RebuildingCoordinator will request a rebuilding for this shard, and rebuilding will rewind without this node's participation.</td></tr>
+<tr><td>read_buffer_bytes</td><td style="text-align:center">long</td><td>Bytes of records that we've read but haven't started re-replicating yet.</td></tr>
+<tr><td>records_in_flight</td><td style="text-align:center">long</td><td>Number of records that are being re-replicated right now.</td></tr>
+<tr><td>read_pointer</td><td style="text-align:center">string</td><td>How far we have read: partition, log ID, LSN.</td></tr>
 <tr><td>progress</td><td style="text-align:center">real</td><td>Approximately what fraction of the work is done, between 0 and 1. -1 if the implementation doesn't support progress estimation.</td></tr>
 </tbody>
 </table>
@@ -784,31 +829,31 @@
 <tr><td>accepting_writes</td><td style="text-align:center">string</td><td>Status indicating if this shard is accepting writes.  Can be one of: &quot;OK&quot; (the shard is accepting writes), &quot;LOW_ON_SPC&quot; (the shard is accepting writes but is low on free space), &quot;NOSPC&quot; (the shard is not accepting writes because it is low on space), &quot;DISABLED&quot; (The shard will never accept writes. This can happen if the shard entered fail-safe mode).</td></tr>
 <tr><td>rebuilding_state</td><td style="text-align:center">string</td><td>&quot;NONE&quot;: the shard is not rebuilding.  &quot;WAITING_FOR_REBUILDING&quot;: the shard is missing data and is waiting for rebuilding to start.  &quot;REBUILDING&quot;: the shard is missing data and rebuilding was started.</td></tr>
 <tr><td>default_cf_version</td><td style="text-align:center">long</td><td>Returns current version of the data.  if LogsDB is  enabled, this will return the version of the default column familiy.</td></tr>
+<tr><td>dirty_state</td><td style="text-align:center">string</td><td>Status indicating if this shard has dirty ranges or not.</td></tr>
 </tbody>
 </table>
 <h2><a class="anchor" aria-hidden="true" id="sockets"></a><a href="#sockets" aria-hidden="true" class="hash-link"><svg class="hash-link-icon" aria-hidden="true" height="16" version="1.1" viewBox="0 0 16 16" width="16"><path fill-rule="evenodd" d="M4 9h1v1H4c-1.5 0-3-1.69-3-3.5S2.55 3 4 3h4c1.45 0 3 1.69 3 3.5 0 1.41-.91 2.72-2 3.25V8.59c.58-.45 1-1.27 1-2.09C10 5.22 8.98 4 8 4H4c-.98 0-2 1.22-2 2.5S3 9 4 9zm9-3h-1v1h1c1 0 2 1.22 2 2.5S13.98 12 13 12H9c-.98 0-2-1.22-2-2.5 0-.83.42-1.64 1-2.09V6.25c-1.09.53-2 1.84-2 3.25C6 11.31 7.55 13 9 13h4c1.45 0 3-1.69 3-3.5S14.5 6 13 6z"></path></svg></a>sockets</h2>
-<p>Tracks all sockets on all nodes in the cluster.</p>
+<p>Tracks all Connections on all nodes in the cluster.</p>
 <table>
 <thead>
 <tr><th>Column</th><th style="text-align:center">Type</th><th>Description</th></tr>
 </thead>
 <tbody>
 <tr><td>node_id</td><td style="text-align:center">int</td><td>Node ID this row is for.</td></tr>
-<tr><td>state</td><td style="text-align:center">string</td><td>State of the socket.   I: The socket is Inactive;   C: The socket is connecting;   H: The socket is doing the handshake at the LD protocol level;   A: The socket is active.</td></tr>
-<tr><td>name</td><td style="text-align:center">string</td><td>Name of the socket. If the other end is a client, the format is similar to the column &quot;client&quot; of the table &quot;catchup_queues&quot; and the column &quot;client&quot; of the table &quot;readers&quot;. If the other end is another node in the cluster, describes that's node's id and ip.</td></tr>
-<tr><td>pending_kb</td><td style="text-align:center">real</td><td>Number of bytes that are available for writing on the socket's output evbuffer. If this value is high this usually means that the other end is not able to read messages as fast as we are writing them.</td></tr>
-<tr><td>available_kb</td><td style="text-align:center">real</td><td>Number of bytes that are available for reading on the socket's input evbuffer.  If this value is high this usually means that the other end is writing faster than this node is able to read.</td></tr>
-<tr><td>read_mb</td><td style="text-align:center">real</td><td>Number of bytes that were read from the socket.</td></tr>
-<tr><td>write_mb</td><td style="text-align:center">real</td><td>Number of bytes that were written to the socket.</td></tr>
-<tr><td>read_cnt</td><td style="text-align:center">int</td><td>Number of messages that were read from the socket.</td></tr>
-<tr><td>write_cnt</td><td style="text-align:center">int</td><td>Number of messages that were written to the socket.</td></tr>
-<tr><td>bytes_per_second</td><td style="text-align:center">real</td><td>Socket throughput in the last health check period.</td></tr>
-<tr><td>rwnd_limited_pct</td><td style="text-align:center">real</td><td>Portion of last health check period, when socket throughput was limited by receiver.</td></tr>
-<tr><td>sndbuf_limited_pct</td><td style="text-align:center">real</td><td>Protion of last health check peiod, when socket throughput was limited by send buffer.</td></tr>
-<tr><td>proto</td><td style="text-align:center">int</td><td>Protocol that was handshaken. Do not trust this value if the socket's state is not active.</td></tr>
+<tr><td>state</td><td style="text-align:center">string</td><td>State of the Connection.   I: The connection is Inactive;   C: The connection is connecting;   H: The connection is doing the handshake at the LD protocol level;   A: The connection is active.</td></tr>
+<tr><td>name</td><td style="text-align:center">string</td><td>Name of the Connection. If the other end is a client, the format is similar to the column &quot;client&quot; of the table &quot;catchup_queues&quot; and the column &quot;client&quot; of the table &quot;readers&quot;. If the other end is another node in the cluster, describes that's node's id and ip.</td></tr>
+<tr><td>pending_kb</td><td style="text-align:center">real</td><td>Number of bytes that are available for writing on the Connection's output buffer. If this value is high this usually means that the other end is not able to read messages as fast as we are writing them.</td></tr>
+<tr><td>available_kb</td><td style="text-align:center">real</td><td>Number of bytes that are available for reading on the Connection's input buffer.  If this value is high this usually means that the other end is writing faster than this node is able to read.</td></tr>
+<tr><td>read_mb</td><td style="text-align:center">real</td><td>Number of bytes that were read from the Connection.</td></tr>
+<tr><td>write_mb</td><td style="text-align:center">real</td><td>Number of bytes that were written to the Connection.</td></tr>
+<tr><td>read_cnt</td><td style="text-align:center">int</td><td>Number of messages that were read from the Connection.</td></tr>
+<tr><td>write_cnt</td><td style="text-align:center">int</td><td>Number of messages that were written to the Connection.</td></tr>
+<tr><td>bytes_per_second</td><td style="text-align:center">real</td><td>Connection throughput in the last health check period.</td></tr>
+<tr><td>rwnd_limited_pct</td><td style="text-align:center">real</td><td>Portion of last health check period, when Connection throughput was limited by receiver.</td></tr>
+<tr><td>sndbuf_limited_pct</td><td style="text-align:center">real</td><td>Portion of last health check peiod, when Connection throughput was limited by send buffer.</td></tr>
+<tr><td>proto</td><td style="text-align:center">int</td><td>Protocol that was handshaken. Do not trust this value if the Connection's state is not active.</td></tr>
 <tr><td>sendbuf</td><td style="text-align:center">int</td><td>Size of the send buffer of the underlying TCP socket.</td></tr>
-<tr><td>peer_config_version</td><td style="text-align:center">int</td><td>Last config version that the peer advertised</td></tr>
-<tr><td>is_ssl</td><td style="text-align:center">int</td><td>Set to true if this socket uses SSL.</td></tr>
+<tr><td>is_ssl</td><td style="text-align:center">int</td><td>Set to true if this Connection uses SSL.</td></tr>
 <tr><td>fd</td><td style="text-align:center">int</td><td>The file descriptor of the underlying os socket.</td></tr>
 </tbody>
 </table>
@@ -888,7 +933,7 @@
 <tr><td>last_status</td><td style="text-align:center">string</td><td>Status of the last GetSeqStateRequest performed by SyncSequencerRequest.</td></tr>
 </tbody>
 </table>
-</span></div></article></div><div class="docs-prevnext"></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#append_outliers">append_outliers</a></li><li><a href="#append_throughput">append_throughput</a></li><li><a href="#catchup_queues">catchup_queues</a></li><li><a href="#chunk_rebuildings">chunk_rebuildings</a></li><li><a href="#client_read_streams">client_read_streams</a></li><li><a href="#cluster_state">cluster_state</a></li><li><a href="#epoch_store">epoch_store</a></li><li><a href="#event_log">event_log</a></li><li><a href="#graylist">graylist</a></li><li><a href="#historical_metadata">historical_metadata</a></li><li><a href="#historical_metadata_legacy">historical_metadata_legacy</a></li><li><a href="#info">info</a></li><li><a href="#info_config">info_config</a></li><li><a href="#is_log_empty">is_log_empty</a></li><li><a href="#iterators">iterators</a></li><li><a href="#log_groups">log_groups</a></li><li><a href="#log_rebuildings">log_rebuildings</a></li><li><a href="#log_storage_state">log_storage_state</a></li><li><a href="#logsconfig_rsm">logsconfig_rsm</a></li><li><a href="#logsdb_directory">logsdb_directory</a></li><li><a href="#logsdb_metadata">logsdb_metadata</a></li><li><a href="#nodes">nodes</a></li><li><a href="#partitions">partitions</a></li><li><a href="#purges">purges</a></li><li><a href="#readers">readers</a></li><li><a href="#record">record</a></li><li><a href="#record_cache">record_cache</a></li><li><a href="#record_csi">record_csi</a></li><li><a href="#recoveries">recoveries</a></li><li><a href="#sequencers">sequencers</a></li><li><a href="#settings">settings</a></li><li><a href="#shard_authoritative_status">shard_authoritative_status</a></li><li><a href="#shard_authoritative_status_spew">shard_authoritative_status_spew</a></li><li><a href="#shard_authoritative_status_verbose">shard_authoritative_status_verbose</a></li><li><a href="#shard_rebuildings">shard_rebuildings</a></li><li><a href="#shards">shards</a></li><li><a href="#sockets">sockets</a></li><li><a href="#stats">stats</a></li><li><a href="#stats_rocksdb">stats_rocksdb</a></li><li><a href="#storage_tasks">storage_tasks</a></li><li><a href="#stored_logs">stored_logs</a></li><li><a href="#sync_sequencer_requests">sync_sequencer_requests</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/logdevice.svg" alt="LogDevice" width="66" height="58"/></a><div><h5>Docs</h5><a href="/docs/Overview.html">Getting Started</a><a href="/docs/FirstCluster.html">Creating your first cluster</a><a href="/api/annotated.html">C++ API Reference</a></div><div><h5>Community</h5><a href="https://facebook.com/groups/logdevice.oss/">LogDevice Users Group</a><a href="http://stackoverflow.com/questions/tagged/logdevice" target="_blank" rel="noreferrer noopener">Stack Overflow</a></div><div><h5>More</h5><a href="/blog">Blog</a><a href="https://github.com/facebookincubator/LogDevice">GitHub</a></div><div><h5>Legal</h5><a href="https://opensource.facebook.com/legal/privacy/" alt="Privacy" target="_blank" rel="noreferrer noopener">Privacy</a><a href="https://opensource.facebook.com/legal/terms/" alt="Terms" target="_blank" rel="noreferrer noopener">Terms</a></div></section><a href="https://code.facebook.com/projects/" target="_blank" rel="noreferrer noopener" class="fbOpenSource"><img src="/img/oss_logo.png" alt="Facebook Open Source" width="170" height="45"/></a><section class="copyright">Copyright © 2020 Facebook</section></footer></div><script type="text/javascript" src="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.js"></script><script>
+</span></div></article></div><div class="docs-prevnext"><a class="docs-prev button" href="/docs/administration/LDShell.html"><span class="arrow-prev">← </span><span class="function-name-prevnext">LogDevice Shell</span></a><a class="docs-next button" href="/docs/administration/ClusterMaintenance.html"><span>Cluster Maintenance</span><span class="arrow-next"> →</span></a></div></div></div><nav class="onPageNav"><ul class="toc-headings"><li><a href="#append_outliers">append_outliers</a></li><li><a href="#append_throughput">append_throughput</a></li><li><a href="#catchup_queues">catchup_queues</a></li><li><a href="#chunk_rebuildings">chunk_rebuildings</a></li><li><a href="#client_read_streams">client_read_streams</a></li><li><a href="#cluster_state">cluster_state</a></li><li><a href="#epoch_store">epoch_store</a></li><li><a href="#event_log">event_log</a></li><li><a href="#graylist">graylist</a></li><li><a href="#historical_metadata">historical_metadata</a></li><li><a href="#historical_metadata_legacy">historical_metadata_legacy</a></li><li><a href="#info">info</a></li><li><a href="#info_config">info_config</a></li><li><a href="#info_rsm">info_rsm</a></li><li><a href="#iterators">iterators</a></li><li><a href="#log_groups">log_groups</a></li><li><a href="#log_rebuildings">log_rebuildings</a></li><li><a href="#log_storage_state">log_storage_state</a></li><li><a href="#logsconfig_rsm">logsconfig_rsm</a></li><li><a href="#logsdb_directory">logsdb_directory</a></li><li><a href="#logsdb_metadata">logsdb_metadata</a></li><li><a href="#nodes">nodes</a></li><li><a href="#partitions">partitions</a></li><li><a href="#purges">purges</a></li><li><a href="#readers">readers</a></li><li><a href="#record">record</a></li><li><a href="#record_cache">record_cache</a></li><li><a href="#record_csi">record_csi</a></li><li><a href="#recoveries">recoveries</a></li><li><a href="#sequencers">sequencers</a></li><li><a href="#settings">settings</a></li><li><a href="#shard_authoritative_status">shard_authoritative_status</a></li><li><a href="#shard_authoritative_status_spew">shard_authoritative_status_spew</a></li><li><a href="#shard_authoritative_status_verbose">shard_authoritative_status_verbose</a></li><li><a href="#shard_rebuildings">shard_rebuildings</a></li><li><a href="#shards">shards</a></li><li><a href="#sockets">sockets</a></li><li><a href="#stats">stats</a></li><li><a href="#stats_rocksdb">stats_rocksdb</a></li><li><a href="#storage_tasks">storage_tasks</a></li><li><a href="#stored_logs">stored_logs</a></li><li><a href="#sync_sequencer_requests">sync_sequencer_requests</a></li></ul></nav></div><footer class="nav-footer" id="footer"><section class="sitemap"><a href="/" class="nav-home"><img src="/img/logdevice.svg" alt="LogDevice" width="66" height="58"/></a><div><h5>Docs</h5><a href="/docs/Overview.html">Getting Started</a><a href="/docs/FirstCluster.html">Creating your first cluster</a><a href="/api/annotated.html">C++ API Reference</a></div><div><h5>Community</h5><a href="https://facebook.com/groups/logdevice.oss/">LogDevice Users Group</a><a href="http://stackoverflow.com/questions/tagged/logdevice" target="_blank" rel="noreferrer noopener">Stack Overflow</a></div><div><h5>More</h5><a href="/blog">Blog</a><a href="https://github.com/facebookincubator/LogDevice">GitHub</a></div><div><h5>Legal</h5><a href="https://opensource.facebook.com/legal/privacy/" alt="Privacy" target="_blank" rel="noreferrer noopener">Privacy</a><a href="https://opensource.facebook.com/legal/terms/" alt="Terms" target="_blank" rel="noreferrer noopener">Terms</a></div></section><a href="https://code.facebook.com/projects/" target="_blank" rel="noreferrer noopener" class="fbOpenSource"><img src="/img/oss_logo.png" alt="Facebook Open Source" width="170" height="45"/></a><section class="copyright">Copyright © 2020 Facebook</section></footer></div><script type="text/javascript" src="https://cdn.jsdelivr.net/docsearch.js/1/docsearch.min.js"></script><script>
                 document.addEventListener('keyup', function(e) {
                   if (e.target !== document.body) {
                     return;
