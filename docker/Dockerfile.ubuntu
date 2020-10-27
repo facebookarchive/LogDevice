@@ -33,6 +33,8 @@ WORKDIR /build
 # to reduce the total memory used during compilation.
 ARG PARALLEL
 
+ENV CC=clang-9
+ENV CXX=clang++-9
 RUN cmake -Dthriftpy3=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF /LogDevice/logdevice/ \
     && make -j ${PARALLEL:-$(nproc)}
 
