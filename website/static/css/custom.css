@@ -60,6 +60,12 @@ a {
 .darkBackground p {
     color:white;
 }
+.archivalNotice {
+    background: #f5e9c3;
+    display: block;
+    text-align: center;
+    padding: 10px;
+}
 
 @media only screen and (min-device-width: 360px) and (max-device-width: 736px) {
 }
