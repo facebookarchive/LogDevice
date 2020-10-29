@@ -10,6 +10,7 @@
 #include <sstream>
 
 #include <folly/Format.h>
+#include <folly/Math.h>
 
 #include "logdevice/common/toString.h"
 
@@ -133,17 +134,17 @@ size_t AdjustedProbabilityDistribution::findPrefixBySum(double s) const {
   // Here we use the fact that SmallMap iterator happens to provide random
   // access. If you're changing implementation of SmallMap to not provide that,
   // this binary search would need to be changed a bit.
-  auto add = diff_->added_cumsum_.begin();
-  auto add_size = diff_->added_cumsum_.size();
+  const auto add = diff_->added_cumsum_.begin();
+  const auto add_size = static_cast<int64_t>(diff_->added_cumsum_.size());
 
   // First do a binary search in `add`, then binary search in the corresponding
   // range of base_->weight_cumsum_. These two searches could be nested instead,
   // but that would be O((log n) * (log k)), while this is O((log n) + (log k)).
   // Invariant: prefixSum(add[le].idx) <= s, prefixSum(add[gt].idx) > s
   // (where add[-1].idx = -1, add[add_size].idx = base_->size()).
-  int le = -1, gt = (int)add_size;
+  int64_t le = -1, gt = add_size;
   while (gt - le > 1) {
-    size_t k = (size_t)((le + gt) / 2);
+    const size_t k = static_cast<size_t>(folly::midpoint(le, gt));
     size_t next_idx = add[k].first;
     double delta = k ? add[k - 1].second : 0.;
     double sum = base_->prefixSum(next_idx) + delta;
@@ -157,7 +158,7 @@ size_t AdjustedProbabilityDistribution::findPrefixBySum(double s) const {
     return 0;
   }
   size_t first_idx = le >= 0 ? add[le].first : 0ul;
-  size_t next_idx = gt < (int)add_size ? add[gt].first : base_->size();
+  size_t next_idx = gt < add_size ? add[gt].first : base_->size();
   double delta = le >= 0 ? add[le].second : 0.;
 
   return std::upper_bound(base_->weight_cumsum_.begin() + first_idx,
