@@ -14,3 +14,6 @@
 [submodule "logdevice/external/fbthrift"]
 	path = logdevice/external/fbthrift
 	url = https://github.com/facebook/fbthrift/
+[submodule "logdevice/external/prometheus-cpp"]
+	path = logdevice/external/prometheus-cpp
+	url = https://github.com/jupp0r/prometheus-cpp/
